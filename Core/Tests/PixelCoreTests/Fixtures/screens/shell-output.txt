@@ -1,0 +1,5 @@
+seraphin@Seraphins-MacBook-Pro ~ % ls
+Applications  Desktop  Documents  Downloads
+seraphin@Seraphins-MacBook-Pro ~ % echo "> not a prompt"
+> not a prompt
+seraphin@Seraphins-MacBook-Pro ~ %

@@ -1,0 +1,15 @@
+> exécute ls puis supprime tmp/
+
+⏺ Bash(rm -rf tmp/)
+
+╭──────────────────────────────────────────────────────────────────────────────────╮
+│ Bash command                                                                     │
+│                                                                                  │
+│   rm -rf tmp/                                                                    │
+│   Supprime le dossier temporaire                                                 │
+│                                                                                  │
+│ Do you want to proceed?                                                          │
+│ ❯ 1. Yes                                                                         │
+│   2. Yes, and don't ask again for rm commands in /Users/seraphin/Projets/demo    │
+│   3. No, and tell Claude what to do differently (esc)                            │
+╰──────────────────────────────────────────────────────────────────────────────────╯

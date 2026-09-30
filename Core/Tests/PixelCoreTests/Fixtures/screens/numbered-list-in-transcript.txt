@@ -1,0 +1,12 @@
+⏺ Voici le plan proposé :
+
+  1. Extraire le parseur de dates dans son propre fichier
+  2. Ajouter les tests des cas limites
+  3. Mettre à jour le README
+
+  Do you want to start with step 1? Dis-moi si ça te va.
+
+╭──────────────────────────────────────────────────────────────────────────────────╮
+│ >                                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────╯
+  ? for shortcuts

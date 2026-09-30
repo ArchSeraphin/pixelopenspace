@@ -1,0 +1,37 @@
+{
+  "session_id": "3f6c2a9e-8d41-4b7a-9c55-1e2f7a8b9c0d",
+  "prompt_id": "7b1e4c2d-5a6f-4e8b-9d0c-2f3a4b5c6d7e",
+  "transcript_path": "/Users/seraphin/.claude/projects/-Users-seraphin-Projets-pixel-demo/3f6c2a9e-8d41-4b7a-9c55-1e2f7a8b9c0d.jsonl",
+  "cwd": "/Users/seraphin/Projets/pixel-demo",
+  "permission_mode": "default",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "Stop",
+  "stop_hook_active": true,
+  "last_assistant_message": "I've started the log watcher and scheduled the nightly build check. I'll report back when they fire.",
+  "background_tasks": [
+    {
+      "id": "task-001",
+      "type": "shell",
+      "status": "running",
+      "description": "tail logs",
+      "command": "tail -f /var/log/system.log"
+    },
+    {
+      "id": "task-002",
+      "type": "subagent",
+      "status": "running",
+      "description": "Review the migration",
+      "agent_type": "general-purpose"
+    }
+  ],
+  "session_crons": [
+    {
+      "id": "cron-001",
+      "schedule": "0 9 * * 1-5",
+      "recurring": true,
+      "prompt": "check the build"
+    }
+  ]
+}

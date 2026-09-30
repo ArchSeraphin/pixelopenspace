@@ -1,0 +1,26 @@
+{
+  "session_id": "3f6c2a9e-8d41-4b7a-9c55-1e2f7a8b9c0d",
+  "prompt_id": "7b1e4c2d-5a6f-4e8b-9d0c-2f3a4b5c6d7e",
+  "transcript_path": "/Users/seraphin/.claude/projects/-Users-seraphin-Projets-pixel-demo/3f6c2a9e-8d41-4b7a-9c55-1e2f7a8b9c0d.jsonl",
+  "cwd": "/Users/seraphin/Projets/pixel-demo",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolBatch",
+  "tool_calls": [
+    {
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/Users/seraphin/Projets/pixel-demo/ledger/accounts.py"
+      },
+      "tool_use_id": "toolu_01ReAdAcCoUnTsAbCdEfGhIj",
+      "tool_response": "1\tfrom __future__ import annotations\n2\t..."
+    },
+    {
+      "tool_name": "Read",
+      "tool_input": {
+        "file_path": "/Users/seraphin/Projets/pixel-demo/ledger/transactions.py"
+      },
+      "tool_use_id": "toolu_02ReAdTrAnSaCtIoNsAbCdEf",
+      "tool_response": "1\tfrom __future__ import annotations\n2\t..."
+    }
+  ]
+}

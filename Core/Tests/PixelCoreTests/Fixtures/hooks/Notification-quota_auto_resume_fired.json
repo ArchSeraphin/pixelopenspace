@@ -1,0 +1,9 @@
+{
+  "session_id": "3f6c2a9e-8d41-4b7a-9c55-1e2f7a8b9c0d",
+  "prompt_id": "7b1e4c2d-5a6f-4e8b-9d0c-2f3a4b5c6d7e",
+  "transcript_path": "/Users/seraphin/.claude/projects/-Users-seraphin-Projets-pixel-demo/3f6c2a9e-8d41-4b7a-9c55-1e2f7a8b9c0d.jsonl",
+  "cwd": "/Users/seraphin/Projets/pixel-demo",
+  "hook_event_name": "Notification",
+  "message": "Usage limit reset: continuing your task",
+  "notification_type": "quota_auto_resume_fired"
+}

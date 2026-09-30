@@ -89,7 +89,8 @@ public enum SessionSource: String, Codable, Sendable {
 /// One Claude Code conversation an agent has run. Appended by the `recordSession` effect.
 public struct SessionRef: Codable, Hashable, Sendable {
     public var sessionID: String
-    /// Real working directory (worktree, `CwdChanged`): `--resume` is launched here.
+    /// Working directory of `SessionStart` (the worktree with `--worktree`): `--resume` is launched here.
+    /// `CwdChanged` only brings it back to the project folder (`Workspace.apply(_:agent:)`).
     public var cwd: String
     public var startedAt: Date
     public var source: SessionSource

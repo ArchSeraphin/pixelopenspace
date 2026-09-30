@@ -1,0 +1,14 @@
+⏺ J'ai besoin d'une précision avant de continuer.
+
+────────────────────────────────────────────────────────────────────────────────────
+ ☐ Base de données
+
+Quelle base de données faut-il utiliser pour les tests ?
+
+❯ 1. SQLite
+     Fichier local, rien à installer
+  2. PostgreSQL
+     Serveur Docker, plus proche de la production
+  3. Type something.
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

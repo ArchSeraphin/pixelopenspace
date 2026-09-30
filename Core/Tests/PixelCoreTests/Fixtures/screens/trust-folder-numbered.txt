@@ -1,0 +1,13 @@
+╭──────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                  │
+│ Do you trust the files in this folder?                                           │
+│                                                                                  │
+│ /Users/seraphin/Projets/pixel demo                                               │
+│                                                                                  │
+│ Claude Code may read, write, or execute files contained in this directory.       │
+│                                                                                  │
+│ ❯ 1. Yes, proceed                                                                │
+│   2. No, exit                                                                    │
+│                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────╯
+   Enter to confirm · Esc to exit

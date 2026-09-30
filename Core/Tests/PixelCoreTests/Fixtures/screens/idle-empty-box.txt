@@ -1,0 +1,12 @@
+ ✻ Welcome to Claude Code!
+
+   /help for help, /status for your current setup
+
+   cwd: /Users/seraphin/Projets/pixel demo
+
+ ※ Tip: Run /terminal-setup to enable convenient terminal integration
+
+╭──────────────────────────────────────────────────────────────────────────────────╮
+│ > Try "how does <filepath> work?"                                                │
+╰──────────────────────────────────────────────────────────────────────────────────╯
+  ? for shortcuts

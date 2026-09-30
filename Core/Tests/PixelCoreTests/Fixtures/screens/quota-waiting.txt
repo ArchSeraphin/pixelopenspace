@@ -1,0 +1,9 @@
+⏺ Je continue la migration des tests.
+
+  ⎿  You've hit your session limit · resets 3:45pm
+
+Usage limit reached · continuing automatically at 3:45pm · esc to cancel
+
+────────────────────────────────────────────────────────────────────────────────────
+>
+────────────────────────────────────────────────────────────────────────────────────

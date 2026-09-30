@@ -1,0 +1,20 @@
+{
+  "session_id": "3f6c2a9e-8d41-4b7a-9c55-1e2f7a8b9c0d",
+  "prompt_id": "7b1e4c2d-5a6f-4e8b-9d0c-2f3a4b5c6d7e",
+  "transcript_path": "/Users/seraphin/.claude/projects/-Users-seraphin-Projets-pixel-demo/3f6c2a9e-8d41-4b7a-9c55-1e2f7a8b9c0d.jsonl",
+  "cwd": "/Users/seraphin/Projets/pixel-demo",
+  "scratchpad_dir": "/private/tmp/claude-501/-Users-seraphin-Projets-pixel-demo/3f6c2a9e-8d41-4b7a-9c55-1e2f7a8b9c0d/scratchpad",
+  "permission_mode": "default",
+  "effort": {
+    "level": "high"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "swift test --filter HookDecoderTests",
+    "description": "Run the hook decoder tests",
+    "timeout": 120000,
+    "run_in_background": false
+  },
+  "tool_use_id": "toolu_01Hq8V3sXb2kLmN4pQrS5tUv"
+}

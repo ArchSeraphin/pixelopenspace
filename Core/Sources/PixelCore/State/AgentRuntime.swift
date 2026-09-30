@@ -51,12 +51,32 @@ public enum ToolKind: Equatable, Hashable, Sendable {
         case "AskUserQuestion": return .question
         default:
             if toolName.hasPrefix("mcp__") {
-                let parts = toolName.split(separator: "_", omittingEmptySubsequences: true)
-                return .mcp(parts.count >= 2 ? String(parts[1]) : toolName)
+                // `mcp__<server>__<tool>`: the server name may contain single underscores ("claude_ai_Gmail").
+                let rest = toolName.dropFirst("mcp__".count)
+                let server = rest.range(of: "__").map { rest[..<$0.lowerBound] } ?? rest
+                return .mcp(server.isEmpty ? toolName : String(server))
             }
             return .other(toolName)
         }
     }
+}
+
+/// A tool call between its `PreToolUse` and its result.
+public struct InFlightTool: Equatable, Sendable {
+    /// `tool_name`.
+    public var tool: String
+    /// `agent_id` of the subagent that made the call; `nil` for the main agent.
+    public var subagentID: String?
+    /// Summary of `tool_input` (`HookPayload.preToolUse`): pairs an id-less `PermissionRequest` with its call.
+    public var summary: String
+
+    public init(tool: String, subagentID: String?, summary: String) {
+        self.tool = tool
+        self.subagentID = subagentID
+        self.summary = summary
+    }
+
+    public var kind: ToolKind { ToolKind.from(toolName: tool) }
 }
 
 /// Key of an open wait. Several waits can be open at once (parallel tools, subagents).
@@ -85,11 +105,15 @@ public struct PendingWait: Equatable, Sendable {
     public var reason: WaitReason
     public var subagentID: String?
     public var since: Date
+    /// Unpaired tool wait (an id-less `PermissionRequest` while several calls of its tool ran): the calls it may
+    /// belong to that have not reported yet. The wait is resolved when the last of them does. Empty otherwise.
+    public var candidateToolUseIDs: Set<String>
 
-    public init(reason: WaitReason, subagentID: String?, since: Date) {
+    public init(reason: WaitReason, subagentID: String?, since: Date, candidateToolUseIDs: Set<String> = []) {
         self.reason = reason
         self.subagentID = subagentID
         self.since = since
+        self.candidateToolUseIDs = candidateToolUseIDs
     }
 }
 
@@ -172,8 +196,8 @@ public struct AgentRuntime: Equatable, Sendable {
     public var phase: AgentPhase
     public var phaseSince: Date
     public var pendingWaits: [WaitKey: PendingWait]
-    /// tool_use_id → tool, for the main agent and subagents.
-    public var inFlightTools: [String: ToolKind]
+    /// tool_use_id → call, for the main agent and subagents.
+    public var inFlightTools: [String: InFlightTool]
     /// pid of the PTY child: the only `claude_pid` accepted for this agent.
     public var pid: Int32?
     /// The process was started with a positional prompt (first post-it).
@@ -193,7 +217,9 @@ public struct AgentRuntime: Equatable, Sendable {
     public var interruptRequestedAt: Date?
     /// Set by `closeRequested`: the next process exit is `offline(.closedByUser)`, not a crash.
     public var closeRequestedAt: Date?
-    public var activeSubagents: Int
+    /// `agent_id`s between `SubagentStart` and `SubagentStop`. A set: `SubagentStart` fires again when a subagent
+    /// resumes, and `SubagentStop` also fires for internal agents that never started (hooks.md).
+    public var activeSubagentIDs: Set<String>
     /// The user has seen the wait: the "!" becomes less intrusive.
     public var acknowledgedWaiting: Bool
     /// No news for a long time while thinking/working.
@@ -218,10 +244,12 @@ public struct AgentRuntime: Equatable, Sendable {
         self.pendingDelivery = nil
         self.interruptRequestedAt = nil
         self.closeRequestedAt = nil
-        self.activeSubagents = 0
+        self.activeSubagentIDs = []
         self.acknowledgedWaiting = false
         self.stale = false
     }
+
+    public var activeSubagents: Int { activeSubagentIDs.count }
 
     /// Displayed state: waiting as soon as one wait is open, otherwise the phase.
     public var state: AgentState {

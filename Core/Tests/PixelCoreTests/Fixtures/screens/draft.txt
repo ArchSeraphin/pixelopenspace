@@ -1,0 +1,7 @@
+⏺ C'est fait : b.txt contient maintenant la date du jour.
+
+╭──────────────────────────────────────────────────────────────────────────────────╮
+│ > Ajoute aussi un test unitaire pour la fonction de parsing des dates, avec     │
+│   des cas limites                                                                │
+╰──────────────────────────────────────────────────────────────────────────────────╯
+  ? for shortcuts

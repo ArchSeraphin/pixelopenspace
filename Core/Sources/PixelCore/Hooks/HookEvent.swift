@@ -70,7 +70,8 @@ public enum HookPayload: Equatable, Sendable {
     case stopFailure(errorType: String?, message: String?)
     case subagent(started: Bool, type: String?)
     case elicitation(server: String?, id: String?, message: String)
-    case elicitationResult(id: String?)
+    /// `elicitation_id` is optional on both events: a result may carry an id its `Elicitation` did not.
+    case elicitationResult(server: String?, id: String?)
     case compact(pre: Bool)
     case cwdChanged(String)
     case other
