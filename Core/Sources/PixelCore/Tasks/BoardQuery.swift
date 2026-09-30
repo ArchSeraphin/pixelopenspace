@@ -1,7 +1,9 @@
 import Foundation
 
 /// What the board shows (proposal 3.5, mock-ups 6(b) and 6(c)). Every criterion narrows the cards; a neutral
-/// one (nil, empty, blank) keeps them all. Observed by the interface, never persisted.
+/// one (nil, empty, blank) keeps them all. Observed by the interface, never persisted. `==` compares the
+/// fields as typed: two filters that keep the same cards can differ ("bug" and "#bug", "" and "  "), so
+/// `isEmpty` (or the result) tells whether a filter changes anything, not `==`.
 public struct BoardFilter: Equatable, Sendable {
     /// nil = all projects. A card without a project only shows with all projects.
     public var projectID: ProjectID?
@@ -44,8 +46,9 @@ public struct BoardFilter: Equatable, Sendable {
 /// Approximate matching for the board's search and the ⌘K palette (proposal 3.5, 3.16).
 public enum FuzzyMatcher {
     /// Case- and diacritic-insensitive ("é" is "e"; the ligatures "œ" and "æ" are "oe" and "ae"; "ø", "ł" and
-    /// "đ" are "o", "l" and "d"), full-width letters and signs are their ASCII form ("ＡＰＩ" is "api"); invisible
-    /// characters (zero-width and bidi marks, controls) are ignored. Every whitespace-separated word of `query`
+    /// "đ" are "o", "l" and "d"), full-width letters and signs are their ASCII form ("ＡＰＩ" is "api"), the
+    /// typographic apostrophes ("’", "‘", "ʼ") are "'" ("l’API" is "l'api"); invisible characters (zero-width
+    /// and bidi marks, controls) are ignored. Every whitespace-separated word of `query`
     /// must be a subsequence of some whitespace-separated word of `candidate`: "pagi" and "pgn" find
     /// "Pagination", "corr login" finds "Corriger le login". A query word never spans two candidate words:
     /// letters picked here and there in a long description would match almost any short word.
@@ -64,12 +67,25 @@ public enum FuzzyMatcher {
         fold(text).split(whereSeparator: \.isWhitespace).map(Array.init)
     }
 
-    /// Case, diacritics, width and French ligatures folded away, invisible scalars removed (whitespace kept).
-    /// `folding` is the Foundation one, available on Linux too; `lowercased()` makes the case identical
-    /// whatever the platform folds to. The letters Foundation leaves alone (no canonical decomposition) and
-    /// the full-width forms are mapped here, the same on every platform.
+    /// Case, diacritics, width, apostrophes and French ligatures folded away, invisible scalars removed
+    /// (whitespace kept). `folding` is the Foundation one, available on Linux too; `lowercased()` makes the
+    /// case identical whatever the platform folds to. What Foundation leaves alone is mapped here, the same
+    /// on every platform: the full-width forms and the apostrophes before it (a combining accent after "Ｅ"
+    /// is then folded as after "E"), the letters without canonical decomposition after it (one case left).
     static func fold(_ text: String) -> String {
-        let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).lowercased()
+        var ascii = String.UnicodeScalarView()
+        ascii.reserveCapacity(text.unicodeScalars.count)
+        for scalar in text.unicodeScalars {
+            switch scalar {
+            // Full-width "！" to "～" (U+FF01 to U+FF5E): their ASCII form, 0xFEE0 below.
+            case "\u{FF01}"..."\u{FF5E}": ascii.append(Unicode.Scalar(scalar.value - 0xFEE0)!)
+            // Typographic apostrophes (smart quotes, pasted text): the one a search field sends.
+            case "\u{2018}", "\u{2019}", "\u{02BC}": ascii.append("'")
+            default: ascii.append(scalar)
+            }
+        }
+        let folded = String(ascii).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            .lowercased()
         var result = ""
         result.unicodeScalars.reserveCapacity(folded.unicodeScalars.count)
         for scalar in folded.unicodeScalars where !isInvisible(scalar) {
@@ -79,8 +95,6 @@ public enum FuzzyMatcher {
             case "ø": result.unicodeScalars.append("o")
             case "ł": result.unicodeScalars.append("l")
             case "đ": result.unicodeScalars.append("d")
-            // Full-width "！" to "～" (U+FF01 to U+FF5E), already lowercased: their ASCII form, 0xFEE0 below.
-            case "\u{FF01}"..."\u{FF5E}": result.unicodeScalars.append(Unicode.Scalar(scalar.value - 0xFEE0)!)
             default: result.unicodeScalars.append(scalar)
             }
         }
@@ -150,7 +164,9 @@ public enum BoardQuery {
 
     /// The card an agent is working on (inProgress), if any. When a stopped card (interrupted, failed turn,
     /// lost session) sits next to the running one, the running one; when all are stopped, the one updated
-    /// last, which the agent's card still shows until the user decides.
+    /// last, which the agent's card still shows until the user decides. Two running cards only exist on a
+    /// board not validated yet: the one `TaskBoardValidator` keeps running (the others are marked
+    /// interrupted on load), so the current card stays the same across a reload.
     public static func currentCard(of agent: AgentID, in board: TaskBoardState) -> TaskCard? {
         board.cards
             .filter { $0.column == .inProgress && $0.assignee == agent }
@@ -158,8 +174,14 @@ public enum BoardQuery {
                 let aStopped = !a.flags.isDisjoint(with: TaskBoardValidator.stoppingFlags)
                 let bStopped = !b.flags.isDisjoint(with: TaskBoardValidator.stoppingFlags)
                 if aStopped != bStopped { return !aStopped }
-                if a.updatedAt != b.updatedAt { return a.updatedAt > b.updatedAt }
-                return TaskCard.displayOrder(a, b)
+                if aStopped {
+                    if a.updatedAt != b.updatedAt { return a.updatedAt > b.updatedAt }
+                    return TaskCard.displayOrder(a, b)
+                }
+                // The validator's order for running cards: first updated, then first created, then id.
+                if a.updatedAt != b.updatedAt { return a.updatedAt < b.updatedAt }
+                if a.createdAt != b.createdAt { return a.createdAt < b.createdAt }
+                return a.id < b.id
             }
     }
 

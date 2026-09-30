@@ -60,6 +60,23 @@ import Testing
         #expect(!FuzzyMatcher.matches("abd", "ＡＢＣ"))
     }
 
+    @Test func aCombiningMarkAfterAFullWidthLetterIsFolded() {
+        // "Ｅ" then a combining acute accent: folded as "E" and its accent are, to "e".
+        #expect(FuzzyMatcher.fold("\u{FF25}\u{301}") == "e")
+        #expect(FuzzyMatcher.matches("e", "\u{FF25}\u{301}"))
+        #expect(FuzzyMatcher.matches("é", "\u{FF25}\u{301}"))
+    }
+
+    @Test func typographicApostrophesMatchTheStraightOne() {
+        // Details typed with smart quotes or pasted from a document, searched from a field that sends "'".
+        #expect(FuzzyMatcher.matches("aujourd'hui", "aujourd\u{2019}hui"))
+        #expect(FuzzyMatcher.matches("l\u{2019}api", "Doc de l'API"))
+        #expect(FuzzyMatcher.matches("l'api", "Doc de l\u{02BC}API"))
+        #expect(FuzzyMatcher.matches("'til", "\u{2018}til"))
+        #expect(FuzzyMatcher.matches("l'api", "Doc de l\u{FF07}API"))
+        #expect(!FuzzyMatcher.matches("l'api", "Doc de lAPI"))
+    }
+
     @Test func everyQueryWordMustMatch() {
         #expect(FuzzyMatcher.matches("corr login", "Corriger le login"))
         #expect(FuzzyMatcher.matches("login corr", "Corriger le login"))
@@ -223,6 +240,14 @@ import Testing
         #expect(Self.filtered(BoardFilter(text: "#infra")).flat == [S.card(2)])
         // Title and tag together.
         #expect(Self.filtered(BoardFilter(text: "login #bug")).flat == [S.card(3)])
+    }
+
+    @Test func textSearchIgnoresTheApostropheStyle() {
+        var board = Self.board()
+        board.cards.append(TaskCard(id: S.card(10), title: "Relire", details: "Vérifier l\u{2019}export.",
+                                    projectID: nil, rank: "z", createdAt: S.at(10)))
+        #expect(Self.filtered(BoardFilter(text: "l'export"), board).flat == [S.card(10)])
+        #expect(Self.filtered(BoardFilter(text: "l\u{2019}api"), board).flat == [S.card(5)])
     }
 
     @Test func textSearchesTagsAsTheTagFilterSeesThem() {
@@ -391,6 +416,32 @@ import Testing
                                     column: .inProgress, rank: "c", assignee: S.agent(1), flags: [.backgroundRunning],
                                     createdAt: S.at(11), updatedAt: S.at(12)))
         #expect(BoardQuery.currentCard(of: S.agent(1), in: board)?.id == S.card(11))
+    }
+
+    @Test func currentCardAmongRunningCardsIsTheOneTheValidatorKeepsRunning() throws {
+        // A board not validated yet with two running cards for one agent: the validator keeps one running and
+        // marks the other interrupted. The current card is that one, before the reload and after it.
+        func running(_ n: Int, rank: String, created: Double, updated: Double) -> TaskCard {
+            TaskCard(id: S.card(n), title: "Carte \(n)", projectID: nil, column: .inProgress, rank: rank,
+                     assignee: S.agent(1), createdAt: S.at(created), updatedAt: S.at(updated))
+        }
+        let cases: [(cards: [TaskCard], kept: TaskCardID)] = [
+            // The one updated first, even when the other comes first on the board.
+            ([running(1, rank: "a", created: 0, updated: 2), running(2, rank: "b", created: 1, updated: 1)], S.card(2)),
+            // Same update: the one created first.
+            ([running(1, rank: "a", created: 1, updated: 2), running(2, rank: "b", created: 0, updated: 2)], S.card(2)),
+            // Same update and creation: the smaller id.
+            ([running(2, rank: "a", created: 0, updated: 2), running(1, rank: "b", created: 0, updated: 2)], S.card(1)),
+        ]
+        for (cards, kept) in cases {
+            var board = TaskBoardState()
+            board.cards = cards
+            let validated = TaskBoardValidator.validate(board, agents: [S.agent(1)], projects: []).board
+            let stillRunning = validated.cards.filter { $0.column == .inProgress && !$0.flags.contains(.interrupted) }
+            try #require(stillRunning.map(\.id) == [kept])
+            #expect(BoardQuery.currentCard(of: S.agent(1), in: board)?.id == kept)
+            #expect(BoardQuery.currentCard(of: S.agent(1), in: validated)?.id == kept)
+        }
     }
 
     // MARK: - Tags
