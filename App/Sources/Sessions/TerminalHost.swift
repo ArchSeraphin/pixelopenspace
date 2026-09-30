@@ -92,6 +92,33 @@ final class TerminalHost: LocalProcessTerminalViewDelegate {
         view.send(data: bytes[...])
     }
 
+    /// Writes bytes to the PTY in one write and waits until all of them reached it (SwiftTerm's
+    /// `LocalProcess.send(data:completion:)`), for `timeout` at most: a child that stops reading its input would
+    /// otherwise hold the delivery forever. The write starts before the first suspension: no other main-actor job
+    /// runs between the caller's last check and the write. After `.timedOut` the bytes may still arrive later.
+    func writeAndWait(_ bytes: [UInt8], timeout: Duration) async -> PTYWriteOutcome {
+        guard pid != nil, !hasExited, let process = view.process else { return .failed }
+        guard !bytes.isEmpty else { return .written }
+        let expected = bytes.count
+        return await withCheckedContinuation { continuation in
+            let once = OneShotContinuation(continuation)
+            let timer = Task {
+                try? await Task.sleep(for: timeout)
+                once.resume(.timedOut)
+            }
+            process.send(data: bytes[...]) { result in
+                switch result {
+                case .success(let written): once.resume(written == expected ? .written : .failed)
+                case .failure: once.resume(.failed)
+                }
+                timer.cancel()
+            }
+        }
+    }
+
+    /// Last PTY output, to the chunk (guard G4 of a delivery); `.output` events are throttled to one per second.
+    var lastOutputAt: Date? { activity.lastOutputAt }
+
     /// Sends `signal` to the process group, and to the process itself in case it left the group.
     func sendSignal(_ signalNumber: Int32) {
         guard let pid, pid > 1 else { return }
@@ -167,17 +194,55 @@ final class TerminalHost: LocalProcessTerminalViewDelegate {
     }
 }
 
+/// How a PTY write awaited by `TerminalHost.writeAndWait` ended.
+enum PTYWriteOutcome: Equatable, Sendable {
+    case written
+    /// No process, or the write failed.
+    case failed
+    /// Not written within the timeout (the child does not read its input).
+    case timedOut
+}
+
+/// Resumes a continuation once, whichever of several callbacks (write completion, timer) comes first.
+final class OneShotContinuation<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Value, Never>?
+
+    init(_ continuation: CheckedContinuation<Value, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ value: Value) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(returning: value)
+    }
+}
+
 /// Throttles PTY activity reports from SwiftTerm's parse thread: the first output after a quiet period is reported at
 /// once; output during the following second only marks the gate, and `rearm()` reports it at the end of the second.
+/// It also keeps the time of the last output, unthrottled.
 final class ActivityGate: @unchecked Sendable {
     private let lock = NSLock()
     private var armed = true
     private var dirty = false
+    private var lastOutput: Date?
+
+    /// Time of the last output seen by `shouldReport()`.
+    var lastOutputAt: Date? {
+        lock.lock()
+        defer { lock.unlock() }
+        return lastOutput
+    }
 
     /// Parse thread: `true` when this output must be reported now.
     func shouldReport() -> Bool {
+        let now = Date()
         lock.lock()
         defer { lock.unlock() }
+        lastOutput = now
         if armed {
             armed = false
             return true

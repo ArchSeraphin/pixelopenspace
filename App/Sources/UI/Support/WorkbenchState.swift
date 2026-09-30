@@ -32,6 +32,8 @@ enum ActiveSheet: Identifiable, Equatable {
     case templates
     /// "Renvoyer avec une précision" (↺, C17) for a card of "À valider".
     case resendCard(TaskCardID)
+    /// "Donner une consigne…" to an agent (proposal 5.6).
+    case giveInstruction(AgentID)
 
     var id: String {
         switch self {
@@ -45,6 +47,7 @@ enum ActiveSheet: Identifiable, Equatable {
         case .pasteCards: return "pasteCards"
         case .templates: return "templates"
         case .resendCard(let cardID): return "resendCard-\(cardID)"
+        case .giveInstruction(let agentID): return "giveInstruction-\(agentID)"
         }
     }
 }

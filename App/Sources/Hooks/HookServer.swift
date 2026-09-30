@@ -26,8 +26,9 @@ enum HookServerState: Equatable, Sendable {
 /// (`PixelIPC.UnixSocketServer`: peer uid checked, one message per connection), then, once the socket is ours, writes
 /// the token to `run/token` (0600, for sessions started outside the app) and `run/hooks-settings.json` (0600, passed
 /// to `claude --settings`, pointing at the bundled `pixel-hook`). Another running copy keeps both files untouched.
-/// Lines are decoded on the server's thread, rate-limited per agent (200 per second) and delivered in arrival order
-/// through `envelopes`. Token checks and routing happen on the main actor (`HookRouter`).
+/// Lines are decoded on the server's thread, counted per agent (`arrivals`, guard G2 of a delivery), rate-limited per
+/// agent (200 per second) and delivered in arrival order through `envelopes`. Token checks and routing happen on the
+/// main actor (`HookRouter`).
 @MainActor
 final class HookServer {
     nonisolated static let maxEventsPerSecondPerAgent = 200
@@ -45,6 +46,8 @@ final class HookServer {
     private let continuation: AsyncStream<HookEnvelope>.Continuation
     private let server: UnixSocketServer
     private let limiter = HookRateLimiter(limit: HookServer.maxEventsPerSecondPerAgent)
+    /// Messages received for each agent, counted on the socket's thread before anything else (proposal 5.6, G2).
+    nonisolated let arrivals = HookArrivalCounter()
 
     init(directories: AppDirectories, helperPath: String = HookServer.bundledHelperPath) {
         socketPath = directories.socketPath
@@ -81,12 +84,17 @@ final class HookServer {
 
         let continuation = self.continuation
         let limiter = self.limiter
+        let arrivals = self.arrivals
         do {
             try server.start { data, _ in
                 guard let envelope = try? HookDecoder.decodeEnvelope(data) else {
                     AppLog.hooks.debug("undecodable hook message (\(data.count) bytes)")
                     return
                 }
+                // Before the rate limit, the token check and the main actor: a delivery's guard G2 must see an event
+                // the reducer has not handled yet (a PreToolUse or PermissionRequest reaches us before the dialog
+                // is drawn). Messages of a nested `claude` or with a wrong token count too: the safe side.
+                if let agentID = envelope.agentID { arrivals.record(agentID) }
                 guard limiter.admit(envelope.agentID?.description ?? "") else { return }
                 continuation.yield(envelope)
             }
@@ -144,6 +152,26 @@ final class HookServer {
             text += String(byte, radix: 16).leftPadded(to: 2)
         }
         return text
+    }
+}
+
+/// Per-agent count of the hook messages received on the socket (guard G2 of a delivery, proposal 5.6): written on
+/// the socket server's thread as soon as a message is decoded, read on the main actor just before each check of a
+/// delivery. Only compared for equality with an earlier reading: it never decreases.
+final class HookArrivalCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var counts: [AgentID: UInt64] = [:]
+
+    func record(_ agentID: AgentID) {
+        lock.lock()
+        counts[agentID, default: 0] &+= 1
+        lock.unlock()
+    }
+
+    func count(for agentID: AgentID) -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return counts[agentID] ?? 0
     }
 }
 

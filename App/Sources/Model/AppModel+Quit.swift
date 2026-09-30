@@ -90,6 +90,8 @@ extension AppModel {
 
     func cancelWaitingForTurns() {
         isWaitingForTurnsToQuit = false
+        // Deliveries were held while waiting to quit.
+        dispatcher.pumpAll()
     }
 
     /// Checked after every state change while waiting for the turns to end.

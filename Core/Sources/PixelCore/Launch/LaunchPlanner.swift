@@ -300,8 +300,9 @@ public enum LaunchPlanner {
     /// The positional prompt, or `nil` when blank. NUL cannot cross `execve` and is dropped. Gets `promptPrefix`:
     /// a prompt starting with one of `promptLeadCharacters` ("-" would be read as an option; "/logout" would run
     /// the command, "!rm …" a shell command without approval), and a single word, which could be taken for a
-    /// subcommand ("update", "doctor"…) or a mistyped one.
-    static func positionalPrompt(_ prompt: String?) -> String? {
+    /// subcommand ("update", "doctor"…) or a mistyped one. The app matches the delivery of a launch's first post-it
+    /// against this text (T30b), since it is what Claude Code submits.
+    public static func positionalPrompt(_ prompt: String?) -> String? {
         guard let prompt else { return nil }
         let cleaned = prompt.replacingOccurrences(of: "\0", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard let first = cleaned.first else { return nil }

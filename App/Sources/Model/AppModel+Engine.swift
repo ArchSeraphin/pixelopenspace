@@ -7,7 +7,8 @@ import PixelIPC
 extension AppModel {
     // MARK: - Dispatch
 
-    /// Reduces one input for one agent, stores the new runtime, then executes the effects in order.
+    /// Reduces one input for one agent, stores the new runtime, then executes the effects in order. The dispatcher
+    /// then looks at the change: an agent that may have become free gets its queue looked at.
     func dispatch(_ input: AgentInput, to agentID: AgentID) {
         guard let previous = runtimes[agentID] else { return }
         let (next, effects) = AgentStateMachine.reduce(previous, input, now: Date(), config: reducerConfig)
@@ -20,6 +21,9 @@ extension AppModel {
         }
         updateDockBadge()
         if isWaitingForTurnsToQuit { quitIfIdle() }
+        if let current = runtimes[agentID] {
+            dispatcher.runtimeChanged(agentID, from: previous, to: current)
+        }
     }
 
     private func perform(_ effect: AgentEffect, for agentID: AgentID) {
@@ -31,12 +35,15 @@ extension AppModel {
             // Sounds arrive with SoundPlayer (step 4); notifications already play the system sound.
             AppLog.model.debug("sound \(sound.rawValue, privacy: .public)")
         case .card(let signal):
+            // The grace delay starts before the card moves: the board's own `.pump` then waits for it.
+            if case .turnCommitted = signal { dispatcher.turnEnded(agentID) }
             // The agent's post-it follows its turn (proposal 4.3b: C7, C8, C10 to C13).
             applyTask(.agentSignal(agentID, signal))
         case .pumpQueue(let delay):
-            // Deliveries arrive with the dispatcher (step 2b-2).
-            AppLog.model.debug("pump queue in \(delay) s")
+            // T13b: the next item after the grace delay (1.5 s by default).
+            dispatcher.pump(agentID, after: delay)
         case .setQueuePaused, .recordSession, .endSession, .updateSessionCwd, .recordProcess:
+            // `setQueuePaused(true)`: interrupt (T22, T28b) or failed delivery (T31); only the user resumes it.
             var updated = workspace
             if updated.apply(effect, agent: agentID) { commit(updated) }
         case .raiseGlobalIssue(let issue):
@@ -200,7 +207,7 @@ extension AppModel {
     }
 
     /// Rules driven by the clock concern a running process: launch timeouts, stale turns, provisional Stop,
-    /// interrupt verification, done → idle after 10 min, degraded mode.
+    /// interrupt verification, done → idle after 10 min, degraded mode, a dialog refused with Esc.
     static func needsTick(_ runtime: AgentRuntime) -> Bool {
         guard runtime.pid != nil else { return false }
         switch runtime.phase {
@@ -208,15 +215,17 @@ extension AppModel {
             return true
         default:
             return runtime.pendingStop != nil || runtime.interruptRequestedAt != nil
-                || runtime.hookHealth == .degraded || hasCatchUpWait(runtime)
+                || runtime.hookHealth == .degraded || runtime.escapedDialogAt != nil || hasCatchUpWait(runtime)
         }
     }
 
-    /// Rules that also read the screen: Stop commit, interrupt check, slow launch, catch-up waits, degraded mode.
+    /// Rules that also read the screen: Stop commit, interrupt check, slow launch, catch-up waits, degraded mode, and
+    /// T28b (a dialog refused with Esc closes only when a reading shows it gone: the 1 Hz reading keeps looking if
+    /// the resample after the key missed it, for as long as the refusal counts).
     static func needsScreen(_ runtime: AgentRuntime) -> Bool {
         guard runtime.pid != nil else { return false }
         return runtime.pendingStop != nil || runtime.interruptRequestedAt != nil || runtime.phase == .launching
-            || runtime.hookHealth == .degraded || hasCatchUpWait(runtime)
+            || runtime.hookHealth == .degraded || runtime.escapedDialogAt != nil || hasCatchUpWait(runtime)
     }
 
     private static func hasCatchUpWait(_ runtime: AgentRuntime) -> Bool {

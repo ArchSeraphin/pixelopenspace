@@ -260,12 +260,14 @@ private struct Step {
         emit(.card(.sessionLost))
     }
 
-    /// T21.
+    /// T21. A delivery in flight (the positional one of this launch) fails, as on an exit.
     mutating func processFailedToStart(_ message: String) {
+        let wasDelivering = r.pendingDelivery != nil
         clearProcessState()
         r.pid = nil
         r.launchedWithPrompt = false
         setPhase(.error(.launchFailed(message)))
+        if wasDelivering { emit(.card(.deliveryFailed(.processGone))) }
     }
 
     // MARK: - Hooks
@@ -387,7 +389,7 @@ private struct Step {
             liftWaits { _, wait in wait.subagentID == nil }
             clearInFlightTools(of: nil)
             r.interruptRequestedAt = nil
-            r.launchedWithPrompt = false
+            settlePositionalPrompt()
 
         case .stopFailure(let errorType, _):
             if main { stopFailure(errorType ?? "unknown") }
@@ -538,12 +540,12 @@ private struct Step {
         }
     }
 
-    /// T4.
+    /// T4. The first prompt of a launch with a positional prompt settles its delivery (T30b): confirmed when it
+    /// matches, failed otherwise.
     mutating func userPromptSubmit(_ event: HookEvent, promptHead: String) {
         setPhase(.thinking)
         liftAllWaits()
         r.acknowledgedWaiting = false
-        r.launchedWithPrompt = false
         r.committedStopPromptID = nil
         r.interruptRequestedAt = nil
         // A new turn: main tools of an earlier, interrupted turn will never report back.
@@ -552,6 +554,16 @@ private struct Step {
             emit(.card(.deliveryConfirmed(promptID: event.promptID)))
             r.pendingDelivery = nil
         }
+        settlePositionalPrompt()
+    }
+
+    /// T30b: the positional prompt of the launch is settled (its UserPromptSubmit, or a Stop or StopFailure that
+    /// came without one). Its delivery, if still pending, was not seen: it fails as T31 (no plan of the dispatcher
+    /// would ever end it). An ordinary delivery is never pending here (T30 refuses it until then).
+    mutating func settlePositionalPrompt() {
+        guard r.launchedWithPrompt else { return }
+        r.launchedWithPrompt = false
+        deliveryAborted(.noPromptSubmit)
     }
 
     /// T9, T10, T14d, T14e.
@@ -595,7 +607,7 @@ private struct Step {
         clearInFlightTools(of: nil)
         r.pendingStop = nil
         r.interruptRequestedAt = nil
-        r.launchedWithPrompt = false
+        settlePositionalPrompt()
         if errorType == "rate_limit" {
             setPhase(.quotaPaused(resetAt: nil, autoResume: true))
             emit(.raiseGlobalIssue(.quota(resetAt: nil)))
@@ -718,9 +730,11 @@ private struct Step {
     /// it, Esc being the last key), a reading that shows the input box and no dialog closes the dialog waits that
     /// were open at the Esc (their calls will never report). The phase goes back to the turn's: it goes on (spinner
     /// visible, or a hook came after the Esc) → as after a tool result (`thinking`, or `working` for another main
-    /// call in flight); otherwise the refusal ended it → `idle`, as T10 would a minute later. No card moves and the
-    /// queue is not pumped. While the dialog is still drawn the screen is read again, for `escapeRefusalWindow` at
-    /// most. Without a prior Esc a screen without dialog closes nothing: the dialog may not be drawn yet.
+    /// call in flight), with no other effect; otherwise the refusal ended it → `idle`, as T10 would a minute later,
+    /// and it counts as an interrupt (T22): the queue pauses and the running card is flagged interrupted (it stays
+    /// "En cours"); the queue is never pumped, so nothing is sent after a refusal until the user resumes it. While
+    /// the dialog is still drawn the screen is read again, for `escapeRefusalWindow` at most. Without a prior Esc a
+    /// screen without dialog closes nothing: the dialog may not be drawn yet.
     mutating func closeEscapedDialog(spinnerVisible: Bool) {
         guard let escapedAt = r.escapedDialogAt else { return }
         let refused = r.pendingWaits.filter { key, wait in wait.since <= escapedAt && Self.isDialogWait(key, wait) }
@@ -756,6 +770,9 @@ private struct Step {
         } else {
             clearInFlightTools(of: nil)
             setPhase(.idle)
+            // As T22: the user stopped the turn from the terminal.
+            emit(.setQueuePaused(true))
+            emit(.card(.interrupted))
         }
     }
 
@@ -804,11 +821,26 @@ private struct Step {
 
     // MARK: - Delivery (T30, T31)
 
-    /// Refused (nothing recorded, so the dispatcher writes nothing) unless the agent is free. Degraded mode
+    /// T30. Refused (nothing recorded, so the dispatcher writes nothing) unless the agent is free. Degraded mode
     /// refuses too: automatic sending is off without hooks (4.4, guard G1).
+    ///
+    /// T30b (next to T30; not in the table of proposal 4.3): a launch with a positional prompt (the first post-it,
+    /// "Lancer un nouvel agent avec ce post-it") is typed by Claude Code itself, from its arguments. Its delivery is
+    /// recorded while that prompt is not submitted yet (`launchedWithPrompt`: launching, or thinking after
+    /// SessionStart), whatever the hooks say so far: nothing is written to the PTY for it, and its UserPromptSubmit
+    /// confirms it (T4). The first prompt, a Stop or a StopFailure settles it (`settlePositionalPrompt`).
     mutating func deliveryStarted(_ delivery: PendingDelivery) {
-        guard r.pid != nil, r.hookHealth == .healthy, r.pendingDelivery == nil, r.pendingWaits.isEmpty,
-              r.pendingStop == nil else { return }
+        guard r.pid != nil, r.pendingDelivery == nil, r.pendingWaits.isEmpty, r.pendingStop == nil else { return }
+        if r.launchedWithPrompt {
+            switch r.phase {
+            case .launching, .thinking:
+                r.pendingDelivery = delivery
+            default:
+                break
+            }
+            return
+        }
+        guard r.hookHealth == .healthy else { return }
         switch r.phase {
         case .idle, .done:
             r.pendingDelivery = delivery

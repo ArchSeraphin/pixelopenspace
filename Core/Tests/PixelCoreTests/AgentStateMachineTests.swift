@@ -1341,7 +1341,8 @@ extension AgentEffect {
 
     /// Spikes S5 and S7 (Claude Code 2.1.285): Esc on a permission dialog or on an AskUserQuestion fires no hook
     /// at all; only the screen shows the dialog is gone and the input box is back. The wait closes, the turn it
-    /// ended is over (no spinner, no hook since the Esc): idle, no card signal, no queue effect.
+    /// ended is over (no spinner, no hook since the Esc): idle, and handled like an interrupt (T22): the card is
+    /// flagged interrupted, the queue paused, nothing pumped.
     @Test func escapeRefusalClearsWaitFromScreen() throws {
         var h = Harness.thinking()
         h.pre("Bash", "t1", "touch spike-refus.txt")
@@ -1354,7 +1355,7 @@ extension AgentEffect {
         #expect(h.r.acknowledgedWaiting)
         #expect(h.r.kind == .waitingInput)
         h.advance(0.3)
-        #expect(h.send(.screen(try Self.realScreen("S5-04-apres-echap"))).isEmpty)
+        #expect(h.send(.screen(try Self.realScreen("S5-04-apres-echap"))) == [.setQueuePaused(true), .card(.interrupted)])
         #expect(h.r.pendingWaits.isEmpty)
         #expect(!h.r.acknowledgedWaiting)
         #expect(h.r.inFlightTools.isEmpty)
@@ -1375,10 +1376,13 @@ extension AgentEffect {
         g.send(.userKeystroke(.escape))
         g.advance(0.3)
         let fx = g.send(.screen(try Self.realScreen("S7-04-apres-echap")))
-        #expect(fx.compactMap(\.cardSignal).isEmpty && !fx.contains(where: \.isPump))
-        #expect(fx.isEmpty)
+        #expect(fx.compactMap(\.cardSignal) == [.interrupted] && !fx.contains(where: \.isPump))
+        #expect(fx == [.setQueuePaused(true), .card(.interrupted)])
         #expect(g.r.pendingWaits.isEmpty)
         #expect(g.r.phase == .idle)
+        // The next reading changes nothing more.
+        g.advance(1)
+        #expect(g.send(.screen(try Self.realScreen("S7-04-apres-echap"))).isEmpty)
     }
 
     /// Without a prior Esc, a screen without dialog closes nothing: the dialog may simply not be drawn yet.
@@ -1419,14 +1423,15 @@ extension AgentEffect {
     }
 
     /// The refusal does not end the turn when the spinner is still there or a hook came after the Esc: the phase
-    /// is then the turn's, as after a tool result. A dialog opened after the Esc is not closed by it.
+    /// is then the turn's, as after a tool result, and nothing is interrupted (no card signal, queue untouched).
+    /// A dialog opened after the Esc is not closed by it.
     @Test func escapeRefusalKeepsATurnThatGoesOn() {
         let prompt = ScreenFacts(inputBox: .empty, recognized: true)
         var h = Harness.thinking()
         h.hook(.preToolUse, .askUserQuestion(toolUseID: "q1", questions: []))
         h.send(.userKeystroke(.escape))
         h.advance(0.3)
-        h.send(.screen(ScreenFacts(inputBox: .empty, spinnerVisible: true, recognized: true)))
+        #expect(h.send(.screen(ScreenFacts(inputBox: .empty, spinnerVisible: true, recognized: true))).isEmpty)
         #expect(h.r.pendingWaits.isEmpty)
         #expect(h.r.phase == .thinking)
 
@@ -1438,7 +1443,7 @@ extension AgentEffect {
         g.pre("Read", "t2", "a.txt")
         g.permission("Read", "t2", "a.txt")
         g.advance(0.1)
-        g.send(.screen(prompt))
+        #expect(g.send(.screen(prompt)).isEmpty)
         #expect(g.r.pendingWaits.keys.map { $0 } == [.tool(toolUseID: "t2")])
         #expect(g.r.inFlightKinds == ["t2": .read])
         #expect(g.r.phase == .working(.read))
@@ -1449,9 +1454,18 @@ extension AgentEffect {
         s.permission("Bash", "s1", "ls", sub: "sub-1")
         s.send(.userKeystroke(.escape))
         s.advance(0.3)
-        s.send(.screen(prompt))
+        #expect(s.send(.screen(prompt)).isEmpty)
         #expect(s.r.pendingWaits.isEmpty)
         #expect(s.r.phase == .working(.subagent))
+
+        // A Stop after the Esc settles the turn by itself: no interrupt either.
+        var d = Harness.thinking()
+        d.permission("Bash", "t1", "touch x")
+        d.send(.userKeystroke(.escape))
+        d.stop()
+        #expect(d.r.pendingWaits.isEmpty)
+        d.advance(0.3)
+        #expect(d.send(.screen(prompt)).compactMap(\.cardSignal).isEmpty)
     }
 
     /// Claude Code may not have redrawn yet: the screen is read again while the dialog is still shown, for a few
@@ -1533,6 +1547,83 @@ extension AgentEffect {
         #expect(degraded.r.phase == .idle && degraded.r.hookHealth == .degraded)
         degraded.send(.deliveryStarted(delivery))
         #expect(degraded.r.pendingDelivery == nil)
+    }
+
+    /// T30b: a launch with a positional prompt (the first post-it) is typed by Claude Code itself. Its delivery is
+    /// recorded while that prompt is not submitted yet (launching, or thinking after SessionStart, hooks known or
+    /// not), and its UserPromptSubmit confirms it (T4).
+    @Test func t30b_positionalPromptDeliveryIsConfirmedByItsPrompt() {
+        let prefix = AgentStateMachine.normalizedPromptPrefix("Corrige le bug du login")
+        let delivery = PendingDelivery(itemID: "card-1", prefix: prefix, startedAt: Harness.t0, hookSeqAtStart: 0)
+        var h = Harness()
+        h.send(.processStarted(pid: Harness.pid, startedAt: Harness.t0, withInitialPrompt: true))
+        #expect(h.send(.deliveryStarted(delivery)).isEmpty)
+        #expect(h.r.pendingDelivery == delivery)
+        h.hook(.sessionStart, .sessionStart(source: .startup, model: nil))
+        #expect(h.r.phase == .thinking)
+        #expect(h.r.pendingDelivery == delivery)
+        #expect(h.submit("Corrige le bug du login", prompt: "P1") == [.card(.deliveryConfirmed(promptID: "P1"))])
+        #expect(h.r.pendingDelivery == nil)
+
+        // Recorded after SessionStart too, before the prompt is submitted.
+        var late = Harness.running(withPrompt: true)
+        late.send(.deliveryStarted(delivery))
+        #expect(late.r.pendingDelivery == delivery)
+
+        // Not once the positional prompt is submitted, nor for a launch without one, nor twice.
+        var submitted = Harness.running(withPrompt: true)
+        submitted.submit("Corrige le bug du login")
+        submitted.send(.deliveryStarted(delivery))
+        #expect(submitted.r.pendingDelivery == nil)
+        var plain = Harness()
+        plain.send(.processStarted(pid: Harness.pid, startedAt: Harness.t0, withInitialPrompt: false))
+        plain.send(.deliveryStarted(delivery))
+        #expect(plain.r.pendingDelivery == nil)
+        var twice = Harness.running(withPrompt: true)
+        twice.send(.deliveryStarted(delivery))
+        let other = PendingDelivery(itemID: "card-2", prefix: "x", startedAt: Harness.t0, hookSeqAtStart: 0)
+        twice.send(.deliveryStarted(other))
+        #expect(twice.r.pendingDelivery == delivery)
+    }
+
+    /// T30b: the positional prompt settled without matching (another first prompt, or a Stop or a StopFailure with no
+    /// UserPromptSubmit at all) fails its delivery as T31 would: the dispatcher runs no plan for it, so nothing else
+    /// would ever end it. An ordinary delivery is left to the dispatcher's own wait.
+    @Test func t30b_positionalDeliveryFailsWhenItsPromptIsNotSeen() {
+        let delivery = PendingDelivery(itemID: "card-1", prefix: "Corrige le bug", startedAt: Harness.t0,
+                                       hookSeqAtStart: 0)
+        let failed: [AgentEffect] = [.card(.deliveryFailed(.noPromptSubmit)), .setQueuePaused(true)]
+
+        var other = Harness.running(withPrompt: true)
+        other.send(.deliveryStarted(delivery))
+        #expect(other.submit("Autre chose", prompt: "P1") == failed)
+        #expect(other.r.pendingDelivery == nil)
+
+        var stopped = Harness.running(withPrompt: true)
+        stopped.send(.deliveryStarted(delivery))
+        #expect(stopped.stop() == failed)
+        #expect(stopped.r.pendingDelivery == nil)
+
+        var broken = Harness.running(withPrompt: true)
+        broken.send(.deliveryStarted(delivery))
+        let fx = broken.stopFailure("overloaded")
+        #expect(Array(fx.prefix(2)) == failed)
+        #expect(broken.r.pendingDelivery == nil)
+
+        var ordinary = Harness.running()
+        ordinary.send(.deliveryStarted(delivery))
+        #expect(ordinary.submit("Autre chose", prompt: "P1").isEmpty)
+        #expect(ordinary.r.pendingDelivery == delivery)
+    }
+
+    /// T21 during a delivery (the positional one of a launch whose exec failed): the card is told, as on an exit.
+    @Test func t21_failedLaunchFailsItsDelivery() {
+        var h = Harness()
+        h.send(.processStarted(pid: Harness.pid, startedAt: Harness.t0, withInitialPrompt: true))
+        h.send(.deliveryStarted(PendingDelivery(itemID: "card-1", prefix: "x", startedAt: h.now, hookSeqAtStart: 0)))
+        #expect(h.send(.processFailedToStart("code 127")) == [.card(.deliveryFailed(.processGone))])
+        #expect(h.r.pendingDelivery == nil)
+        #expect(h.send(.processFailedToStart("code 127")).isEmpty)
     }
 
     @Test func t31_abortedDeliveryFailsTheCardAndPausesTheQueue() {

@@ -132,12 +132,76 @@ extension AppModel {
         guard updated.removeAgent(id) else { return false }
         commit(updated)
         applyTask(.agentRemoved(id))
+        dispatcher.forget(id)
         forgetRuntime(id)
         sessions.discard(id)
         notifications.withdraw(agentID: id)
         if selectedAgentID == id { selectedAgentID = nil }
         updateDockBadge()
         return true
+    }
+
+    // MARK: - Queues (step 2b-2)
+
+    /// "Reprendre la file" (and C9, C14): the queue paused by an interruption or a failed delivery goes on. Not while
+    /// the agent's card of "En cours" is stopped (interrupted, failed turn, lost session): the user settles it first
+    /// (4.3b), or the next post-it would start beside it.
+    func resumeQueue(_ agentID: AgentID) {
+        guard let agent = workspace.agent(agentID) else { return }
+        if agent.queuePaused, let card = currentCard(of: agentID),
+           !card.flags.isDisjoint(with: TaskBoardValidator.stoppingFlags) {
+            showToast("\(agent.name) : décide d'abord de « \(card.title) » (continuer la tâche, la remettre à faire "
+                          + "ou la marquer à valider), puis reprends la file.", style: .warning, agentID: agentID)
+            return
+        }
+        setQueuePaused(false, for: agentID)
+        dispatcher.queueResumed(agentID)
+    }
+
+    /// "Envoyer quand même": the next delivery goes despite a draft in the input box; it lifts nothing else (no
+    /// state, event or dialog guard).
+    func sendAnyway(_ agentID: AgentID) {
+        dispatcher.sendAnyway(agentID)
+    }
+
+    /// "Envoyer" on a text of 16 KB or more (proposal 5.6: the app asks before sending).
+    func confirmLargeDelivery(_ agentID: AgentID) {
+        dispatcher.confirmLargeDelivery(agentID)
+    }
+
+    /// "Donner une consigne…" (5.6): sent at once by the same guarded delivery when the agent is free, put at the
+    /// head of its queue when it is busy. Returns the refusal's message, if any.
+    @discardableResult
+    func giveInstruction(to agentID: AgentID, text: String) -> String? {
+        let busy = runtimes[agentID].map { !Self.isFreeForDelivery($0) } ?? true
+        let effects = applyTask(.giveInstruction(agent: agentID, text: text, instructionID: InstructionID(),
+                                                 atHead: busy))
+        for case .rejected(_, let message) in effects { return message }
+        return nil
+    }
+
+    /// At rest, nothing pending: an instruction would go now rather than after the turn.
+    static func isFreeForDelivery(_ runtime: AgentRuntime) -> Bool {
+        guard runtime.pid != nil, runtime.pendingStop == nil, runtime.pendingDelivery == nil else { return false }
+        return runtime.kind == .idle || runtime.kind == .done
+    }
+
+    /// "Lancer un nouvel agent avec ce post-it" (3.6, when no agent of the project runs): a new agent of the card's
+    /// project, started with the card's prompt as its positional prompt. The card joins its queue and its delivery
+    /// is recorded at the launch, so that the prompt's `UserPromptSubmit` moves it to "En cours" (T30b).
+    func launchNewAgent(with cardID: TaskCardID) {
+        guard let card = board.card(cardID), card.column == .todo else { return }
+        guard let projectID = dispatchProject(for: card) else {
+            showToast("Choisis d'abord le projet de ce post-it.", style: .warning)
+            return
+        }
+        guard let agentID = addAgent(projectID: projectID, launch: false) else { return }
+        applyTask(.assign(cardID, to: agentID))
+        guard board.card(cardID)?.assignee == agentID, let prompt = promptPreview(for: cardID), !prompt.isEmpty else {
+            return
+        }
+        dispatcher.expectPositionalLaunch(agentID, item: .card(cardID), text: prompt.text)
+        launch(agentID, mode: .new(initialPrompt: prompt.text))
     }
 
     // MARK: - Selection and navigation

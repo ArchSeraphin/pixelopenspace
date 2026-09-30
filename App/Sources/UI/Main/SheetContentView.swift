@@ -51,6 +51,12 @@ struct SheetContentView: View {
             } else {
                 MissingItemSheet()
             }
+        case .giveInstruction(let agentID):
+            if model.agent(agentID) != nil {
+                GiveInstructionSheet(agentID: agentID)
+            } else {
+                MissingItemSheet()
+            }
         }
     }
 }

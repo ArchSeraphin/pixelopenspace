@@ -77,6 +77,17 @@ public enum DispatchPolicy {
     public static func nextDelivery(agent: Agent, runtime: AgentRuntime, queue: [QueueItem], now: Date,
                                     lastTurnEndedAt: Date?, settings: DispatchSettings,
                                     draftOverride: Bool) -> DeliveryDecision {
+        let decision = decisionBeforeScreen(agent: agent, runtime: runtime, queue: queue, now: now,
+                                            lastTurnEndedAt: lastTurnEndedAt, settings: settings)
+        guard case .deliver = decision else { return decision }
+        if let cause = screenCause(runtime.screen, draftOverride: draftOverride) { return .wait(cause) }
+        return decision
+    }
+
+    /// Rules 1 to 10, then 12: the decision `nextDelivery` would take if the screen allowed a delivery. The
+    /// dispatcher asks it, without reading the screen, whether a fresh reading could lead to a delivery.
+    public static func decisionBeforeScreen(agent: Agent, runtime: AgentRuntime, queue: [QueueItem], now: Date,
+                                            lastTurnEndedAt: Date?, settings: DispatchSettings) -> DeliveryDecision {
         guard let head = queue.first else { return .none }
         if agent.queuePaused { return .wait(.paused) }
         guard isLive(runtime) else { return .wait(.offline) }
@@ -91,12 +102,19 @@ public enum DispatchPolicy {
         guard runtime.phase == .idle || runtime.phase == .done, runtime.pendingStop == nil else {
             return .wait(.busy)
         }
-        if let ended = lastTurnEndedAt, now.timeIntervalSince(ended) < settings.graceSeconds {
+        if cooldownRemaining(now: now, lastTurnEndedAt: lastTurnEndedAt, settings: settings) != nil {
             return .wait(.cooldown)
         }
         if !settings.autoChain && runtime.phase == .done { return .wait(.cooldown) }
-        if let cause = screenCause(runtime.screen, draftOverride: draftOverride) { return .wait(cause) }
         return .deliver(head)
+    }
+
+    /// Rule 9: the seconds left of the grace delay after the end of a turn, nil when it is over (or there was no
+    /// turn). A stamp after `now` counts from that stamp.
+    public static func cooldownRemaining(now: Date, lastTurnEndedAt: Date?, settings: DispatchSettings) -> TimeInterval? {
+        guard let ended = lastTurnEndedAt else { return nil }
+        let elapsed = now.timeIntervalSince(ended)
+        return elapsed < settings.graceSeconds ? settings.graceSeconds - elapsed : nil
     }
 
     /// The agent a post-it dropped on a project goes to ("premier agent libre", 3.6), among the live agents of

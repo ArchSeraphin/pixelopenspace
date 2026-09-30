@@ -61,6 +61,8 @@ final class AppModel {
     let notifications: NotificationBridge
     let persistence: PersistenceStore
     let locator: ClaudeLocator
+    /// Delivers the head of each agent's queue into its terminal (step 2b-2); observed for its notices.
+    let dispatcher = TaskDispatcher()
 
     // MARK: - Bookkeeping (not observed)
 
@@ -107,6 +109,7 @@ final class AppModel {
         }
         runtimes = initial
 
+        dispatcher.model = self
         sessions.onEvent = { [weak self] agentID, event in
             self?.handleTerminalEvent(agentID, event)
         }
@@ -222,6 +225,10 @@ final class AppModel {
     /// lose updates). The hooks banner says so.
     var isPersistenceSuspended: Bool { hookServerState == .anotherInstance }
 
+    /// New deliveries may start: not while quitting, nor while waiting for the turns to end before quitting ("Rien de
+    /// nouveau ne sera envoyé aux agents").
+    var acceptsDeliveries: Bool { !quitInProgress && !isWaitingForTurnsToQuit }
+
     /// Replaces the workspace and schedules its save.
     func commit(_ newWorkspace: Workspace) {
         guard newWorkspace != workspace else { return }
@@ -252,6 +259,12 @@ final class AppModel {
         let version = saveVersion
         let store = persistence
         Task { await store.scheduleSave(newBoard, version: version) }
+    }
+
+    /// Writes an agent's queue pause (`Agent.queuePaused`, as the reducer's `setQueuePaused` effect does).
+    func setQueuePaused(_ paused: Bool, for id: AgentID) {
+        var updated = workspace
+        if updated.apply(.setQueuePaused(paused), agent: id) { commit(updated) }
     }
 
     func storeRuntime(_ runtime: AgentRuntime, for id: AgentID) {

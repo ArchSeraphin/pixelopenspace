@@ -3,7 +3,7 @@ import PixelCore
 
 /// The cork board (proposal 3.5, 4.3b): every change goes through `TaskLifecycle.reduce` (`applyTask`), whose
 /// effects are executed here. The board panel, the card editor and the agents' cards read the queries below.
-/// Nothing is delivered to a terminal yet: `.pump` is only logged until the dispatcher (step 2b-2).
+/// `.pump` asks the `TaskDispatcher` to look at the agent's queue (step 2b-2).
 extension AppModel {
     // MARK: - Reducer
 
@@ -20,21 +20,37 @@ extension AppModel {
     }
 
     /// Reduces the inputs in order against one context, stores the board once, then executes all the effects.
+    /// "Réessayer" (C9) and "Continuer la tâche" (C14) also resume the agent's queue, paused by the failure or the
+    /// interruption (`resumeQueue`).
     @discardableResult
     private func applyTasks(_ inputs: [TaskInput]) -> [TaskEffect] {
         let context = taskContext()
         var next = board
         var effects: [TaskEffect] = []
+        var resumed: [AgentID] = []
         for input in inputs {
             let (reduced, emitted) = TaskLifecycle.reduce(next, input, context: context)
             next = reduced
             effects += emitted
+            let refused = emitted.contains { if case .rejected = $0 { return true } else { return false } }
+            if !refused, let agent = Self.agentResumed(by: input, in: reduced) { resumed.append(agent) }
         }
         commitBoard(next)
+        for agent in resumed {
+            resumeQueue(agent)
+        }
         for effect in effects {
             perform(effect)
         }
         return effects
+    }
+
+    /// C9 and C14 resume the queue of the card's agent (4.3b: "reprise de la file").
+    private static func agentResumed(by input: TaskInput, in board: TaskBoardState) -> AgentID? {
+        switch input {
+        case .retry(let id), .continueTask(let id, _): board.card(id)?.assignee
+        default: nil
+        }
     }
 
     /// What the reducer reads about the world, now: each agent's project, the running agents and their current
@@ -50,8 +66,7 @@ extension AppModel {
     private func perform(_ effect: TaskEffect) {
         switch effect {
         case .pump(let agentID):
-            // The dispatcher arrives with step 2b-2: nothing is typed into a terminal yet.
-            AppLog.sessions.debug("pump \(agentID.description, privacy: .public): no delivery before step 2b-2")
+            dispatcher.pump(agentID)
         case .notify(let text):
             showToast(text, style: .warning)
         case .rejected(_, let message):
@@ -127,6 +142,35 @@ extension AppModel {
     /// The card the agent is working on ("En cours"), if any.
     func currentCard(of agent: AgentID) -> TaskCard? {
         BoardQuery.currentCard(of: agent, in: board)
+    }
+
+    /// Why the head of the agent's queue is not being delivered (`DispatchPolicy`, on the last screen reading and the
+    /// model's clock); nil when the queue is empty or a delivery can start.
+    func deliveryWaitCause(of agentID: AgentID) -> WaitCause? {
+        guard let agent = workspace.agent(agentID), let runtime = runtimes[agentID] else { return nil }
+        let queue = queue(of: agentID)
+        guard !queue.isEmpty else { return nil }
+        let decision = DispatchPolicy.nextDelivery(agent: agent, runtime: runtime, queue: queue, now: now,
+                                                   lastTurnEndedAt: dispatcher.lastTurnEndedAt[agentID],
+                                                   settings: DispatchSettings(settings: settings),
+                                                   draftOverride: dispatcher.draftOverrides.contains(agentID))
+        if case .wait(let cause) = decision { return cause }
+        return nil
+    }
+
+    /// The project a card is given to by "Premier agent libre" or "Lancer un nouvel agent": its own, else the one
+    /// selected (a card without project).
+    func dispatchProject(for card: TaskCard) -> ProjectID? {
+        (card.projectID ?? selectedProjectID).flatMap { workspace.project($0)?.id }
+    }
+
+    /// "Premier agent libre" (3.6): the agent of the card's project it would go to; nil when no agent of that
+    /// project runs (the app then offers "Lancer un nouvel agent avec ce post-it").
+    func firstFreeAgent(for card: TaskCard) -> AgentID? {
+        guard let projectID = dispatchProject(for: card) else { return nil }
+        let agents = workspace.agents(in: projectID)
+        let lengths = Dictionary(agents.map { ($0.id, queue(of: $0.id).count) }) { first, _ in first }
+        return DispatchPolicy.firstFreeAgent(in: projectID, agents: agents, runtimes: runtimes, queueLengths: lengths)
     }
 
     /// The four columns under `boardFilter` (every column present, possibly empty).

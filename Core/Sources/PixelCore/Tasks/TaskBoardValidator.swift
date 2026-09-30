@@ -14,8 +14,9 @@ public enum TaskBoardValidator {
     public static let untitled = "Sans titre"
 
     /// Flags that mean the card's turn is over (the agent no longer works on it): such a card leaves room
-    /// for another "En cours" card of the same agent (C13, C14).
-    static let stoppingFlags: Set<CardFlag> = [.interrupted, .turnFailed, .sessionLost]
+    /// for another "En cours" card of the same agent (C13, C14). The app asks the user to settle such a card before
+    /// resuming the agent's queue (4.3b).
+    public static let stoppingFlags: Set<CardFlag> = [.interrupted, .turnFailed, .sessionLost]
 
     /// Repairs a loaded board against the workspace's agents and projects; French messages for the load banner.
     public static func validate(_ input: TaskBoardState, agents: Set<AgentID>, projects: Set<ProjectID>)

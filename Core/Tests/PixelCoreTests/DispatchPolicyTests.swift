@@ -297,6 +297,62 @@ fileprivate enum Fixture {
         }
     }
 
+    // MARK: - Before the screen, cooldown
+
+    /// Rules 1 to 10: what the dispatcher checks before it reads the screen, to know whether a reading is worth it.
+    @Test func decisionBeforeScreenLeavesTheScreenOut() {
+        func before(_ r: AgentRuntime, agent: Agent = F.agent(), queue: [QueueItem] = [F.card, F.laterCard],
+                    lastTurnEndedAt: Date? = nil, settings: DispatchSettings = DispatchSettings()) -> DeliveryDecision {
+            DispatchPolicy.decisionBeforeScreen(agent: agent, runtime: r, queue: queue, now: F.now,
+                                                lastTurnEndedAt: lastTurnEndedAt, settings: settings)
+        }
+        let screens: [ScreenFacts?] = [
+            nil,
+            ScreenFacts(inputBox: .empty, recognized: false),
+            ScreenFacts(inputBox: .unknown, dialogVisible: true, recognized: true),
+            ScreenFacts(inputBox: .empty, quotaLine: "Usage limit reached", recognized: true),
+            ScreenFacts(inputBox: .empty, spinnerVisible: true, recognized: true),
+            ScreenFacts(inputBox: .unknown, recognized: true),
+            ScreenFacts(inputBox: .draft(prefix: "Réponds juste OK."), recognized: true),
+            ScreenFacts(inputBox: .empty, recognized: true),
+        ]
+        for screen in screens {
+            var r = F.ready()
+            r.screen = screen
+            #expect(before(r) == .deliver(F.card))
+            #expect(before(r, queue: []) == .none)
+            #expect(before(r, agent: F.agent(paused: true)) == .wait(.paused))
+            var busy = r
+            busy.phase = .working(.bash)
+            #expect(before(busy) == .wait(.busy))
+            #expect(before(r, lastTurnEndedAt: F.now) == .wait(.cooldown))
+            #expect(before(r, lastTurnEndedAt: F.now) == F.decide(r, lastTurnEndedAt: F.now))
+        }
+        // When the screen allows it, the same decision as `nextDelivery`.
+        #expect(before(F.ready()) == F.decide(F.ready()))
+    }
+
+    @Test func cooldownRemainingCountsDownTheGraceDelay() {
+        let settings = DispatchSettings(graceSeconds: 1.5)
+        func remaining(_ ended: Date?, _ s: DispatchSettings = settings) -> TimeInterval? {
+            DispatchPolicy.cooldownRemaining(now: F.now, lastTurnEndedAt: ended, settings: s)
+        }
+        #expect(remaining(nil) == nil)
+        #expect(remaining(F.now) == 1.5)
+        #expect(remaining(F.now.addingTimeInterval(-1)) == 0.5)
+        #expect(remaining(F.now.addingTimeInterval(-1.5)) == nil)
+        #expect(remaining(F.now.addingTimeInterval(-60)) == nil)
+        #expect(remaining(F.now, DispatchSettings(graceSeconds: 0)) == nil)
+        // A stamp after `now` (clock set back): the whole delay from that stamp, as rule 9 counts it.
+        #expect(remaining(F.now.addingTimeInterval(30)) == 31.5)
+        // Exactly when rule 9 says "cooldown".
+        for offset in [-2.0, -1.5, -1.49, -0.5, 0, 0.5] {
+            let ended = F.now.addingTimeInterval(offset)
+            let cooling = F.decide(F.ready(), lastTurnEndedAt: ended) == .wait(.cooldown)
+            #expect((remaining(ended) != nil) == cooling, "\(offset)")
+        }
+    }
+
     /// Starting with every cause at once and removing them one by one walks the rules in the plan's order.
     @Test func rulesApplyInPriorityOrder() {
         var agent = F.agent(paused: true)

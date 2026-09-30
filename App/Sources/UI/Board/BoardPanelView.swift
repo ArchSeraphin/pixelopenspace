@@ -23,6 +23,7 @@ struct BoardPanelView: View {
             header
             BoardFilterBar()
             Divider()
+            SuspendedDeliveryNotice()
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
@@ -124,6 +125,40 @@ struct BoardPanelView: View {
         let next = index + offset
         guard shown.indices.contains(next) else { return }
         focusedCard = shown[next]
+    }
+}
+
+/// "Envoi automatique suspendu : écran non reconnu" (proposal 5.6, G3): agents whose queue waits because their
+/// terminal shows a screen `ScreenPatterns` does not know (another Claude Code version, a full-screen view). Nothing
+/// is sent to them until the screen is recognized again.
+private struct SuspendedDeliveryNotice: View {
+    @Environment(AppModel.self) private var model
+    @Environment(WorkbenchState.self) private var workbench
+
+    var body: some View {
+        let agents = model.agentsInOrder.filter { model.deliveryWaitCause(of: $0.id) == .screenUnknown }
+        if let first = agents.first {
+            VStack(spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(StateStyle.tint(for: .waitingInput))
+                        .accessibilityHidden(true)
+                    Text("Envoi automatique suspendu : écran non reconnu · "
+                         + agents.map(\.name).joined(separator: ", "))
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    Button("Terminal") { workbench.showTerminal(for: first.id, focus: true) }
+                        .controlSize(.small)
+                        .help("Ouvrir le terminal de \(first.name) : rien ne lui est envoyé tant que son écran n'est pas reconnu")
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(StateStyle.tint(for: .waitingInput).opacity(0.1))
+                Divider()
+            }
+            .accessibilityElement(children: .combine)
+        }
     }
 }
 

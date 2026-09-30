@@ -142,6 +142,15 @@ public enum DeliveryPlan {
         }
     }
 
+    /// Added to the reason of a guard that fails once text was typed (before an Enter): the text stays in the input
+    /// box, never erased (no Ctrl+U), where it reads as a draft and blocks the next deliveries (5.6, step 4).
+    public static let textLeftNotice = "texte laissé dans le terminal, vérifie-le"
+
+    /// The detail of `DeliveryAbortReason.guardFailed` for a guard that failed with `reason`, after writing text or not.
+    public static func abortDetail(_ reason: String, textWritten: Bool) -> String {
+        textWritten ? reason + " · " + textLeftNotice : reason
+    }
+
     public static func evaluate(_ check: DeliveryGuard, _ inputs: GuardInputs) -> GuardVerdict {
         if let reason = stateProblem(inputs) ?? newEventProblem(inputs) { return .abort(reason) }
         if let reason = screenProblem(check, inputs) {

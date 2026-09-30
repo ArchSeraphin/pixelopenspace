@@ -84,7 +84,9 @@ struct AgentCardView: View {
     }
 }
 
-/// "▣ Refonte du header" (the post-it the agent works on, click to edit it) and "file : 2 post-its" (mockup 6(b)).
+/// "▣ Refonte du header" (the post-it the agent works on, click to edit it) and "file : 2 post-its · occupé"
+/// (mockup 6(b)): why the head of the queue waits (`WaitCause`), the last delivery failure, and the actions that
+/// apply ("Reprendre la file" when paused, "Envoyer quand même" on a draft, "Envoyer" for a text of 16 KB or more).
 private struct AgentQueueLine: View {
     let agentID: AgentID
 
@@ -96,7 +98,10 @@ private struct AgentQueueLine: View {
         let cards = queue.filter { if case .card = $0 { return true } else { return false } }.count
         let instructions = queue.count - cards
         let current = model.currentCard(of: agentID)
-        VStack(alignment: .leading, spacing: 2) {
+        let paused = model.agent(agentID)?.queuePaused ?? false
+        let cause = model.deliveryWaitCause(of: agentID)
+        let notice = model.dispatcher.notices[agentID]
+        VStack(alignment: .leading, spacing: 3) {
             if let current {
                 Button {
                     workbench.editCard(current.id)
@@ -111,9 +116,54 @@ private struct AgentQueueLine: View {
                 .accessibilityLabel("Post-it en cours : \(currentText(current))")
                 .accessibilityHint("Ouvre l'éditeur du post-it")
             }
-            Text(Self.queueText(cards: cards, instructions: instructions))
+            Text(Self.queueText(cards: cards, instructions: instructions, cause: cause, paused: paused))
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(cause == nil ? Color.secondary : StateStyle.tint(for: .waitingInput))
+                .lineLimit(2)
+            if let notice {
+                noticeView(notice)
+            }
+            if paused || cause == .draftInInputBox {
+                HStack(spacing: 6) {
+                    if paused {
+                        Button("Reprendre la file") { model.resumeQueue(agentID) }
+                            .help("La file s'est mise en pause (interruption ou échec d'envoi) : rien ne part sans toi")
+                    }
+                    if cause == .draftInInputBox {
+                        Button("Envoyer quand même") { model.sendAnyway(agentID) }
+                            .help("Ignore le texte affiché dans la zone de saisie du terminal, et seulement lui : "
+                                  + "un dialogue, un tour en cours ou un nouvel événement bloquent toujours l'envoi")
+                    }
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func noticeView(_ notice: DeliveryNotice) -> some View {
+        switch notice {
+        case .failed(let reason):
+            VStack(alignment: .leading, spacing: 3) {
+                Label("Dernier envoi : \(reason)", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(StateStyle.tint(for: .error))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if AgentActions(model: model, agentID: agentID).canOpenTerminal {
+                    Button("Ouvrir le terminal") { workbench.showTerminal(for: agentID, focus: true) }
+                        .controlSize(.small)
+                }
+            }
+        case .needsConfirmation(_, let bytes):
+            HStack(spacing: 6) {
+                Label("Texte de \(Self.kilobytes(bytes)) Ko : l'envoyer ?", systemImage: "doc.text")
+                    .font(.caption)
+                    .lineLimit(2)
+                Button("Envoyer") { model.confirmLargeDelivery(agentID) }
+                    .controlSize(.small)
+                    .help("Le texte, long, part par un collage dans le terminal")
+            }
         }
     }
 
@@ -123,13 +173,20 @@ private struct AgentQueueLine: View {
         return flags.isEmpty ? card.title : "\(card.title) (\(flags.joined(separator: ", ")))"
     }
 
-    /// "file vide", "file : 1 post-it", "file : 2 post-its · 1 consigne".
-    static func queueText(cards: Int, instructions: Int) -> String {
-        guard cards > 0 || instructions > 0 else { return "file vide" }
+    /// "file vide", "file : 1 post-it", "file : 2 post-its · 1 consigne · occupé", "file vide · en pause".
+    static func queueText(cards: Int, instructions: Int, cause: WaitCause?, paused: Bool) -> String {
+        guard cards > 0 || instructions > 0 else { return paused ? "file vide · en pause" : "file vide" }
         var parts: [String] = []
         if cards > 0 { parts.append(cards > 1 ? "\(cards) post-its" : "1 post-it") }
         if instructions > 0 { parts.append(instructions > 1 ? "\(instructions) consignes" : "1 consigne") }
-        return "file : " + parts.joined(separator: " · ")
+        var text = "file : " + parts.joined(separator: " · ")
+        if let cause { text += " · " + cause.label }
+        return text
+    }
+
+    /// Kilobytes, rounded up ("17").
+    static func kilobytes(_ bytes: Int) -> Int {
+        (bytes + 1023) / 1024
     }
 }
 

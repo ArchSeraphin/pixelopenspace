@@ -443,9 +443,18 @@ import Testing
     // MARK: - Reasons
 
     @Test func reasonsAreFrenchWithoutEmDash() {
-        for reason in DeliveryPlan.Reason.all {
+        for reason in DeliveryPlan.Reason.all + [DeliveryPlan.textLeftNotice] {
             #expect(!reason.isEmpty)
             #expect(!reason.contains("\u{2014}"))
         }
+    }
+
+    /// Step 4 of 5.6: a guard that fails once text was typed leaves it in the input box (never erased), and the card
+    /// says so.
+    @Test func abortDetailSaysWhenTextWasLeftInTheTerminal() {
+        #expect(DeliveryPlan.textLeftNotice == "texte laissé dans le terminal, vérifie-le")
+        #expect(DeliveryPlan.abortDetail("un dialogue est affiché", textWritten: false) == "un dialogue est affiché")
+        #expect(DeliveryPlan.abortDetail("un dialogue est affiché", textWritten: true)
+                == "un dialogue est affiché · texte laissé dans le terminal, vérifie-le")
     }
 }

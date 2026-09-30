@@ -55,15 +55,21 @@ enum CardPresentation {
         model.agent(agentID)?.name ?? "agent inconnu"
     }
 
-    /// "non assigné", "Nova · file #2", "Nova · envoi en cours", "Pixou · en cours · 6 min",
-    /// "Rio · fini il y a 2 min", "validé 09:12 · Bip". Reads `model.now` only for the texts that need it.
+    /// "non assigné", "Nova · file #2", "Nova · file #1 · ✎ brouillon" (why the head of the queue waits),
+    /// "Nova · envoi en cours", "Pixou · en cours · 6 min", "Rio · fini il y a 2 min", "validé 09:12 · Bip". Reads
+    /// `model.now` only for the texts that need it.
     static func status(of card: TaskCard, model: AppModel) -> String {
         let agent = card.assignee.map { agentName($0, model: model) }
         switch card.column {
         case .todo:
             guard let agent else { return "non assigné" }
             if card.delivery?.isPending == true { return "\(agent) · envoi en cours" }
-            if let position = model.queuePosition(of: card.id) { return "\(agent) · file #\(position)" }
+            if let position = model.queuePosition(of: card.id) {
+                if position == 1, let cause = card.assignee.flatMap(model.deliveryWaitCause(of:)) {
+                    return "\(agent) · file #1 · \(cause.label)"
+                }
+                return "\(agent) · file #\(position)"
+            }
             return agent
         case .inProgress:
             let since = card.delivery?.confirmedAt ?? card.updatedAt
@@ -425,6 +431,7 @@ struct CardMenuItems: View {
                     workbench.requestTask(.assign(card.id, to: agentID))
                 }
             }
+            FirstFreeAgentItem(card: card, model: model, workbench: workbench)
             if card.assignee != nil {
                 Button("Retirer de la file") {
                     workbench.requestTask(.unassign(card.id))
@@ -475,6 +482,33 @@ struct CardMenuItems: View {
             workbench.requestTask(.delete(card.id))
         }
         .keyboardShortcut(.delete, modifiers: .command)
+    }
+}
+
+/// "Donner au premier agent libre (Nova)" (proposal 3.6: idle or done with an empty queue, idle the longest, else the
+/// shortest queue among the running agents of the card's project); with no agent running there, "Lancer un nouvel
+/// agent avec ce post-it" (the card is its first prompt).
+struct FirstFreeAgentItem: View {
+    let card: TaskCard
+    let model: AppModel
+    let workbench: WorkbenchState
+
+    var body: some View {
+        if let target = model.firstFreeAgent(for: card) {
+            let name = CardPresentation.agentName(target, model: model)
+            if target == card.assignee {
+                Button("Premier agent libre : \(name) (déjà dans sa file)") {}
+                    .disabled(true)
+            } else {
+                Button("Donner au premier agent libre (\(name))") {
+                    workbench.requestTask(.assign(card.id, to: target))
+                }
+            }
+        } else if model.dispatchProject(for: card) != nil {
+            Button("Lancer un nouvel agent avec ce post-it") {
+                model.launchNewAgent(with: card.id)
+            }
+        }
     }
 }
 

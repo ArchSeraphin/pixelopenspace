@@ -85,6 +85,14 @@ struct AgentMenuItems: View {
         }
         .disabled(!actions.canRelaunch)
         Divider()
+        Button("Donner une consigne…") {
+            workbench.present(.giveInstruction(agent.id))
+        }
+        Button("Reprendre la file") {
+            model.resumeQueue(agent.id)
+        }
+        .disabled(!agent.queuePaused)
+        Divider()
         Button("Renommer…") {
             workbench.present(.renameAgent(agent.id))
         }

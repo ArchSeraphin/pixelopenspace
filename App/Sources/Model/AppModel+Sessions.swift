@@ -154,8 +154,10 @@ extension AppModel {
                 resumeAttempts[agentID] = nil
             }
             let startedAt = ProcessAncestry.startTime(of: pid) ?? Date()
-            dispatch(.processStarted(pid: pid, startedAt: startedAt, withInitialPrompt: Self.hasInitialPrompt(mode)),
-                     to: agentID)
+            let withPrompt = Self.hasInitialPrompt(mode)
+            dispatch(.processStarted(pid: pid, startedAt: startedAt, withInitialPrompt: withPrompt), to: agentID)
+            // "Lancer un nouvel agent avec ce post-it": the card's delivery is the positional prompt (T30b).
+            dispatcher.launched(agentID, withPrompt: withPrompt)
         case .failure(.alreadyRunning):
             showToast("\(name) a déjà une session en cours.", agentID: agentID)
         case .failure(let error):
@@ -164,6 +166,7 @@ extension AppModel {
     }
 
     private func failLaunch(_ agentID: AgentID, message: String) {
+        dispatcher.launchFailed(agentID)
         dispatch(.processFailedToStart(message), to: agentID)
         showToast("\(names(of: agentID).agent) : \(message)", style: .error, agentID: agentID)
     }
