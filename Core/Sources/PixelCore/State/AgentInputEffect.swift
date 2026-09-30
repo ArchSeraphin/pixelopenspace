@@ -23,6 +23,8 @@ public enum AgentInput: Equatable, Sendable {
     case deliveryAborted(DeliveryAbortReason)
     /// The user opened the agent window or its terminal.
     case acknowledged
+    /// The user asked to close the session: the coming exit is not a crash.
+    case closeRequested
 }
 
 /// Signals from an agent to the post-it lifecycle (`TaskLifecycle`, step 2b).
@@ -76,6 +78,8 @@ public enum AgentEffect: Equatable, Sendable {
     case resampleScreen(afterSeconds: Double)
     /// Something was missed: re-derive what can be derived (e.g. re-read the screen).
     case reconcile
+    /// Short transient message for the user (toast), in French. The app prefixes the agent's name.
+    case showMessage(String)
 }
 
 /// Timing parameters of the reducer (from `AppSettings`, overridable in tests).

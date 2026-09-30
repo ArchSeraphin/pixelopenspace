@@ -191,6 +191,8 @@ public struct AgentRuntime: Equatable, Sendable {
     public var committedStopPromptID: String?
     public var pendingDelivery: PendingDelivery?
     public var interruptRequestedAt: Date?
+    /// Set by `closeRequested`: the next process exit is `offline(.closedByUser)`, not a crash.
+    public var closeRequestedAt: Date?
     public var activeSubagents: Int
     /// The user has seen the wait: the "!" becomes less intrusive.
     public var acknowledgedWaiting: Bool
@@ -215,6 +217,7 @@ public struct AgentRuntime: Equatable, Sendable {
         self.committedStopPromptID = nil
         self.pendingDelivery = nil
         self.interruptRequestedAt = nil
+        self.closeRequestedAt = nil
         self.activeSubagents = 0
         self.acknowledgedWaiting = false
         self.stale = false
