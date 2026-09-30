@@ -1,0 +1,76 @@
+# Core package (Core/): builds and tests PixelCore, PixelIPC, pixel-hook and fake-claude on Linux and macOS.
+name: Core
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (Swift 6.2)
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Cache the SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: Core/.build
+          # A key per commit, restored from the newest one with the same manifest: an exact hit is never saved
+          # again, so a key without the commit would freeze the cache at its first build.
+          key: core-linux-swift-6.2-${{ hashFiles('Core/Package.swift', 'Core/Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            core-linux-swift-6.2-${{ hashFiles('Core/Package.swift', 'Core/Package.resolved') }}-
+
+      - name: Build
+        working-directory: Core
+        run: swift build
+
+      - name: Test
+        working-directory: Core
+        run: swift test --parallel
+
+  macos-core:
+    name: macOS (Xcode, swift test)
+    # macos-26 brings Xcode 26: Core/Package.swift needs swift-tools 6.2, which older images lack.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Toolchain
+        id: toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          echo "xcode=$(xcodebuild -version | head -n 1 | tr -c 'A-Za-z0-9.' '-')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: Core/.build
+          # The Xcode version is part of the key: modules built by another compiler cannot be reused.
+          # The commit too, restored by prefix: see the Linux job.
+          key: core-macos-${{ steps.toolchain.outputs.xcode }}-${{ hashFiles('Core/Package.swift', 'Core/Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            core-macos-${{ steps.toolchain.outputs.xcode }}-${{ hashFiles('Core/Package.swift', 'Core/Package.resolved') }}-
+
+      - name: Test
+        working-directory: Core
+        run: swift test
