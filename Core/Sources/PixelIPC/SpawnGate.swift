@@ -11,7 +11,7 @@ import Glibc
 /// pty master (and its `dup`) that SwiftTerm's `forkpty` creates, are not. Two children started close together
 /// can then each hold the other's stdin open, so neither ever reads end-of-file (a `claude` would also keep the
 /// other agents' terminals alive). Every child is started inside `SpawnGate.run`, which marks all open descriptors
-/// close-on-exec before the start (the child only gets what the spawner maps to 0, 1, 2 — so create its pipes
+/// close-on-exec before the start (the child only gets what the spawner maps to 0, 1, 2, so create its pipes
 /// before calling `run`) and after it (descriptors the start itself created, such as the pty master).
 public enum SpawnGate {
     private static let lock = NSLock()

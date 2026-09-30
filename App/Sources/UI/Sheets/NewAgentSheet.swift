@@ -92,7 +92,7 @@ struct NewAgentSheet: View {
         Section {
             Picker("Permissions", selection: $permissionMode) {
                 ForEach(PermissionMode.allCases, id: \.self) { mode in
-                    Text("\(mode.rawValue) — \(PermissionModeInfo.summary(mode))").tag(mode)
+                    Text("\(mode.rawValue) : \(PermissionModeInfo.summary(mode))").tag(mode)
                 }
             }
             .pickerStyle(.radioGroup)

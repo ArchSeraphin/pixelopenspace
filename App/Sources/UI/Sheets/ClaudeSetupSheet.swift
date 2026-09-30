@@ -107,7 +107,7 @@ struct ClaudeStatusView: View {
                     .foregroundStyle(StateStyle.tint(for: .waitingInput))
             }
         } else {
-            Text("— (minimum \(minimum), lue avec claude --version)")
+            Text("- (minimum \(minimum), lue avec claude --version)")
                 .foregroundStyle(.secondary)
         }
     }

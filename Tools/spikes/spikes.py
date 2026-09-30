@@ -1839,12 +1839,12 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
     add("|---|---|---|---|")
     for result in results:
         n = result["notes"]
-        add("| %s — %s | %s | %.0f s | %s |" % (n["id"], n["title"], n.get("status"), n.get("duration_s", 0),
+        add("| %s : %s | %s | %.0f s | %s |" % (n["id"], n["title"], n.get("status"), n.get("duration_s", 0),
                                                truncate(n.get("error") or "", 120).replace("|", "/")))
     add("")
 
     # S1
-    add("## S1 — Les hooks de `--settings` s'ajoutent-ils aux autres ?")
+    add("## S1 : Les hooks de `--settings` s'ajoutent-ils aux autres ?")
     a = ans("S1")
     if a.get("tags"):
         verdict = "**OUI**, les deux sources ont reçu les événements" if a.get("merged") else \
@@ -1861,7 +1861,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
     add("")
 
     # S2
-    add("## S2 — `SessionStart.session_id` = `--session-id` ?")
+    add("## S2 : `SessionStart.session_id` = `--session-id` ?")
     a = ans("S2")
     if "equal" in a:
         add("**%s** (demandé %s, reçu %s, source `%s`)." % (
@@ -1876,7 +1876,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
     add("")
 
     # S3
-    add("## S3 — Saisie dans le PTY")
+    add("## S3 : Saisie dans le PTY")
     add("")
     add("### (a) Texte saisi d'un bloc, puis Entrée seule après un délai")
     add("")
@@ -1887,7 +1887,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
         if "user_prompt_submit" in a:
             add("| %s ms | %s | %s | %s | %s |" % (
                 a.get("delay_ms"), _yes_no(a.get("user_prompt_submit")), _yes_no(a.get("exact")),
-                "%s ms" % a["enter_to_hook_ms"] if "enter_to_hook_ms" in a else "—", _yes_no(a.get("stop"))))
+                "%s ms" % a["enter_to_hook_ms"] if "enter_to_hook_ms" in a else "-", _yes_no(a.get("stop"))))
         else:
             add("| %s | %s | | | |" % (sid, status(sid)))
     for sid in ("S3.a-30ms", "S3.a-120ms", "S3.a-250ms"):
@@ -1930,7 +1930,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
     a = ans("S3.d-positional")
     if "user_prompt_submit" in a:
         add("UserPromptSubmit : **%s** · prompt : %s · %s ms après SessionStart · Stop : %s" % (
-            _yes_no(a.get("user_prompt_submit")), _code(a.get("prompt")), a.get("after_session_start_ms", "—"),
+            _yes_no(a.get("user_prompt_submit")), _code(a.get("prompt")), a.get("after_session_start_ms", "-"),
             _yes_no(a.get("stop"))))
     else:
         add("_Pas de réponse (%s)._" % status("S3.d-positional"))
@@ -1953,7 +1953,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
             add("- Événements après la touche : %s" % (" → ".join(
                 str(e.get("event")) for e in a.get("events_after_key", [])) or "aucun"))
             add("- Fichier créé : %s · Stop : %s · écran calme %s ms après Stop" % (
-                _yes_no(a.get("file_created")), _yes_no(a.get("stop")), a.get("stop_to_quiet_ms", "—")))
+                _yes_no(a.get("file_created")), _yes_no(a.get("stop")), a.get("stop_to_quiet_ms", "-")))
             chain = a.get("chain", {})
             add("- Enchaînement après Stop (nouveau prompt, Entrée à 250 ms) : UserPromptSubmit **%s**, prompt "
                 "identique %s, Stop %s" % (_yes_no(chain.get("user_prompt_submit")), _yes_no(chain.get("exact")),
@@ -1966,7 +1966,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
     add("")
 
     # S3b
-    add("## S3b — Tâche de fond (minimal)")
+    add("## S3b : Tâche de fond (minimal)")
     a = ans("S3b-background")
     if "S3b-background" not in notes:
         add("_Non lancé (option `--with-perturbation`)._")
@@ -1983,7 +1983,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
     add("")
 
     # S4
-    add("## S4 — `session_id` après /clear, /compact, /resume, --resume, --fork-session ; `cwd` avec --worktree")
+    add("## S4 : `session_id` après /clear, /compact, /resume, --resume, --fork-session ; `cwd` avec --worktree")
     a = ans("S4")
     if a.get("steps"):
         add("")
@@ -2018,7 +2018,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
     add("")
 
     # S5
-    add("## S5 — Refus manuel d'une permission par Échap")
+    add("## S5 : Refus manuel d'une permission par Échap")
     a = ans("S5")
     if "permission_request" in a:
         if not a["permission_request"]:
@@ -2041,7 +2041,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
     add("")
 
     # S7
-    add("## S7 — Dialogues à l'écran")
+    add("## S7 : Dialogues à l'écran")
     add("")
     add("Options détectées par le motif de l'app `^\\s*[❯>]?\\s*([1-9])\\.\\s+(.+)$` (bordures `│` retirées).")
     add("")
@@ -2075,7 +2075,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
     add("")
 
     # S9
-    add("## S9 — Latence de `pixel-hook`")
+    add("## S9 : Latence de `pixel-hook`")
     a = ans("S9")
     if "delivery_ms" in a:
         add("| Mesure | n | p50 | p95 | max |")
@@ -2085,10 +2085,10 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
                            ("no_socket_exit_ms", "Sans socket (app fermée) → fin"),
                            ("baseline_true_ms", "Référence : `/usr/bin/true`")):
             p = a.get(key, {})
-            add("| %s | %s | %s ms | %s ms | %s ms |" % (label, p.get("n", 0), p.get("p50", "—"), p.get("p95", "—"),
-                                                         p.get("max", "—")))
+            add("| %s | %s | %s ms | %s ms | %s ms |" % (label, p.get("n", 0), p.get("p50", "-"), p.get("p95", "-"),
+                                                         p.get("max", "-")))
         add("")
-        add("Échecs : %s%s" % (a.get("failure_count", 0), (" — " + "; ".join(a.get("failures", [])[:5]))
+        add("Échecs : %s%s" % (a.get("failure_count", 0), (" (" + "; ".join(a.get("failures", [])[:5]) + ")")
                               if a.get("failures") else ""))
     else:
         add("_Pas de mesure (%s%s)._" % (status("S9"), " : " + notes["S9"].get("error", "")
@@ -2096,7 +2096,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
     add("")
 
     # S10
-    add("## S10 — Des hooks tournent-ils avant l'acceptation de la confiance du dossier ?")
+    add("## S10 : Des hooks tournent-ils avant l'acceptation de la confiance du dossier ?")
     launches = [(r["notes"]["id"], launch) for r in results for launch in r["notes"].get("launches", [])]
     with_dialog = [(sid, launch) for sid, launch in launches if launch.get("trust_dialog")]
     early = [(sid, launch) for sid, launch in with_dialog if launch.get("hooks_before_trust_accept")]
@@ -2141,7 +2141,7 @@ def build_summary(env: Dict[str, Any], results: List[Dict[str, Any]]) -> str:
             seen.setdefault(key, []).append("%s / %s" % (sid, launch.get("label")))
     if seen:
         for key, where in seen.items():
-            add("- %s — %d lancement(s) : %s" % (_code(key, 240), len(where), ", ".join(where[:6])))
+            add("- %s (%d lancement(s)) : %s" % (_code(key, 240), len(where), ", ".join(where[:6])))
         add("- L'app doit les attendre elle aussi : ils s'ouvrent après SessionStart, avant la zone de saisie.")
     else:
         add("Aucun.")
@@ -2295,9 +2295,9 @@ class Harness:
                 results.append({"notes": {"id": scenario.id, "title": scenario.title, "status": "ignoré",
                                           "error": "claude n'a pas démarré deux fois de suite", "launches": []},
                                 "events": [], "screens": []})
-                print("- %s — %s : ignoré (claude ne démarre pas)" % (scenario.id, scenario.title))
+                print("- %s, %s : ignoré (claude ne démarre pas)" % (scenario.id, scenario.title))
                 continue
-            print("▶ %s — %s…" % (scenario.id, scenario.title), flush=True)
+            print("▶ %s : %s…" % (scenario.id, scenario.title), flush=True)
             ctx = ScenarioContext(self, scenario)
             started = time.monotonic()
             try:
@@ -2328,7 +2328,7 @@ class Harness:
                     print("  (écriture des résultats incomplète : %s)" % error)
             mark = "✔" if ctx.notes["status"] == "ok" else "✘"
             print("  %s %s (%.0f s)%s" % (mark, ctx.notes["status"], ctx.notes["duration_s"],
-                                          " — " + ctx.notes["error"] if ctx.notes.get("error") else ""), flush=True)
+                                          " : " + ctx.notes["error"] if ctx.notes.get("error") else ""), flush=True)
             results.append({"notes": ctx.notes, "events": ctx.events.events, "screens": ctx.screens})
             if interrupted:
                 break

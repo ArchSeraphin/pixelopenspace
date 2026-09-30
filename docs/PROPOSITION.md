@@ -1,4 +1,4 @@
-# Pixel Open Space — Proposition technique et design (étape 1)
+# Pixel Open Space : Proposition technique et design (étape 1)
 
 > **Statut** : proposition à valider. Ce document ne contient **aucun code de l'app** : seulement des esquisses de types et de signatures pour fixer le vocabulaire.
 > **Date** : 2026-09-30. **Base factuelle** : documentation officielle de Claude Code (URLs citées en ligne), code source de SwiftTerm, documentation Apple, et projets existants analysés (section 1 et 10).
@@ -83,18 +83,18 @@ Liste reconstruite à partir des exigences de ta spec telles que je les ai compr
 | Iso 2:1, pixel parfait, lumière en haut à gauche, contours teintés, palette centrale | 7.1 à 7.5 | jalon visuel, 4 | tests palette, luminance, captures | ✔ |
 | Mode nuit avec lampes allumées | 7.8 | 4 | captures jour/nuit | ✔ |
 | Plantes et machine à café dans le décor de base | 7.4.9 | 3 | jalon visuel | ✔ |
-| Mini-carte | 3.9, 6(a), 7.4.10 | 3 | — | ✔ (points avec glyphes) |
-| Mini-avatar de l'agent sur le post-it | 7.4.10 (`portrait.mini`) | 4 | — | ✔ |
+| Mini-carte | 3.9, 6(a), 7.4.10 | 3 | - | ✔ (points avec glyphes) |
+| Mini-avatar de l'agent sur le post-it | 7.4.10 (`portrait.mini`) | 4 | - | ✔ |
 | Déplacement à la souris, zoom, double-clic sur un îlot pour centrer | 3.9 | 3 | tests UI | ✔ |
 | Raccourci ou menu pour chaque action | 3.16 | 5 | test `AppCommand` | ✔ |
 | Accessibilité, jamais la couleur seule | 7.9 | 3 à 5 | checklists | ✔ |
 | Consomme peu au repos | 3.9 (budgets) | 3 | S11 + Instruments | ✔ chiffré |
 | Gamification discrète : XP, badges, décor à débloquer | 3.11, 7.4.9, 6(s) | 6 | tests `ProgressRules` | ✔ |
 | Sons 8 bits | 3.17, 7.11 | 4 | manuel | ✔ |
-| Modules nommés (`AssetFactory`, `GameProgress`…) | 2.1 (correspondance) | — | — | ≈ répartis entre plusieurs types |
-| Vérifier chaque point dans la doc officielle | 1 | 1 | — | ✔ |
+| Modules nommés (`AssetFactory`, `GameProgress`…) | 2.1 (correspondance) | - | - | ≈ répartis entre plusieurs types |
+| Vérifier chaque point dans la doc officielle | 1 | 1 | - | ✔ |
 | Originalité, aucune ressemblance avec un jeu existant | 7.10 | 3, 4 | revue visuelle | ✔ |
-| Import GitHub, statistiques | 8 (étape 7) | 7 | — | → bonus |
+| Import GitHub, statistiques | 8 (étape 7) | 7 | - | → bonus |
 
 ---
 
@@ -291,7 +291,7 @@ Démarrage : PersistenceStore charge workspace.json, tasks.json, progress.json, 
            « Laisser tourner » : ses hooks sont refusés (jeton régénéré) ; le poste affiche « session
            détenue par un autre processus » ; Relancer est désactivé tant que ce pid vit
  → tous les agents sont en .offline(.appRelaunched) : chaise vide avec la veste, écran et lampe éteints,
-   plaque « OFF » (7.4.10) — jamais confondu avec un agent endormi
+   plaque « OFF » (7.4.10), jamais confondu avec un agent endormi
  → bannière « 6 sessions peuvent être relancées » : [Tout relancer] [Choisir…] [Plus tard] (maquette 6(p))
  → reprendre un agent = LaunchPlanner(.resume(sessions.last)) → `claude --resume <id> …` lancé dans
    SessionRef.cwd (worktree ou dossier changé) ; dossier disparu → proposer un fork dans le dossier du projet
@@ -639,7 +639,7 @@ struct WorldSnapshot: Equatable { var layout: WorldLayoutResult; var agents: [Ag
   | Poste libre | copier | poste en surbrillance + « Nouvel agent avec ce post-it » | crée l'agent, post-it en prompt positionnel |
   | Sol d'un îlot | copier | îlot en surbrillance + « premier agent libre » | `DispatchPolicy.firstFreeAgent` |
   | Ligne du plateau d'attente ou de la mini-carte | copier | ligne en surbrillance | comme la cible agent |
-  | Ailleurs | aucune | — | rien |
+  | Ailleurs | aucune | - | rien |
 
   **Défilement automatique** : à moins de 48 pt d'un bord de la scène pendant un glisser, la caméra glisse vers ce bord (200 pt/s, 600 pt/s à moins de 16 pt) ; survoler une ligne du plateau d'attente 0,5 s fait voler la caméra vers l'agent. Un seul post-it par glisser au MVP ; l'aperçu du glisser a la taille du post-it du tableau, quel que soit le zoom.
 - **Plateau d'attente** (objectif « qui attend quoi en moins de 3 s ») :
@@ -747,7 +747,7 @@ Toutes les actions passent par `CommandCenter` (`func perform(_ c: AppCommand)`)
 | Fichier | Nouveau post-it (titre, puis Entrée) | ⌘N (remplace `CommandGroup(replacing: .newItem)`, donc pas de « Nouvelle fenêtre ») | Fichier |
 | | Nouvel agent dans le projet sélectionné | ⇧⌘N | Fichier |
 | | Nouveau projet (sélecteur de dossier) ; ou dépôt d'un dossier sur la fenêtre | ⌥⌘N | Fichier |
-| Tableau (focus) | Sélectionner un post-it | ↑ ↓ ← → | — |
+| Tableau (focus) | Sélectionner un post-it | ↑ ↓ ← → | - |
 | | Changer de colonne · réordonner | ⌘← / ⌘→ · ⌘↑ / ⌘↓ | Tâche |
 | | Modifier · supprimer | ↩ · ⌘⌫ | Tâche |
 | | Donner à… · au premier agent libre | ⌘D · ⇧⌘D | Tâche |
@@ -923,7 +923,7 @@ struct TaskCard: Codable, Identifiable, Sendable {
     var templateID: PromptTemplateID?
     var delivery: DeliveryInfo?         // tentative en cours ou dernière ; les précédentes vont dans history
     var flags: Set<CardFlag>            // .interrupted, .deliveryFailed, .turnFailed, .sessionLost
-    var history: [CardEvent]            // (date, de, vers, par) — lisible dans le détail du post-it
+    var history: [CardEvent]            // (date, de, vers, par), lisible dans le détail du post-it
     var external: ExternalRef?          // plus tard : issue GitHub (numéro, URL) ; carte « externe » (5.5)
     var createdAt: Date; var updatedAt: Date
 }
@@ -1022,14 +1022,14 @@ DecorItem ──► .hall ou .island(ProjectID)            ProgressState ──�
 | Fait | Propriétaire | Modifié uniquement par | Dérivés (jamais stockés ailleurs) |
 |---|---|---|---|
 | Projets, slot, teinte, ordre | `WorkspaceStore` | commandes | îlots (`WorldLayout`) |
-| Agent (nom, poste, apparence, modèle, mode, worktree) | `WorkspaceStore` | commandes | — |
+| Agent (nom, poste, apparence, modèle, mode, worktree) | `WorkspaceStore` | commandes | - |
 | Journal des sessions, dernier processus | `WorkspaceStore` | effets `recordSession`, `endSession`, `updateSessionCwd`, `recordProcess` émis par `AgentStateMachine.reduce` | cible de reprise = `sessions.last` |
-| File en pause | `Agent.queuePaused` | commandes « Mettre en pause / Reprendre la file », effet `setQueuePaused` | — |
+| File en pause | `Agent.queuePaused` | commandes « Mettre en pause / Reprendre la file », effet `setQueuePaused` | - |
 | Phase, attentes, outils en vol, session vivante, `Stop` provisoire, livraison en cours, santé des hooks, relevé d'écran | `AgentRuntime` | `AgentStateMachine.reduce` (entrées `AgentInput`, y compris `deliveryStarted` / `deliveryAborted`) | `state`, `AgentPresentation`, compteurs |
 | Colonne, assignation, rang de file, drapeaux, livraison et historique d'une carte ; consignes en file | `TaskStore` | `TaskLifecycle.reduce` (entrées `TaskInput`, dont les effets `cardEvent` de l'agent) | file d'un agent = consignes, puis cartes `todo ∧ assignee == a`, par `queueRank` |
 | Texte, tags, priorité, modèle d'une carte ; modèles de prompt | `TaskStore` | éditeur de post-it | prompt composé |
 | XP, badges, déblocages | `ProgressStore` | `ProgressRules`, sur l'effet de validation | niveau |
-| Réglages | `SettingsStore` | écran Réglages | — |
+| Réglages | `SettingsStore` | écran Réglages | - |
 | Écran et octets du terminal | SwiftTerm (`TerminalHost`) | le PTY | `ScreenFacts` (entrée `.screen`) |
 
 Invariants vérifiés par `WorkspaceValidator` au chargement **et** par des tests de propriétés sur les réducteurs :
@@ -1049,44 +1049,44 @@ Conventions :
 
 | # | Entrée | Garde | Nouvelle phase | Effets et champs |
 |---|---|---|---|---|
-| T1 | `processStarted(pid, start)` | — | `launching` | `pid` ; `recordProcess` |
+| T1 | `processStarted(pid, start)` | - | `launching` | `pid` ; `recordProcess` |
 | T2 | `hook SessionStart(source)` | principal | `idle`, ou `thinking` si un prompt initial a été passé | `recordSession(id, source, cwd)` ; la carte initiale passe « En cours » au `UserPromptSubmit` correspondant, ou dès ce `SessionStart` si ce hook ne part pas pour un prompt positionnel (⚠️ S3) |
 | T3 | `hook SessionStart(compact \| clear \| resume)` | principal | inchangée (`clear` → `idle`) | nouvelle `SessionRef` seulement si l'id change |
 | T4 | `hook UserPromptSubmit` | principal | `thinking` | `pendingStop = nil` ; toutes les attentes levées ; si `pendingDelivery` et que le prompt commence par son préfixe : `cardEvent(deliveryConfirmed(promptID))`, `pendingDelivery = nil` ; `acknowledged` |
-| T5 | `hook PreToolUse(AskUserQuestion)` | — | inchangée | attente `.tool(id)` = `.question(questions)` ; `notify(.waiting)`, `playSound(.alert)`, `announce` |
+| T5 | `hook PreToolUse(AskUserQuestion)` | - | inchangée | attente `.tool(id)` = `.question(questions)` ; `notify(.waiting)`, `playSound(.alert)`, `announce` |
 | T6 | `hook PreToolUse(tool)` | principal | `working(ToolKind(tool))` | `inFlightTools[id]` ; `pendingStop = nil` (voir T13c) |
 | T7 | `hook PreToolUse / PostToolUse` | sous-agent | inchangée | `inFlightTools` mis à jour ; activité (garde le poste animé) |
 | T8 | `hook PermissionRequest(tool, id)` | principal **ou** sous-agent | inchangée | attente `.tool(id)` = `.permission` ; `notify(.waiting)`, `playSound(.alert)`, `announce`, badge Dock |
 | T9 | `hook Notification(permission_prompt \| agent_needs_input \| elicitation_dialog)` | aucune attente ouverte | inchangée | attente `.notification(type)` (**rattrapage**, si `PermissionRequest` a été manqué) ; notifier |
 | T10 | `hook Notification(idle_prompt)` | phase ∈ {`thinking`, `working`} | `idle` | `reconcile` (un `Stop` a été manqué) |
-| T11 | `hook Elicitation(id)` | — | inchangée | attente `.elicitation(id)` = `.elicitation(server, message)` ; notifier |
-| T12 | `hook PostToolUse / PostToolUseFailure / PermissionDenied` (même `tool_use_id`) ; `ElicitationResult` | — | principal : `thinking` (affichage lissé sur 300 ms) | retire l'attente et l'outil de même id ; si `failed` : effet visuel « bouffée de fumée » |
-| T12b | `hook PostToolBatch` | — | inchangée | retire toutes les attentes `.tool` de ce même agent (principal ou sous-agent) : couvre un refus manuel, qui ne produit ni `PostToolUse` ni `PermissionDenied` (⚠️ S5) |
+| T11 | `hook Elicitation(id)` | - | inchangée | attente `.elicitation(id)` = `.elicitation(server, message)` ; notifier |
+| T12 | `hook PostToolUse / PostToolUseFailure / PermissionDenied` (même `tool_use_id`) ; `ElicitationResult` | - | principal : `thinking` (affichage lissé sur 300 ms) | retire l'attente et l'outil de même id ; si `failed` : effet visuel « bouffée de fumée » |
+| T12b | `hook PostToolBatch` | - | inchangée | retire toutes les attentes `.tool` de ce même agent (principal ou sous-agent) : couvre un refus manuel, qui ne produit ni `PostToolUse` ni `PermissionDenied` (⚠️ S5) |
 | T13 | `hook Stop(stopHookActive, bg, crons)` | principal | `done`, affiché tout de suite | `pendingStop` rempli ; attentes et outils principaux vidés ; **aucun effet sur la carte ni la file** |
 | T13b | `tick` ou `screen` | `pendingStop` ∧ aucun événement principal depuis 3 s (6 s si `stopHookActive`) ∧ écran : zone de saisie visible, pas de spinner | `bg > 0` ou `crons > 0` → `waitingBackground(bg, crons)` ; sinon `done` confirmé | `pendingStop = nil`. Si `bg > 0` : `cardEvent(turnWaitingBackground)`. Sinon : `cardEvent(turnCommitted(promptID))`, `playSound(.done)`, `notify(.done)` si l'app est en arrière-plan, et `pumpQueue(after: 1.5 s)` **seulement si** `crons == 0` |
 | T13c | événement principal autre que `Notification` | `pendingStop ≠ nil`, ou `Stop` confirmé et même `prompt_id` sans `UserPromptSubmit` | selon la ligne concernée | le tour continuait (hook `Stop` bloquant, `/goal`) : `pendingStop = nil` ; si le `Stop` avait déjà été confirmé : `cardEvent(turnReopened(promptID))` |
-| T14 | `hook StopFailure(rate_limit)` | — | `quotaPaused(resetAt, autoResume: true)` (`resetAt` lu à l'écran, ⚠️ S5) | attentes levées ; `globalIssue(.quota)` : **une** bannière pour tous ; la carte reste « En cours », étiquette « en pause : quota » |
-| T14b | `hook StopFailure(authentication_failed \| oauth_org_not_allowed \| account_on_hold \| billing_error)` | — | `error(.account(type))` | `globalIssue(.account)` : **un** bandeau et **une** notification pour tous les agents |
-| T14c | `hook StopFailure(autre type)` | — | `error(.api(type))` | `cardEvent(turnFailed)` ; notifier |
+| T14 | `hook StopFailure(rate_limit)` | - | `quotaPaused(resetAt, autoResume: true)` (`resetAt` lu à l'écran, ⚠️ S5) | attentes levées ; `globalIssue(.quota)` : **une** bannière pour tous ; la carte reste « En cours », étiquette « en pause : quota » |
+| T14b | `hook StopFailure(authentication_failed \| oauth_org_not_allowed \| account_on_hold \| billing_error)` | - | `error(.account(type))` | `globalIssue(.account)` : **un** bandeau et **une** notification pour tous les agents |
+| T14c | `hook StopFailure(autre type)` | - | `error(.api(type))` | `cardEvent(turnFailed)` ; notifier |
 | T14d | `hook Notification(quota_auto_resume_fired)` | phase = `quotaPaused` | `thinking` | le tour repris par Claude Code se termine par un `Stop` normal (T13) ; `globalIssue` levé quand plus aucun agent n'est en pause |
 | T14e | `hook Notification(quota_auto_resume_stale \| _disabled)` | phase = `quotaPaused` | `_stale` : inchangée + attente `.notification` (« Limite réinitialisée : appuie sur Entrée dans le terminal ») ; `_disabled` : `quotaPaused(autoResume: false)` | la carte propose « Continuer la tâche » |
-| T15 | `hook SubagentStart / SubagentStop` | — | inchangée | `activeSubagents ± 1` (mini-avatar) |
-| T16 | `hook PreCompact / PostCompact` | — | inchangée | overlay « range son bureau » |
-| T17 | `hook SessionEnd(reason ∈ {clear, resume})` | — | inchangée | `endSession` (le `SessionStart` suivant portera le nouvel id) |
-| T18 | `hook SessionEnd(autre)` | — | inchangée | `endSession` ; on attend la fin du processus |
-| T19 | `processExited(0)` | — | `offline(.exited)` | attentes, outils, `pendingStop`, `pendingDelivery` vidés ; `cardEvent(sessionLost)` |
-| T20 | `processExited(≠0 ou signal)` | — | `error(.crashed(code))` | idem T19 ; notifier |
-| T21 | `processFailedToStart` | — | `error(.launchFailed)` | — |
+| T15 | `hook SubagentStart / SubagentStop` | - | inchangée | `activeSubagents ± 1` (mini-avatar) |
+| T16 | `hook PreCompact / PostCompact` | - | inchangée | overlay « range son bureau » |
+| T17 | `hook SessionEnd(reason ∈ {clear, resume})` | - | inchangée | `endSession` (le `SessionStart` suivant portera le nouvel id) |
+| T18 | `hook SessionEnd(autre)` | - | inchangée | `endSession` ; on attend la fin du processus |
+| T19 | `processExited(0)` | - | `offline(.exited)` | attentes, outils, `pendingStop`, `pendingDelivery` vidés ; `cardEvent(sessionLost)` |
+| T20 | `processExited(≠0 ou signal)` | - | `error(.crashed(code))` | idem T19 ; notifier |
+| T21 | `processFailedToStart` | - | `error(.launchFailed)` | - |
 | T22 | `userInterrupt` (bouton, ⌘., Échap dans la fenêtre agent) | phase ∈ {`thinking`, `working`} ∧ aucune attente ∧ aucune livraison en cours | inchangée | `interruptRequestedAt` ; `setQueuePaused(true)` ; `cardEvent(interrupted)` : la carte **reste En cours**. `SessionManager.interrupt` n'écrit l'octet `ESC` que si cette garde passe |
 | T22b | `tick` ou `screen` | `interruptRequestedAt` ∧ aucune sortie PTY depuis 1 s ∧ aucun `PreToolUse` depuis ∧ écran : zone de saisie visible, pas de spinner | `idle` | `interruptRequestedAt = nil`. Si Échap a envoyé des messages en file, le `UserPromptSubmit` qui suit applique T4 |
 | T22c | `tick` | `interruptRequestedAt` depuis plus de 3 s, sans effet (spinner, `PreToolUse`) | inchangée | « L'interruption n'a pas pris : ouvre le terminal » ; **pas** de second `ESC` (Échap Échap ouvre le retour arrière) |
-| T23 | `userKeystroke(k)` | — | inchangée | attente ouverte : `acknowledgedWaiting = true` (« ! » plus discret), touche ignorée pour le brouillon ; sinon `resampleScreen` (relevé 300 ms plus tard) |
-| T24 | `acknowledged` (fenêtre agent ou terminal ouverts) | `done` confirmé | `idle` | — |
+| T23 | `userKeystroke(k)` | - | inchangée | attente ouverte : `acknowledgedWaiting = true` (« ! » plus discret), touche ignorée pour le brouillon ; sinon `resampleScreen` (relevé 300 ms plus tard) |
+| T24 | `acknowledged` (fenêtre agent ou terminal ouverts) | `done` confirmé | `idle` | - |
 | T24b | `tick` | `done` confirmé depuis 10 min | `idle` | l'écran garde une petite coche (`screen.done`) jusqu'au tour suivant ; la carte reste « À valider » |
 | T25 | `tick` | `launching` depuis > 8 s ∧ aucune sortie depuis 3 s | inchangée | attente `.terminal` : « Regarde le terminal » |
 | T26 | `tick` | `launching` depuis > 15 s ∧ aucun hook | inchangée | `hookHealth = .degraded`, bandeau (4.4) |
 | T27 | `tick` | `thinking`/`working` ∧ aucun hook depuis 10 min ∧ aucune sortie depuis 2 min | inchangée | `stale = true` (« ? »), `reconcile` |
-| T28 | `screen(facts)` | — | inchangée | `screen = facts` ; une attente `.notification` ou `.terminal` est levée si aucun dialogue n'est visible depuis 2 s et que la zone de saisie l'est |
+| T28 | `screen(facts)` | - | inchangée | `screen = facts` ; une attente `.notification` ou `.terminal` est levée si aucun dialogue n'est visible depuis 2 s et que la zone de saisie l'est |
 | T29 | `hook CwdChanged(cwd)` | principal | inchangée | `updateSessionCwd(cwd)` |
 | T30 | `deliveryStarted(p)` | phase ∈ {`idle`, `done` confirmé} ∧ aucune attente ∧ `pendingStop == nil` | inchangée | `pendingDelivery = p` (sinon refus : le dispatcher n'écrit rien) |
 | T31 | `deliveryAborted(raison)` | `pendingDelivery ≠ nil` | inchangée | `pendingDelivery = nil` ; `cardEvent(deliveryFailed(raison))` ; `setQueuePaused(true)` |
@@ -1113,22 +1113,22 @@ Réducteur pur `(TaskBoardState, TaskInput) → (TaskBoardState, [TaskEffect])`.
 
 | # | Entrée | Garde | Colonne et champs | Effets |
 |---|---|---|---|---|
-| C1 | `create` (⌘N, collage de liste) | — | `todo`, non assignée | — |
+| C1 | `create` (⌘N, collage de liste) | - | `todo`, non assignée | - |
 | C2 | `assign(agent)` | `todo` ; même projet ; agent de l'app | `assignee = agent`, `queueRank` = fin de file | `pump(agent)` |
 | C3 | `assign(agent)` d'un autre projet | confirmation « Nova travaille dans ~/dev/site » | comme C2 ; `projectID` = projet de l'agent (noté dans l'historique) | `pump(agent)` |
 | C4 | `unassign` · `reassign(b)` · réordonner | `todo` | `assignee = nil` ou `b` ; `queueRank` recalculé | `pump(b)` |
-| C5 | `assign`, `reassign` ou glisser vers « En cours » d'une carte `inProgress`, `review` ou `done` | — | refusé (curseur interdit + explication : « glisse-la sur un agent » ou « remets-la d'abord à faire ») | — |
-| C6 | `deliveryStarted` | carte en tête de file | inchangée ; `delivery = {sessionID, sentAt}` | — |
-| C7 | `deliveryConfirmed(promptID)` | `delivery` en attente | **`inProgress`** ; `queueRank = nil` ; `delivery.promptID` | — |
-| C8 | `deliveryFailed(raison)` | — | reste `todo`, en tête ; drapeau `deliveryFailed` | notifier (la file de l'agent est déjà en pause, T31) |
+| C5 | `assign`, `reassign` ou glisser vers « En cours » d'une carte `inProgress`, `review` ou `done` | - | refusé (curseur interdit + explication : « glisse-la sur un agent » ou « remets-la d'abord à faire ») | - |
+| C6 | `deliveryStarted` | carte en tête de file | inchangée ; `delivery = {sessionID, sentAt}` | - |
+| C7 | `deliveryConfirmed(promptID)` | `delivery` en attente | **`inProgress`** ; `queueRank = nil` ; `delivery.promptID` | - |
+| C8 | `deliveryFailed(raison)` | - | reste `todo`, en tête ; drapeau `deliveryFailed` | notifier (la file de l'agent est déjà en pause, T31) |
 | C9 | `retry` (bouton « Réessayer ») | drapeau `deliveryFailed` | drapeau retiré | reprise de la file, `pump` |
-| C10 | `turnCommitted(promptID)` | `inProgress` ∧ même `promptID` (ou premier `Stop` après C7) | **`review`** ; `turnEndedAt` | — |
-| C11 | `turnWaitingBackground` | `inProgress` | inchangée ; étiquette « tâche de fond en cours » | — |
-| C12 | `turnReopened(promptID)` | `review` ∧ même `promptID` ∧ pas encore validée | **`inProgress`** | — |
+| C10 | `turnCommitted(promptID)` | `inProgress` ∧ même `promptID` (ou premier `Stop` après C7) | **`review`** ; `turnEndedAt` | - |
+| C11 | `turnWaitingBackground` | `inProgress` | inchangée ; étiquette « tâche de fond en cours » | - |
+| C12 | `turnReopened(promptID)` | `review` ∧ même `promptID` ∧ pas encore validée | **`inProgress`** | - |
 | C13 | `turnFailed` · `interrupted` · `sessionLost` | `inProgress` | inchangée ; drapeau correspondant | actions proposées : « Continuer la tâche », « Remettre à faire », « Marquer à valider » |
 | C14 | `continueTask` | `inProgress` avec drapeau ∧ agent vivant | drapeaux retirés | consigne « Continue la tâche : <titre> » **en tête de file** de l'assignee ; reprise de la file ; `pump` |
 | C15 | `putBack` (« Remettre à faire », glisser vers « À faire ») | `inProgress` ou `review` | `todo`, non assignée, drapeaux retirés ; `delivery` versée à l'historique | si l'agent travaille encore sur ce tour, il n'est **pas** interrompu, et son `Stop` n'affectera plus la carte |
-| C16 | `markForReview` (glisser vers « À valider ») | `inProgress` | `review` | — |
+| C16 | `markForReview` (glisser vers « À valider ») | `inProgress` | `review` | - |
 | C17 | `resend(précision)` (↺) | `review` | inchangée jusqu'au `deliveryConfirmed` de la précision, puis `inProgress` (nouveau `promptID`) | consigne « précision » en tête de file du **même agent** ; si sa session a changé depuis la livraison, avertissement ; agent hors ligne : « Relancer la session » d'abord |
 | C18 | `validate` (⌘↩, glisser vers « Fait ») | `review` ; depuis `todo` ou `inProgress` : confirmation « Marquer fait » | `done` | effet de validation → `ProgressRules` : XP **une seule fois par carte**, et seulement si elle a été livrée au moins une fois |
 | C19 | `reopen` | `done` | `todo`, non assignée | aucune XP retirée ni redonnée |
@@ -1306,13 +1306,13 @@ main:
 
 | Étape | Écriture PTY | Détail |
 |---|---|---|
-| 0 | — | `reduce(.deliveryStarted)` (T30) ; mémorise `hookSeq` |
+| 0 | - | `reduce(.deliveryStarted)` (T30) ; mémorise `hookSeq` |
 | 1 | **Garde `beforeText`** : G1 à G4 | Échec → `deliveryAborted` : carte « échec d'envoi », file en pause ; rien n'a été écrit |
 | 2 | **Texte court** (≤ 800 caractères et ≤ 3 lignes) : le texte **saisi**, lignes séparées par `LF` (= Ctrl+J = saut de ligne) | Envoyé comme une frappe, sans marqueurs de collage. Claude le traite comme un message que tu as tapé |
 | 2 | **Texte long** : une phrase d'amorce **saisie**, « Réalise la tâche décrite dans le texte collé ci-dessous. », puis `ESC[200~` + corps + `ESC[201~` | Seulement si `bracketedPasteMode` est vrai (lu dans SwiftTerm). La doc prévient qu'un collage replié est présenté à Claude comme un texte que tu n'as peut-être pas écrit : l'amorce saisie l'autorise explicitement à le suivre |
 | 3 | Attente de la fin d'écriture (`LocalProcess.send(data:completion:)`), puis délai d | d = 120 ms (< 500 o), 250 ms (< 2 Ko), 500 ms (< 16 Ko), 1 s au-delà. Un bug connu perd le collage si une touche arrive dans le même bloc que la fin du collage (issue anthropics/claude-code #91205) |
 | 4 | **Garde `beforeEnter`** : G1, G2 (aucun événement depuis l'étape 0), G3 (notre préfixe visible dans la zone de saisie, aucun dialogue) | Échec → abandon **sans Entrée**. Le texte reste dans la zone de saisie : la carte indique « texte laissé dans le terminal, vérifie-le », et la zone passe en « brouillon », ce qui bloque toute autre livraison automatique. L'app n'efface jamais rien (pas de Ctrl+U) |
-| 5 | `\r` **seul, dans une écriture distincte** | — |
+| 5 | `\r` **seul, dans une écriture distincte** | - |
 | 6 | Attente de `UserPromptSubmit`, 3 s au plus | Son `prompt` doit commencer par les 40 premiers caractères normalisés du texte envoyé : la carte passe alors « En cours » (C7) |
 | 7 | Sinon : **garde `beforeRetryEnter`** (G1, G2, G3 avec le préfixe toujours visible) | Réussie → **un seul** `\r` de plus, puis 3 s d'attente. Sinon, ou toujours rien : `deliveryAborted`, carte `deliveryFailed` dans « À faire », notification |
 
@@ -1401,7 +1401,7 @@ Un script `Tools/spikes/run-spikes.sh` exécute ces tests avec ta vraie installa
 | S3b | **Livraison sous perturbation** : pendant une livraison, faire finir une tâche de fond (`run_in_background`), armer un `/loop` ou un cron, activer `/goal`, installer un hook `Stop` bloquant de test, provoquer une permission. Vérifier que les gardes abandonnent, qu'aucune Entrée ne tombe sur un dialogue, que `Stop` porte `background_tasks`/`session_crons` et qu'un tour relancé est bien détecté | Gardes G1/G2, T13 à T13c |
 | S4 | `session_id` après `/clear`, `/compact`, `/resume`, `--resume`, `--fork-session` ; `cwd` avec `--worktree` | Tests de la machine à états, reprise |
 | S5 | Champs réels de `PermissionRequest`, `Stop`, `StopFailure`, `Notification` ; événements après un **refus manuel** (`PostToolUseFailure` ? `PostToolBatch` ?) ; ligne de limite d'usage à l'écran | Décodeur, T12b, T14 |
-| S6 | *(retiré : la doc répond déjà, `claude agents --json` ne liste pas les sessions interactives)* | — |
+| S6 | *(retiré : la doc répond déjà, `claude agents --json` ne liste pas les sessions interactives)* | - |
 | S7 | Lignes visibles du dialogue de permission **et** du dialogue `AskUserQuestion` (captures) ; touches qui choisissent chaque option | Motifs des réponses rapides, boutons de question |
 | S8 | Glisser un `Transferable` SwiftUI vers un `NSDraggingDestination` AppKit ; sinon, décodage direct de l'UTI par `WorldView` | Glisser-déposer vers la scène |
 | S9 | Latence de `pixel-hook` (p50, p95) | Tolérance « < 1 s » |
@@ -1529,7 +1529,7 @@ Ce MVP n'a pas de scène isométrique : des cartes d'agents regroupées par proj
 
 ```text
 ╔═[▦]═ Nova · API ════════════════════════════════════════════════[×]═╗
-║ ┌──────────┐  État    : [#] TRAVAILLE — Bash                        ║
+║ ┌──────────┐  État    : [#] TRAVAILLE : Bash                        ║
 ║ │  avatar  │  Tâche   : Corriger le login OAuth                     ║
 ║ │  32×56   │  Depuis  : 4 min 12 s        Tour : 3 outils           ║
 ║ │  (anim.) │  Modèle  : sonnet            Permissions : default     ║
@@ -1556,13 +1556,13 @@ Ce MVP n'a pas de scène isométrique : des cartes d'agents regroupées par proj
 
 | État | Terminal | Interrompre | Relancer la session | Reprendre la file | Continuer la tâche | Envoyer quand même | Fermer |
 |---|---|---|---|---|---|---|---|
-| `thinking` / `working` | ✔ | ✔ | — | si en pause | — | — | ✔ (confirmation) |
-| `waitingInput` | ✔ | — (utiliser « Refuser ») | — | si en pause | — | — | ✔ (confirmation) |
-| `idle` / `done` | ✔ | — | — | si en pause | si carte signalée | si brouillon | ✔ |
-| `waitingBackground` | ✔ | — | — | — | — | ✔ (confirmation) | ✔ (confirmation) |
-| `quotaPaused` | ✔ | — (annulerait la reprise auto) | — | — | si reprise auto désactivée | — | ✔ (confirmation) |
-| `error` | ✔ | — | si processus terminé | — | si carte signalée | — | ✔ |
-| `offline` | — | — | ✔ (sauf pid orphelin vivant) | — | après relance | — | — |
+| `thinking` / `working` | ✔ | ✔ | - | si en pause | - | - | ✔ (confirmation) |
+| `waitingInput` | ✔ | - (utiliser « Refuser ») | - | si en pause | - | - | ✔ (confirmation) |
+| `idle` / `done` | ✔ | - | - | si en pause | si carte signalée | si brouillon | ✔ |
+| `waitingBackground` | ✔ | - | - | - | - | ✔ (confirmation) | ✔ (confirmation) |
+| `quotaPaused` | ✔ | - (annulerait la reprise auto) | - | - | si reprise auto désactivée | - | ✔ (confirmation) |
+| `error` | ✔ | - | si processus terminé | - | si carte signalée | - | ✔ |
+| `offline` | - | - | ✔ (sauf pid orphelin vivant) | - | après relance | - | - |
 
 ### (e) Agent en attente de permission, avec réponses rapides
 
@@ -1714,7 +1714,7 @@ Le libellé de l'icône montre le nombre d'agents en attente (« ▣ 2 »), ou r
 ┌──────────────────────────────────────────────────────────────────────┐
 │ ⌘K  › nova_                                                          │
 ├──────────────────────────────────────────────────────────────────────┤
-│ ▸ (!) Aller à Nova (API) — attend ta réponse               ↩         │
+│ ▸ (!) Aller à Nova (API) : attend ta réponse               ↩         │
 │       Ouvrir le terminal de Nova                           ⌘T        │
 │       Interrompre Nova                                     ⌘.        │
 │       Donner un post-it à Nova…                                      │
@@ -1863,7 +1863,7 @@ Le bouton « Lancer » reste grisé tant que la case de risque n'est pas cochée
 │       post-it en cours :  ( ) Continuer la tâche   (•) Remettre à faire  │
 │ [✓] Bip · API     session 7d2f…                 il y a 2 h               │
 │ [ ] Tao · SITE    transcript purgé : une nouvelle session sera créée     │
-│ [—] Rio · INFRA   ⚠ tourne encore hors de l'app (pid 4312)               │
+│ [-] Rio · INFRA   ⚠ tourne encore hors de l'app (pid 4312)               │
 │                   [Terminer ce processus]   [Laisser tourner]            │
 │                                                                          │
 │ [ Plus tard ]                               [ Relancer 2 sessions ↩ ]    │
@@ -1904,7 +1904,7 @@ Emprise : 6 slots (3×2) = 1920×1056 pt à ×1, donc 960×528 pt en vue d'ensem
 │    Cherché : réglage, ~/.local/bin, /opt/homebrew/bin, /usr/local/bin,   │
 │    et le PATH de ton shell de connexion (zsh).                           │
 │    [Indiquer le chemin…]   [Comment l'installer ↗]   [Réessayer]         │
-│ 2. Version          —   (minimum 2.1.234, lue avec claude --version)     │
+│ 2. Version          -   (minimum 2.1.234, lue avec claude --version)     │
 │ 3. Connexion        se fait dans le terminal au premier lancement ;      │
 │    l'app ne voit ni ne stocke tes identifiants.                          │
 │ 4. Premier dossier  Claude peut demander la confiance du dossier dans    │
@@ -2048,15 +2048,15 @@ Colonnes : **Taille** en px · **Ancre** en px · **Frames × fps** (1 = statiqu
 
 | ID | Taille | Ancre | Frames × fps | Variantes | Miroir | Ét. |
 |---|---|---|---|---|---|---|
-| `floor.hall` | 64×32 | 32,16 | 1 | 3 bruits de parquet | — | 3 |
-| `floor.corridor` | 64×32 | 32,16 | 1 | 2 | — | 3 |
-| `floor.carpet` | 64×32 | 32,16 | 1 | 10 teintes × 2 motifs | — | 3 |
+| `floor.hall` | 64×32 | 32,16 | 1 | 3 bruits de parquet | - | 3 |
+| `floor.corridor` | 64×32 | 32,16 | 1 | 2 | - | 3 |
+| `floor.carpet` | 64×32 | 32,16 | 1 | 10 teintes × 2 motifs | - | 3 |
 | `floor.carpet.edge.n / .s` | 64×32 | 32,16 | 1 | 10 teintes | oui → `.e/.w` | 3 |
 | `floor.carpet.corner.n / .e / .s` | 64×32 | 32,16 | 1 | 10 teintes | oui → `.w` | 3 |
-| `floor.hover` | 64×32 | 32,16 | 2 × 4 | contour pointillé `chalk` | — | 3 |
-| `floor.dropTarget` | 64×32 | 32,16 | 4 × 8 | halo `chalk` pulsé (post-it au-dessus d'un poste) | — | 3 |
-| `floor.editGrid` | 64×32 | 32,16 | 1 | libre / occupé | — | 6 |
-| `shadow.tile` · `shadow.char` · `shadow.small` | 56×28 · 20×8 · 16×8 | centre | 1 | — | — | 3 |
+| `floor.hover` | 64×32 | 32,16 | 2 × 4 | contour pointillé `chalk` | - | 3 |
+| `floor.dropTarget` | 64×32 | 32,16 | 4 × 8 | halo `chalk` pulsé (post-it au-dessus d'un poste) | - | 3 |
+| `floor.editGrid` | 64×32 | 32,16 | 1 | libre / occupé | - | 6 |
+| `shadow.tile` · `shadow.char` · `shadow.small` | 56×28 · 20×8 · 16×8 | centre | 1 | - | - | 3 |
 
 **7.4.2 Murs et structure**
 
@@ -2064,11 +2064,11 @@ Colonnes : **Taille** en px · **Ancre** en px · **Frames × fps** (1 = statiqu
 |---|---|---|---|---|---|---|
 | `wall.segment` | 32×112 | 16,104 | 1 | uni · prise · plinthe | 4 or. (mur NO et mur NE générés séparément) | 3 |
 | `wall.window` | 32×112 | 16,104 | 1 (nuages 4 × 1 en option) | ciel jour / crépuscule / nuit | 4 or. | 3 |
-| `wall.corner` | 16×112 | 8,104 | 1 | — | — | 3 |
-| `pillar` | 32×96 | 16,88 | 1 | — | — | 3 |
-| `elevator` | 64×128 | 32,120 | portes 6 × 12 · voyant 2 × 2 | — | — | 3 |
+| `wall.corner` | 16×112 | 8,104 | 1 | - | - | 3 |
+| `pillar` | 32×96 | 16,88 | 1 | - | - | 3 |
+| `elevator` | 64×128 | 32,120 | portes 6 × 12 · voyant 2 × 2 | - | - | 3 |
 | `board.cork` (mur de liège, cisaillé 2:1) | 192×128 | 96,120 | 1 (mini post-its ajoutés dynamiquement) | 48 emplacements (4 rangées de 12) ; au-delà, compteur « +23 » épinglé | 4 or. | 3 |
-| `sign.island` (pancarte, panneau de face) | 64×40 | 32,38 | 1 | 10 teintes ; nom rasterisé en Silkscreen 8 px, 10 caractères max puis « … » | — | 3 |
+| `sign.island` (pancarte, panneau de face) | 64×40 | 32,38 | 1 | 10 teintes ; nom rasterisé en Silkscreen 8 px, 10 caractères max puis « … » | - | 3 |
 
 **7.4.3 Mobilier du poste**
 
@@ -2079,12 +2079,12 @@ Colonnes : **Taille** en px · **Ancre** en px · **Frames × fps** (1 = statiqu
 | `monitor.front` (écran visible) | 24×24 | 12,22 | 1 | décalé de 6 px vers l'allée en rangée A, pour que l'écran ne soit pas caché par l'avatar (à valider au jalon visuel) | 4 or. | 3 |
 | `monitor.back` (dos + LED d'état) | 24×24 | 12,22 | LED 2 × 2 | LED de la couleur **et** du motif de l'état (clignote en attente) | 4 or. | 3 |
 | `screen.off / .boot / .idle / .thinking / .working / .waiting / .done / .error / .quota / .background` | 16×10 | 8,10 | 1 · 4×8 · 2×1 · 3×4 · 4×8 · 2×4 · 1 · 3×8 · 2×1 · 3×2 | contenu d'écran superposé ; `.waiting` = clignotement jaune ; `.quota` = horloge ; `.background` = sablier | oui | 3 |
-| `keyboard` · `mug` · `papers` | 14×6 · 6×8 · 12×6 | bas-centre | 1 · vapeur 3 × 4 · 1 | — | 4 or. | 3 |
-| `desk.postit` (post-it collé à l'écran) | 6×6 | 3,6 | 1 | 11 teintes | — | 3 |
-| `desk.queue` (pile de post-its en file) | 10×8 | 5,8 | 1 | 1 à 3 feuilles | — | 3 |
+| `keyboard` · `mug` · `papers` | 14×6 · 6×8 · 12×6 | bas-centre | 1 · vapeur 3 × 4 · 1 | - | 4 or. | 3 |
+| `desk.postit` (post-it collé à l'écran) | 6×6 | 3,6 | 1 | 11 teintes | - | 3 |
+| `desk.queue` (pile de post-its en file) | 10×8 | 5,8 | 1 | 1 à 3 feuilles | - | 3 |
 | `lamp.desk` (une par poste, mobilier de base) | 12×18 | 6,17 | 1 | allumée / éteinte | 4 or. | 3 |
-| `light.cone` | 48×32 | 24,16 | 1 | additif, nuit | — | 4 |
-| `trash` · `printer` | 12×14 · 32×32 | bas-centre | 1 · impression 4 × 8 | — | 4 or. | 4 |
+| `light.cone` | 48×32 | 24,16 | 1 | additif, nuit | - | 4 |
+| `trash` · `printer` | 12×14 · 32×32 | bas-centre | 1 · impression 4 × 8 | - | 4 or. | 4 |
 
 **7.4.4 Personnages** (32×56, ancre `(16, 53)`, dessinés en SE et NE ; SW et NW = miroir de la silhouette **puis ré-ombrage**, 7.5)
 
@@ -2128,7 +2128,7 @@ Total : 48 frames en SE et 44 en NE (`raiseHand` n'existe que vers le spectateur
 | `ov.edgeArrow` | 16×16 | 8,8 | 2 × 4 | flèche de bord avec « ! » pour un agent en attente hors champ (8 directions par rotation de 45°, sprite symétrique) | 3 |
 | `ov.degraded` · `ov.unsafe` · `ov.external` | 12×12 | 6,12 | 1 | panneaux : mode dégradé · `bypassPermissions` · session externe | 3 |
 | `ov.selection` | 36×18 | 18,9 | 2 × 3 | anneau de sélection au sol | 3 |
-| `ov.speech` (9-slice) | 24×16, bords 4/4/4/8 avec pointe | — | 1 | bulle de texte court (nom, « Salut ! ») | 4 |
+| `ov.speech` (9-slice) | 24×16, bords 4/4/4/8 avec pointe | - | 1 | bulle de texte court (nom, « Salut ! ») | 4 |
 
 **7.4.6 Habillage d'UI (SwiftUI, 9-slice, affiché avec `.interpolation(.none)` et une échelle entière)**
 
@@ -2137,26 +2137,26 @@ Total : 48 frames en SE et 44 en NE (`raiseHand` n'existe que vers le spectateur
 | `ui.window` | 24×24 | 8 | active / inactive | 4 |
 | `ui.titlebar` | 24×18 | 6 | teinte projet ou `uiTitle` · inactive | 4 |
 | `ui.button` | 16×16 | 4 | normal / survol / enfoncé / désactivé / principal / danger | 4 |
-| `ui.close` | 12×12 | — | normal / survol / enfoncé | 4 |
+| `ui.close` | 12×12 | - | normal / survol / enfoncé | 4 |
 | `ui.field` | 12×12 | 4 | normal / focus / erreur | 4 |
 | `ui.panel` | 16×16 | 4 | en relief / en creux | 4 |
 | `ui.scroll.track` · `ui.scroll.thumb` | 8×16 | 3 | normal / survol | 4 |
-| `ui.check` · `ui.toggle` | 12×12 · 20×12 | — | on / off / mixte | 4 |
+| `ui.check` · `ui.toggle` | 12×12 · 20×12 | - | on / off / mixte | 4 |
 | `ui.tab` · `ui.tooltip` · `ui.badge` | 16×16 · 12×12 · 10×10 | 4 · 4 · 3 | actif / inactif | 4 |
-| `ui.cursor.grab` · `ui.cursor.drop` · `ui.cursor.forbidden` | 16×16 | point chaud 8,8 | — | 4 |
+| `ui.cursor.grab` · `ui.cursor.drop` · `ui.cursor.forbidden` | 16×16 | point chaud 8,8 | - | 4 |
 | `ui.dropdown` · `ui.segmented` · `ui.progress` | 16×16 · 16×16 · 12×8 | 4 · 4 · 3 | normal / survol / enfoncé / désactivé ; segment actif ; remplissage | 4 |
-| `board.corkTile` (fond du tableau SwiftUI, en mosaïque) | 32×32 | — | 1 | 4 |
-| `app.icon` (maître 64×64, exporté ×16) · `menubar.icon` (gabarit 18×18 monochrome) | — | — | — | 4 |
+| `board.corkTile` (fond du tableau SwiftUI, en mosaïque) | 32×32 | - | 1 | 4 |
+| `app.icon` (maître 64×64, exporté ×16) · `menubar.icon` (gabarit 18×18 monochrome) | - | - | - | 4 |
 
 **7.4.7 Post-its et punaises**
 
 | ID | Taille | Ancre | Frames × fps | Variantes | Ét. |
 |---|---|---|---|---|---|
-| `postit.card` (tableau, **9-slice**, affiché ×2) | 16×16, bords de 4 px | — | 1 | 11 teintes (10 projets + `paper`) ; taille libre selon le contenu (titre, 2 lignes, tags, projet, assigné) | 4 |
+| `postit.card` (tableau, **9-slice**, affiché ×2) | 16×16, bords de 4 px | - | 1 | 11 teintes (10 projets + `paper`) ; taille libre selon le contenu (titre, 2 lignes, tags, projet, assigné) | 4 |
 | `postit.corner` (coin corné, superposé) | 8×8 | en haut à droite | 1 | 11 teintes | 4 |
-| `postit.wiggle` | — | — | 2 × 8 (décalage de 1 px du 9-slice entier, pas de rotation) | — | 4 |
+| `postit.wiggle` | - | - | 2 × 8 (décalage de 1 px du 9-slice entier, pas de rotation) | - | 4 |
 | `pin.red / .yellow / .green` | 8×10 | 4,9 | 2 (normale / enfoncée) | Sur le tableau (UI), la punaise jaune utilise `alertYellow` : la réserve ne vaut que dans la scène | 4 |
-| `tape` | 16×6 | 8,3 | 1 | — | 4 |
+| `tape` | 16×6 | 8,3 | 1 | - | 4 |
 | `postit.mini` (mur de liège, cisaillé 2:1) | 8×12 | 4,12 | 1 | 11 teintes × 2 murs | 3 |
 
 **7.4.8 Effets et particules**
@@ -2179,18 +2179,18 @@ Total : 48 frames en SE et 44 en NE (`raiseHand` n'existe que vers le spectateur
 | `decor.plantSmall` (hall, une par îlot) | 16×24 | balancement 2 × 1 | **base** |
 | `decor.coffeeMachine` (coin café du hall) | 32×48 | vapeur 4 × 6 | **base** (anime `coffee`) |
 | `lamp.desk` (7.4.3, une par poste) | 12×18 | on/off | **base** (allumée la nuit) |
-| `decor.cactus` | 16×24 | — | badge « Première tâche » |
+| `decor.cactus` | 16×24 | - | badge « Première tâche » |
 | `decor.espressoMachine` (habillage de la machine du hall) | 32×48 | vapeur 4 × 6 | 5 tâches validées |
 | `decor.floorLamp` | 16×48 | on/off | 10 tâches validées |
-| `decor.posterMountain` | 24×32 (mur, cisaillé 2:1) | — | badge « 5 agents en parallèle » |
-| `decor.rug` (3 motifs) | 128×64 | — | 3 projets |
+| `decor.posterMountain` | 24×32 (mur, cisaillé 2:1) | - | badge « 5 agents en parallèle » |
+| `decor.rug` (3 motifs) | 128×64 | - | 3 projets |
 | `decor.plantBig` | 32×56 | 2 × 1 | niveau 3 |
-| `decor.bookshelf` | 32×64 | — | 25 tâches validées |
+| `decor.bookshelf` | 32×64 | - | 25 tâches validées |
 | `decor.aquarium` | 64×48 | poissons 6 × 6, bulles 3 × 4 | niveau 5 |
 | `decor.arcade` (borne originale) | 32×56 | écran 4 × 4 | badge « 10 post-its vidés dans la journée » |
-| `decor.sofa` | 64×48 | — | 50 tâches validées |
+| `decor.sofa` | 64×48 | - | 50 tâches validées |
 | `decor.waterCooler` | 16×40 | bulle 3 × 3 | badge « Zéro attente » |
-| `decor.posterWave` · `decor.posterRobot` | 24×32 | — | niveaux 7 et 10 |
+| `decor.posterWave` · `decor.posterRobot` | 24×32 | - | niveaux 7 et 10 |
 
 **Badges** (`BadgeID`) :
 
@@ -2211,15 +2211,15 @@ Total : 48 frames en SE et 44 en NE (`raiseHand` n'existe que vers le spectateur
 |---|---|---|---|---|---|
 | `desk.nameplate` (9-slice) | 16×8, bords 3 | bas-centre | 1 | plaque de nom du poste ; variante « OFF · Relancer » | 3 |
 | `desk.queueBadge` | 8×8 | 4,8 | 1 | nombre de post-its en file (1 à 9, puis « + ») | 3 |
-| `hud.state.*` (un par `AgentStateKind`) | 12×12 | — | 1 | icônes de la barre d'état, du plateau d'attente et de la vue Liste | 3 |
-| `minimap.frame` (9-slice) · `minimap.dot.*` · `minimap.viewport` | 16×16 · 5×5 · 9-slice 8×8 | — | 1 | cadre ; un point **avec glyphe** par état ; rectangle de la zone visible | 3 |
-| `portrait.mini` | 12×12 | — | 1 (composé depuis `AgentLook`) | agent assigné sur le post-it, menu de la barre de menus, vue Liste | 4 |
+| `hud.state.*` (un par `AgentStateKind`) | 12×12 | - | 1 | icônes de la barre d'état, du plateau d'attente et de la vue Liste | 3 |
+| `minimap.frame` (9-slice) · `minimap.dot.*` · `minimap.viewport` | 16×16 · 5×5 · 9-slice 8×8 | - | 1 | cadre ; un point **avec glyphe** par état ; rectangle de la zone visible | 3 |
+| `portrait.mini` | 12×12 | - | 1 (composé depuis `AgentLook`) | agent assigné sur le post-it, menu de la barre de menus, vue Liste | 4 |
 | `agent.outline.dashed` | 32×56 | 16,53 | 2 × 2 | contour pointillé d'un visiteur externe | 5 |
 | `fx.star` | 1×1 et 3×3 | centre | 2 × 1 | étoiles des fenêtres la nuit | 4 |
 | `light.screenGlow` | 24×16 | 12,8 | 1, additif | lueur d'écran la nuit | 4 |
-| `hud.level` · `hud.xpBar` (9-slice) | 16×16 · 8×8 | — | 1 | niveau et barre d'XP de la barre d'outils | 6 |
-| `badge.*` (8 icônes, une par `BadgeID`) | 16×16 | — | 1 · version grisée | vitrine des badges | 6 |
-| `edit.drawer` (9-slice) · `edit.ghost` · `edit.invalid` | 16×16 · emprise · emprise | — | 1 · 2 × 4 · 1 | tiroir du mode édition ; fantôme de placement ; teinte rouge d'emplacement occupé | 6 |
+| `hud.level` · `hud.xpBar` (9-slice) | 16×16 · 8×8 | - | 1 | niveau et barre d'XP de la barre d'outils | 6 |
+| `badge.*` (8 icônes, une par `BadgeID`) | 16×16 | - | 1 · version grisée | vitrine des badges | 6 |
+| `edit.drawer` (9-slice) · `edit.ghost` · `edit.invalid` | 16×16 · emprise · emprise | - | 1 · 2 × 4 · 1 | tiroir du mode édition ; fantôme de placement ; teinte rouge d'emplacement occupé | 6 |
 
 **Couverture** : un test (`SpriteCoverageTests`) tient la liste de chaque nom de la spec et de ce document (état, animation, meuble, élément d'UI) et vérifie qu'un `SpriteID` lui correspond dans `SpriteCatalog` ; un nom sans sprite fait échouer la CI.
 

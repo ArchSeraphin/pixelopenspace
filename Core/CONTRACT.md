@@ -1,4 +1,4 @@
-# PixelCore — contract and working rules
+# PixelCore: contract and working rules
 
 Design reference: `docs/PROPOSITION.md` (French). Section numbers below refer to it.
 

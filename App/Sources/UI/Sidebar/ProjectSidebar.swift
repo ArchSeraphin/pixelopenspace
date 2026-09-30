@@ -39,7 +39,7 @@ struct ProjectSidebar: View {
                 Label("Projet", systemImage: "plus")
             }
             .buttonStyle(.borderless)
-            .help("Nouveau projet (⌥⌘N) — ou dépose un dossier sur la fenêtre")
+            .help("Nouveau projet (⌥⌘N), ou dépose un dossier sur la fenêtre")
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
         }

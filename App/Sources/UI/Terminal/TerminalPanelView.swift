@@ -50,7 +50,8 @@ struct TerminalPanelView: View {
     }
 }
 
-/// "Hors ligne — Relancer" (or the orphan left by a crashed run, proposal 2.5), instead of a dead terminal.
+/// "Hors ligne" with a "Relancer" button (or the orphan left by a crashed run, proposal 2.5), instead of a dead
+/// terminal.
 struct OfflineTerminalPlaceholder: View {
     let agent: Agent
     let actions: AgentActions
