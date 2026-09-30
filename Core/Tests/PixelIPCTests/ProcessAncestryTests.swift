@@ -1,4 +1,5 @@
 import Foundation
+import PixelIPC
 import Testing
 @testable import PixelIPC
 #if canImport(Darwin)
@@ -36,7 +37,7 @@ import Glibc
         process.arguments = ["-c", "read line; exit 0"]
         let input = Pipe()
         process.standardInput = input
-        try process.run()
+        try SpawnGate.run { try process.run() }
         defer {
             try? input.fileHandleForWriting.close()
             process.waitUntilExit()

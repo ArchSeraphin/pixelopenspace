@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import PixelCore
+import PixelIPC
 import SwiftTerm
 
 /// What a terminal reports to the model. Carries no business state: the reducer turns it into `AgentInput`.
@@ -66,8 +67,12 @@ final class TerminalHost: LocalProcessTerminalViewDelegate {
 
     /// Starts `claude` as planned. Returns its pid, or `nil` when the PTY could not be created (reported once).
     func start(_ plan: LaunchPlan) -> Int32? {
-        view.startProcess(executable: plan.executable, args: plan.args, environment: plan.environmentArray,
-                          execName: ClaudeLocatorPlan.executableName, currentDirectory: plan.cwd)
+        // forkpty leaves the pty master (and SwiftTerm's dup of it) inheritable: the gate keeps this `claude` from
+        // receiving the other agents' terminals, and the next ones from receiving this one.
+        SpawnGate.run {
+            view.startProcess(executable: plan.executable, args: plan.args, environment: plan.environmentArray,
+                              execName: ClaudeLocatorPlan.executableName, currentDirectory: plan.cwd)
+        }
         let childPID = view.process.shellPid
         guard childPID > 0 else {
             reportedStartFailure = true

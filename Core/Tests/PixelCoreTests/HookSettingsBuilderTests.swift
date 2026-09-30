@@ -1,4 +1,5 @@
 import Foundation
+import PixelIPC
 import Testing
 @testable import PixelCore
 
@@ -111,7 +112,7 @@ import Testing
         process.arguments = ["-c", "set -- \(command); printf '%s\\0' \"$@\""]
         let output = Pipe()
         process.standardOutput = output
-        try process.run()
+        try SpawnGate.run { try process.run() }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         #expect(process.terminationStatus == 0)

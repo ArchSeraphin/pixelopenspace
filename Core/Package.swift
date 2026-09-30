@@ -20,7 +20,7 @@ let package = Package(
         .executableTarget(name: "fake-claude", dependencies: ["PixelIPC"]),
         .testTarget(
             name: "PixelCoreTests",
-            dependencies: ["PixelCore"],
+            dependencies: ["PixelCore", "PixelIPC"],
             resources: [.copy("Fixtures")]
         ),
         .testTarget(

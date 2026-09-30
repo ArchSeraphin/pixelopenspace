@@ -73,4 +73,6 @@ jobs:
 
       - name: Test
         working-directory: Core
+        # A hang must fail this step (logs kept) instead of eating the job's 30 minutes.
+        timeout-minutes: 15
         run: swift test

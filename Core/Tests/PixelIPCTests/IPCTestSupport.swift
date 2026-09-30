@@ -1,4 +1,5 @@
 import Foundation
+import PixelIPC
 import Testing
 @testable import PixelIPC
 #if canImport(Darwin)
@@ -223,11 +224,13 @@ enum ChildProcess {
         process.standardInput = input
         process.standardOutput = output
         process.standardError = errors
+        // Through the gate: children started by concurrent tests must not inherit (and keep open) this child's
+        // stdin, which would hang both on macOS.
+        try SpawnGate.run { try process.run() }
 
         let box = Box()
         let group = DispatchGroup()
         let started = Date()
-        try process.run()
         let pid = process.processIdentifier
 
         let writer = input.fileHandleForWriting

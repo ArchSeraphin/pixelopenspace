@@ -1,4 +1,5 @@
 import Foundation
+import PixelIPC
 
 /// Runs a short helper command (login shell, `claude --version`) off the main thread, with a deadline.
 ///
@@ -54,7 +55,7 @@ enum ProcessRunner {
         let finished = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in finished.signal() }
         do {
-            try process.run()
+            try SpawnGate.run { try process.run() }
         } catch {
             return Outcome(exitCode: nil, output: Data(), timedOut: false, launchError: error.localizedDescription)
         }

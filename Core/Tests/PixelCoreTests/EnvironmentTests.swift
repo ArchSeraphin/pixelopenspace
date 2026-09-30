@@ -1,4 +1,5 @@
 import Foundation
+import PixelIPC
 import Testing
 @testable import PixelCore
 
@@ -110,7 +111,7 @@ import Testing
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardInput = FileHandle.nullDevice
-        try process.run()
+        try SpawnGate.run { try process.run() }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         let env = try #require(LoginShellEnvironment.parse(data, marker: Self.marker))
