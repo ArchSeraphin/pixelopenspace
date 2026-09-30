@@ -46,10 +46,10 @@ fileprivate enum Fixture {
     static func decide(_ runtime: AgentRuntime, agent: Agent = agent(), queue: [QueueItem] = [card, laterCard],
                        now: Date = now, lastTurnEndedAt: Date? = nil,
                        settings: DispatchSettings = DispatchSettings(),
-                       draftOverride: Bool = false) -> DeliveryDecision {
+                       draftOverride: Bool = false, quitPending: Bool = false) -> DeliveryDecision {
         DispatchPolicy.nextDelivery(agent: agent, runtime: runtime, queue: queue, now: now,
                                     lastTurnEndedAt: lastTurnEndedAt, settings: settings,
-                                    draftOverride: draftOverride)
+                                    draftOverride: draftOverride, quitPending: quitPending)
     }
 }
 
@@ -72,6 +72,29 @@ fileprivate enum Fixture {
         r.pid = nil
         r.hookHealth = .degraded
         #expect(F.decide(r, agent: F.agent(paused: true), queue: []) == .none)
+    }
+
+    /// Review focus 5: "Attendre la fin des tours" starts no delivery while the app waits to quit.
+    @Test func quitPendingBlocksDelivery() {
+        #expect(F.decide(F.ready(), quitPending: true) == .wait(.quitting))
+        #expect(F.decide(F.ready(.done), quitPending: true) == .wait(.quitting))
+        #expect(F.decide(F.ready(), queue: [F.instruction], quitPending: true) == .wait(.quitting))
+        // Off by default: the other callers are unchanged.
+        #expect(DispatchPolicy.nextDelivery(agent: F.agent(), runtime: F.ready(), queue: [F.card], now: F.now,
+                                            lastTurnEndedAt: nil, settings: DispatchSettings(),
+                                            draftOverride: false) == .deliver(F.card))
+        // Right after "empty queue": nothing to hold back, no cause to show.
+        #expect(F.decide(F.ready(), queue: [], quitPending: true) == .none)
+        // Before every other cause, even a paused queue or an offline agent.
+        #expect(F.decide(F.ready(), agent: F.agent(paused: true), quitPending: true) == .wait(.quitting))
+        var offline = F.ready(.offline(.exited))
+        offline.pid = nil
+        #expect(F.decide(offline, quitPending: true) == .wait(.quitting))
+        // "Envoyer quand même" lifts the draft only, never the pending quit.
+        var draft = F.ready()
+        draft.screen = ScreenFacts(inputBox: .draft(prefix: "x"), recognized: true)
+        #expect(F.decide(draft, draftOverride: true, quitPending: true) == .wait(.quitting))
+        #expect(WaitCause.quitting.label == "l'app va quitter")
     }
 
     @Test func pausedQueueWaits() {
@@ -265,13 +288,14 @@ fileprivate enum Fixture {
         #expect(F.decide(draft, draftOverride: true) == .deliver(F.card))
 
         // Every other cause stays, draft on screen or not.
-        var blocked: [(AgentRuntime, Agent, Date?, DispatchSettings)] = []
+        var blocked: [(AgentRuntime, Agent, Date?, DispatchSettings, Bool)] = []
         func add(_ change: (inout AgentRuntime) -> Void, agent: Agent = F.agent(), ended: Date? = nil,
-                 settings: DispatchSettings = DispatchSettings()) {
+                 settings: DispatchSettings = DispatchSettings(), quitPending: Bool = false) {
             var r = draft
             change(&r)
-            blocked.append((r, agent, ended, settings))
+            blocked.append((r, agent, ended, settings, quitPending))
         }
+        add({ _ in }, quitPending: true)
         add({ _ in }, agent: F.agent(paused: true))
         add { $0.pid = nil; $0.phase = .offline(.exited) }
         add { $0.hookHealth = .degraded }
@@ -287,10 +311,11 @@ fileprivate enum Fixture {
         add { $0.screen?.dialogVisible = true }
         add { $0.screen?.quotaLine = "Usage limit reached" }
         add { $0.screen?.spinnerVisible = true }
-        for (runtime, agent, ended, settings) in blocked {
-            let without = F.decide(runtime, agent: agent, lastTurnEndedAt: ended, settings: settings)
+        for (runtime, agent, ended, settings, quitPending) in blocked {
+            let without = F.decide(runtime, agent: agent, lastTurnEndedAt: ended, settings: settings,
+                                   quitPending: quitPending)
             let with = F.decide(runtime, agent: agent, lastTurnEndedAt: ended, settings: settings,
-                                draftOverride: true)
+                                draftOverride: true, quitPending: quitPending)
             #expect(without != .deliver(F.card))
             #expect(without != .wait(.draftInInputBox))
             #expect(with == without)
@@ -425,6 +450,7 @@ fileprivate enum Fixture {
         var settings = DispatchSettings(autoChain: false)
         var ended: Date? = F.now
         var draftOverride = false
+        var quitPending = true
         var r = F.ready(.waitingBackground(tasks: 1, crons: 0))
         r.pid = nil
         r.hookHealth = .degraded
@@ -437,10 +463,12 @@ fileprivate enum Fixture {
         var seen: [DeliveryDecision] = []
         func record() {
             seen.append(F.decide(r, agent: agent, queue: queue, lastTurnEndedAt: ended, settings: settings,
-                                 draftOverride: draftOverride))
+                                 draftOverride: draftOverride, quitPending: quitPending))
         }
         record()
         queue = [F.card]
+        record()
+        quitPending = false
         record()
         agent.queuePaused = false
         record()
@@ -474,7 +502,7 @@ fileprivate enum Fixture {
         record()
 
         #expect(seen == [
-            .none, .wait(.paused), .wait(.offline), .wait(.hooksUnhealthy), .wait(.waitingInput),
+            .none, .wait(.quitting), .wait(.paused), .wait(.offline), .wait(.hooksUnhealthy), .wait(.waitingInput),
             .wait(.waitingBackground), .wait(.quotaPaused), .wait(.deliveryInProgress), .wait(.busy),
             .wait(.cooldown), .wait(.cooldown), .wait(.screenUnknown),
             // What the screen shows: a dialog, the usage limit line, a spinner, then a draft.
@@ -503,6 +531,7 @@ fileprivate enum Fixture {
         #expect(WaitCause.screenUnknown.label == "écran non reconnu")
         #expect(WaitCause.paused.label == "file en pause")
         #expect(WaitCause.offline.label == "hors ligne")
+        #expect(WaitCause.quitting.label == "l'app va quitter")
         let labels = WaitCause.allCases.map(\.label)
         #expect(Set(labels).count == WaitCause.allCases.count)
         for label in labels {

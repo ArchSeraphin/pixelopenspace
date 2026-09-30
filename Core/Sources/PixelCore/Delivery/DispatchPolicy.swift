@@ -3,7 +3,7 @@ import Foundation
 /// Why the head of an agent's queue is not delivered now (shown on the agent's card when its queue is not empty).
 public enum WaitCause: Equatable, Sendable, CaseIterable {
     case busy, waitingInput, waitingBackground, quotaPaused, draftInInputBox, screenUnknown, paused, offline,
-         hooksUnhealthy, cooldown, deliveryInProgress
+         hooksUnhealthy, cooldown, deliveryInProgress, quitting
 
     /// Short French text for the agent's card and the status bar.
     public var label: String {
@@ -19,6 +19,7 @@ public enum WaitCause: Equatable, Sendable, CaseIterable {
         case .hooksUnhealthy: "hooks non reçus : envoi automatique coupé"
         case .cooldown: "pause entre deux tâches"
         case .deliveryInProgress: "envoi en cours"
+        case .quitting: "l'app va quitter"
         }
     }
 }
@@ -58,38 +59,43 @@ public struct DispatchSettings: Equatable, Sendable {
 public enum DispatchPolicy {
     /// The decision for the head of `queue` (`BoardQuery.queue(of:in:)`). The first rule that matches wins:
     ///  1. empty queue → `.none`;
-    ///  2. `agent.queuePaused` → `.paused`;
-    ///  3. no process (`pid == nil`, or an offline phase) → `.offline`;
-    ///  4. `hookHealth != .healthy` (degraded mode, or no hook yet since launch) → `.hooksUnhealthy`;
-    ///  5. an open wait → `.waitingInput`;
-    ///  6. `waitingBackground` → `.waitingBackground`; `quotaPaused` → `.quotaPaused`;
-    ///  7. `pendingDelivery != nil` → `.deliveryInProgress`;
-    ///  8. a phase other than `idle`/`done` (launching, thinking, working, error with a live process), or a
+    ///  2. `quitPending` ("Attendre la fin des tours", proposal 2.5: no delivery while the app waits to quit) →
+    ///     `.quitting`;
+    ///  3. `agent.queuePaused` → `.paused`;
+    ///  4. no process (`pid == nil`, or an offline phase) → `.offline`;
+    ///  5. `hookHealth != .healthy` (degraded mode, or no hook yet since launch) → `.hooksUnhealthy`;
+    ///  6. an open wait → `.waitingInput`;
+    ///  7. `waitingBackground` → `.waitingBackground`; `quotaPaused` → `.quotaPaused`;
+    ///  8. `pendingDelivery != nil` → `.deliveryInProgress`;
+    ///  9. a phase other than `idle`/`done` (launching, thinking, working, error with a live process), or a
     ///     provisional `Stop` → `.busy`;
-    ///  9. less than `graceSeconds` since `lastTurnEndedAt` → `.cooldown` (a stamp after `now` counts as within);
-    /// 10. `autoChain == false` and phase `done` → `.cooldown` until the user acts: looking at the agent turns
+    /// 10. less than `graceSeconds` since `lastTurnEndedAt` → `.cooldown` (a stamp after `now` counts as within);
+    /// 11. `autoChain == false` and phase `done` → `.cooldown` until the user acts: looking at the agent turns
     ///     `done` into `idle` (T24, or T24b after 10 min), and an `idle` agent gets its queue (auto-chaining only
     ///     concerns the turn that just ended);
-    /// 11. screen: none read, or not recognized, → `.screenUnknown`; a dialog → `.waitingInput`; the usage limit
+    /// 12. screen: none read, or not recognized, → `.screenUnknown`; a dialog → `.waitingInput`; the usage limit
     ///     line → `.quotaPaused`; a spinner → `.busy`; no input box → `.screenUnknown`; a draft in the input
     ///     box → `.draftInInputBox`, unless `draftOverride` ("Envoyer quand même", which lifts nothing else; the
     ///     app passes it while `draftOverrideHolds`);
-    /// 12. otherwise `.deliver(queue[0])`.
+    /// 13. otherwise `.deliver(queue[0])`.
     public static func nextDelivery(agent: Agent, runtime: AgentRuntime, queue: [QueueItem], now: Date,
                                     lastTurnEndedAt: Date?, settings: DispatchSettings,
-                                    draftOverride: Bool) -> DeliveryDecision {
+                                    draftOverride: Bool, quitPending: Bool = false) -> DeliveryDecision {
         let decision = decisionBeforeScreen(agent: agent, runtime: runtime, queue: queue, now: now,
-                                            lastTurnEndedAt: lastTurnEndedAt, settings: settings)
+                                            lastTurnEndedAt: lastTurnEndedAt, settings: settings,
+                                            quitPending: quitPending)
         guard case .deliver = decision else { return decision }
         if let cause = screenCause(runtime.screen, draftOverride: draftOverride) { return .wait(cause) }
         return decision
     }
 
-    /// Rules 1 to 10, then 12: the decision `nextDelivery` would take if the screen allowed a delivery. The
+    /// Rules 1 to 11, then 13: the decision `nextDelivery` would take if the screen allowed a delivery. The
     /// dispatcher asks it, without reading the screen, whether a fresh reading could lead to a delivery.
     public static func decisionBeforeScreen(agent: Agent, runtime: AgentRuntime, queue: [QueueItem], now: Date,
-                                            lastTurnEndedAt: Date?, settings: DispatchSettings) -> DeliveryDecision {
+                                            lastTurnEndedAt: Date?, settings: DispatchSettings,
+                                            quitPending: Bool = false) -> DeliveryDecision {
         guard let head = queue.first else { return .none }
+        if quitPending { return .wait(.quitting) }
         if agent.queuePaused { return .wait(.paused) }
         guard isLive(runtime) else { return .wait(.offline) }
         guard runtime.hookHealth == .healthy else { return .wait(.hooksUnhealthy) }
@@ -126,9 +132,9 @@ public enum DispatchPolicy {
     /// Delays of `screenRecheckDelay(attempt:)`, the last one repeated.
     public static let screenRecheckDelays: [TimeInterval] = [0.5, 1, 2, 4]
 
-    /// Rule 11 is only as current as the last reading, and nothing reads the screen of an idle agent again by
+    /// Rule 12 is only as current as the last reading, and nothing reads the screen of an idle agent again by
     /// itself: no hook comes, and only a keystroke resamples it. So when a fresh reading alone holds the queue
-    /// (rules 1 to 10 would deliver: the input box not drawn yet just after `SessionStart`, a redraw read halfway,
+    /// (rules 1 to 11 would deliver: the input box not drawn yet just after `SessionStart`, a redraw read halfway,
     /// a suggestion, a dialog without hook…), the dispatcher looks again after this delay, `attempt` being the
     /// number of such looks in a row (0 for the first): 0.5 s, 1 s, 2 s, then every 4 s, bounded, for as long as
     /// the screen holds the queue.
@@ -172,7 +178,7 @@ public enum DispatchPolicy {
         return runtime.pid != nil
     }
 
-    /// Rule 11: what the last screen read shows, nil when it allows a delivery.
+    /// Rule 12: what the last screen read shows, nil when it allows a delivery.
     static func screenCause(_ screen: ScreenFacts?, draftOverride: Bool) -> WaitCause? {
         guard let screen, screen.recognized else { return .screenUnknown }
         if screen.dialogVisible { return .waitingInput }
