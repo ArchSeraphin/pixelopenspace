@@ -153,7 +153,8 @@ extension AppModel {
         let decision = DispatchPolicy.nextDelivery(agent: agent, runtime: runtime, queue: queue, now: now,
                                                    lastTurnEndedAt: dispatcher.lastTurnEndedAt[agentID],
                                                    settings: DispatchSettings(settings: settings),
-                                                   draftOverride: dispatcher.draftOverrides.contains(agentID))
+                                                   draftOverride: dispatcher.draftOverride(for: agentID,
+                                                                                           screen: runtime.screen))
         if case .wait(let cause) = decision { return cause }
         return nil
     }

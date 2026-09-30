@@ -41,7 +41,8 @@ public struct GuardInputs: Equatable, Sendable {
     public var screenAt: Date
     public var lastOutputAt: Date?
     public var now: Date
-    /// "Envoyer quand même": lifts only the empty-input-box part of G3 before the text.
+    /// "Envoyer quand même": lifts only the empty-input-box part of G3 before the text. The app sets it only while
+    /// the input box shows the text the user agreed to type over (`DispatchPolicy.draftOverrideHolds`).
     public var draftOverride: Bool
 
     public init(runtime: AgentRuntime, queuePaused: Bool, hookSeqAtStart: UInt64, hookSeqNow: UInt64,

@@ -158,10 +158,11 @@ extension AppModel {
         dispatcher.queueResumed(agentID)
     }
 
-    /// "Envoyer quand même": the next delivery goes despite a draft in the input box; it lifts nothing else (no
-    /// state, event or dialog guard).
-    func sendAnyway(_ agentID: AgentID) {
-        dispatcher.sendAnyway(agentID)
+    /// "Envoyer quand même", once the user was warned about `shown` (the text of the input box, meant to be a grey
+    /// suggestion of Claude Code): the next delivery goes despite that text, while the box still shows it; it lifts
+    /// nothing else (no state, event or dialog guard, and the Enter still needs our text alone in the box).
+    func sendAnyway(_ agentID: AgentID, over shown: String) {
+        dispatcher.sendAnyway(agentID, over: shown)
     }
 
     /// "Envoyer" on a text of 16 KB or more (proposal 5.6: the app asks before sending).

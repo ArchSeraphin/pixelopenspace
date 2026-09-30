@@ -297,6 +297,71 @@ fileprivate enum Fixture {
         }
     }
 
+    /// "Envoyer quand même" is given for the text the user saw in the input box (a grey suggestion of Claude Code,
+    /// which the first typed letter replaces): it holds while the input box shows that very text, never for a text
+    /// typed afterwards, and lapses once the box shows anything else.
+    @Test func draftOverrideHoldsOnlyForTheTextAgreedTo() {
+        func holds(_ agreed: String?, _ box: InputBoxState?, recognized: Bool = true) -> Bool {
+            DispatchPolicy.draftOverrideHolds(agreed: agreed,
+                                              screen: box.map { ScreenFacts(inputBox: $0, recognized: recognized) })
+        }
+        let agreed = "run the tests"
+        #expect(holds(agreed, .draft(prefix: agreed)))
+        #expect(!holds(nil, .draft(prefix: agreed)))
+        // The user typed after agreeing (or a real draft replaced the suggestion).
+        #expect(!holds(agreed, .draft(prefix: "run the tests and fix")))
+        #expect(!holds(agreed, .draft(prefix: "je tapais ça")))
+        // Nothing to type over any more, or nothing readable.
+        #expect(!holds(agreed, .empty))
+        #expect(!holds(agreed, .unknown))
+        #expect(!holds(agreed, nil))
+
+        // What the policy then decides with it.
+        var r = F.ready()
+        r.screen = ScreenFacts(inputBox: .draft(prefix: agreed), recognized: true)
+        #expect(F.decide(r, draftOverride: holds(agreed, r.screen?.inputBox)) == .deliver(F.card))
+        r.screen = ScreenFacts(inputBox: .draft(prefix: "je tapais ça"), recognized: true)
+        #expect(F.decide(r, draftOverride: holds(agreed, r.screen?.inputBox)) == .wait(.draftInInputBox))
+    }
+
+    // MARK: - Rechecking the screen
+
+    /// Rule 11 is only as current as the last reading, and nothing else reads the screen of an idle agent again
+    /// (no hook comes; only a keystroke resamples it). A queue held by the screen alone is looked at again: soon at
+    /// first (the REPL draws its input box after SessionStart, about 0.5 s before a positional prompt is submitted,
+    /// spike S3.d), then every 4 s at most, for as long as the screen holds it.
+    @Test func screenRecheckDelayBacksOffToABound() {
+        #expect((0..<7).map(DispatchPolicy.screenRecheckDelay(attempt:)) == [0.5, 1, 2, 4, 4, 4, 4])
+        #expect(DispatchPolicy.screenRecheckDelay(attempt: -3) == 0.5)
+        #expect(DispatchPolicy.screenRecheckDelay(attempt: .max) == 4)
+        #expect(DispatchPolicy.screenRecheckDelays.max() == DispatchPolicy.screenRecheckDelay(attempt: 1000))
+    }
+
+    /// The waits the dispatcher looks at again: those that rules 1 to 10 would let through, so that the screen alone
+    /// holds the queue. Every other wait has its own way out (a hook, the clock, the user).
+    @Test func screenAloneHoldsTheQueueOnlyUnderRule11() {
+        let screens: [ScreenFacts?] = [
+            nil,
+            ScreenFacts(inputBox: .unknown, recognized: false),
+            ScreenFacts(inputBox: .unknown, recognized: true),
+            ScreenFacts(inputBox: .unknown, dialogVisible: true, recognized: true),
+            ScreenFacts(inputBox: .empty, quotaLine: "Usage limit reached", recognized: true),
+            ScreenFacts(inputBox: .empty, spinnerVisible: true, recognized: true),
+            ScreenFacts(inputBox: .draft(prefix: "je tapais ça"), recognized: true),
+        ]
+        for screen in screens {
+            var r = F.ready()
+            r.screen = screen
+            guard case .wait = F.decide(r) else {
+                Issue.record("\(String(describing: screen)) should wait")
+                continue
+            }
+            #expect(DispatchPolicy.decisionBeforeScreen(agent: F.agent(), runtime: r, queue: [F.card], now: F.now,
+                                                        lastTurnEndedAt: nil, settings: DispatchSettings())
+                    == .deliver(F.card))
+        }
+    }
+
     // MARK: - Before the screen, cooldown
 
     /// Rules 1 to 10: what the dispatcher checks before it reads the screen, to know whether a reading is worth it.

@@ -249,6 +249,7 @@ struct RootView: View {
         switch confirmation {
         case .closeSession: return "Fermer la session de \(name) ?"
         case .remove: return "Retirer \(name) ?"
+        case .sendOverDraft: return "Envoyer le post-it par-dessus la zone de saisie de \(name) ?"
         }
     }
 
@@ -259,6 +260,12 @@ struct RootView: View {
             Button("Fermer la session", role: .destructive) { workbench.confirm(confirmation) }
         case .remove:
             Button("Retirer l'agent", role: .destructive) { workbench.confirm(confirmation) }
+        case .sendOverDraft(let agentID, _):
+            Button("C'est une suggestion : envoyer") { workbench.confirm(confirmation) }
+            Button("Ouvrir le terminal") {
+                workbench.confirmation = nil
+                workbench.showTerminal(for: agentID, focus: true)
+            }
         }
         Button("Annuler", role: .cancel) { workbench.confirmation = nil }
     }
@@ -273,6 +280,12 @@ struct RootView: View {
         case .remove:
             return "\(name) disparaît de l'app avec son historique de sessions. Les conversations restent dans "
                 + "Claude Code et le dossier du projet n'est pas touché."
+        case .sendOverDraft(_, let shown):
+            return "La zone de saisie montre « \(shown) ». S'il s'agit d'une suggestion grisée de Claude Code, "
+                + "elle s'efface à la première lettre et le post-it part normalement. S'il s'agit d'un texte que tu "
+                + "as tapé, le post-it s'écrirait à sa suite : l'envoi s'arrêterait avant l'Entrée, les deux textes "
+                + "resteraient mêlés dans le terminal et la file se mettrait en pause. Dans ce cas, vide d'abord la "
+                + "zone de saisie dans le terminal."
         }
     }
 

@@ -86,7 +86,8 @@ struct AgentCardView: View {
 
 /// "▣ Refonte du header" (the post-it the agent works on, click to edit it) and "file : 2 post-its · occupé"
 /// (mockup 6(b)): why the head of the queue waits (`WaitCause`), the last delivery failure, and the actions that
-/// apply ("Reprendre la file" when paused, "Envoyer quand même" on a draft, "Envoyer" for a text of 16 KB or more).
+/// apply ("Reprendre la file" when paused, "Envoyer quand même…" on a draft, after a warning, "Envoyer" for a text of
+/// 16 KB or more).
 private struct AgentQueueLine: View {
     let agentID: AgentID
 
@@ -130,9 +131,11 @@ private struct AgentQueueLine: View {
                             .help("La file s'est mise en pause (interruption ou échec d'envoi) : rien ne part sans toi")
                     }
                     if cause == .draftInInputBox {
-                        Button("Envoyer quand même") { model.sendAnyway(agentID) }
-                            .help("Ignore le texte affiché dans la zone de saisie du terminal, et seulement lui : "
-                                  + "un dialogue, un tour en cours ou un nouvel événement bloquent toujours l'envoi")
+                        Button("Envoyer quand même…") { workbench.requestSendAnyway(agentID) }
+                            .help("Pour une suggestion grisée de Claude Code, que la première lettre efface : le "
+                                  + "post-it l'écrase. Un texte que tu as tapé ferait échouer l'envoi : vide-le "
+                                  + "plutôt dans le terminal. Un dialogue, un tour en cours ou un nouvel événement "
+                                  + "bloquent toujours l'envoi")
                     }
                 }
                 .controlSize(.small)

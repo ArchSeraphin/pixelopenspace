@@ -52,14 +52,17 @@ enum ActiveSheet: Identifiable, Equatable {
     }
 }
 
-/// An agent action that needs a confirmation dialog (6(d): closing a busy session, removing an agent).
+/// An agent action that needs a confirmation dialog (6(d): closing a busy session, removing an agent, sending a
+/// post-it over the text of the input box).
 enum AgentConfirmation: Equatable {
     case closeSession(AgentID)
     case remove(AgentID)
+    /// "Envoyer quand même…": `shown` is the text of the input box read then (its first 40 characters).
+    case sendOverDraft(AgentID, shown: String)
 
     var agentID: AgentID {
         switch self {
-        case .closeSession(let agentID), .remove(let agentID): return agentID
+        case .closeSession(let agentID), .remove(let agentID), .sendOverDraft(let agentID, _): return agentID
         }
     }
 }
@@ -237,11 +240,20 @@ final class WorkbenchState {
         askConfirmation(.remove(agentID))
     }
 
+    /// "Envoyer quand même…" on a draft: always after a warning. The screen cannot tell a grey suggestion of Claude
+    /// Code (replaced by the first letter typed: the post-it goes) from a text the user typed (the post-it would land
+    /// after it, the delivery would stop before the Enter, and both texts would stay mixed in the terminal).
+    func requestSendAnyway(_ agentID: AgentID) {
+        guard case .draft(let shown)? = model.runtime(for: agentID)?.screen?.inputBox else { return }
+        askConfirmation(.sendOverDraft(agentID, shown: shown))
+    }
+
     func confirm(_ confirmation: AgentConfirmation) {
         self.confirmation = nil
         switch confirmation {
         case .closeSession(let agentID): model.closeSession(agentID)
         case .remove(let agentID): model.removeAgent(agentID)
+        case .sendOverDraft(let agentID, let shown): model.sendAnyway(agentID, over: shown)
         }
     }
 

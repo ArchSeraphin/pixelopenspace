@@ -72,7 +72,8 @@ public enum DispatchPolicy {
     ///     concerns the turn that just ended);
     /// 11. screen: none read, or not recognized, → `.screenUnknown`; a dialog → `.waitingInput`; the usage limit
     ///     line → `.quotaPaused`; a spinner → `.busy`; no input box → `.screenUnknown`; a draft in the input
-    ///     box → `.draftInInputBox`, unless `draftOverride` ("Envoyer quand même", which lifts nothing else);
+    ///     box → `.draftInInputBox`, unless `draftOverride` ("Envoyer quand même", which lifts nothing else; the
+    ///     app passes it while `draftOverrideHolds`);
     /// 12. otherwise `.deliver(queue[0])`.
     public static func nextDelivery(agent: Agent, runtime: AgentRuntime, queue: [QueueItem], now: Date,
                                     lastTurnEndedAt: Date?, settings: DispatchSettings,
@@ -107,6 +108,32 @@ public enum DispatchPolicy {
         }
         if !settings.autoChain && runtime.phase == .done { return .wait(.cooldown) }
         return .deliver(head)
+    }
+
+    /// "Envoyer quand même" (`draftOverride`) is given for the text the user saw in the input box, `agreed` (the
+    /// draft prefix read then): it holds while the input box shows that very text, and lapses as soon as it shows
+    /// anything else, so that a text typed afterwards is never typed over.
+    ///
+    /// It is meant for a grey suggestion of Claude Code, which the screen reads as a draft (attributes are not read)
+    /// and which the first typed letter replaces. Over a text the user typed, the delivery cannot succeed: our text
+    /// lands after it, the guard before the Enter sees more than our text and aborts (`DeliveryPlan`), and the
+    /// user's text stays mixed with ours. The app says so before the user agrees.
+    public static func draftOverrideHolds(agreed: String?, screen: ScreenFacts?) -> Bool {
+        guard let agreed, case .draft(let shown)? = screen?.inputBox else { return false }
+        return shown == agreed
+    }
+
+    /// Delays of `screenRecheckDelay(attempt:)`, the last one repeated.
+    public static let screenRecheckDelays: [TimeInterval] = [0.5, 1, 2, 4]
+
+    /// Rule 11 is only as current as the last reading, and nothing reads the screen of an idle agent again by
+    /// itself: no hook comes, and only a keystroke resamples it. So when a fresh reading alone holds the queue
+    /// (rules 1 to 10 would deliver: the input box not drawn yet just after `SessionStart`, a redraw read halfway,
+    /// a suggestion, a dialog without hook…), the dispatcher looks again after this delay, `attempt` being the
+    /// number of such looks in a row (0 for the first): 0.5 s, 1 s, 2 s, then every 4 s, bounded, for as long as
+    /// the screen holds the queue.
+    public static func screenRecheckDelay(attempt: Int) -> TimeInterval {
+        screenRecheckDelays[min(max(attempt, 0), screenRecheckDelays.count - 1)]
     }
 
     /// Rule 9: the seconds left of the grace delay after the end of a turn, nil when it is over (or there was no

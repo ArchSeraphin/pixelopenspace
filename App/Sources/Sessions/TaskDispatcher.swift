@@ -18,7 +18,9 @@ enum DeliveryNotice: Equatable, Sendable {
 ///
 /// - `pump(_:)` is asked by the reducers' effects (`.pump`, `.pumpQueue`), by the intents (resume, "Envoyer quand
 ///   même"), and by `runtimeChanged` when an agent with a queue may have become free. Requests are coalesced and run
-///   on a later main-actor turn, never inside a reduction.
+///   on a later main-actor turn, never inside a reduction. A queue held by the screen alone (rule 11 of
+///   `DispatchPolicy`) is looked at again by the pump itself, with a bounded backoff: for an idle agent nothing
+///   else reads the screen again but a keystroke.
 /// - One delivery per agent at a time, in its own `Task`. Every `check` reads the screen, then the hook server's
 ///   per-agent counter (G2), right before the write that follows it, with no suspension in between; every `write`
 ///   first checks that the same process still runs. A failed guard aborts (queue paused, card flagged), never "try
@@ -46,8 +48,10 @@ final class TaskDispatcher {
 
     /// When each agent's last turn was confirmed (`turnCommitted`): the grace delay before the next delivery.
     private(set) var lastTurnEndedAt: [AgentID: Date] = [:]
-    /// "Envoyer quand même": the next delivery of the agent ignores a draft in the input box (and only that).
-    private(set) var draftOverrides: Set<AgentID> = []
+    /// "Envoyer quand même": the text of the input box the user agreed to type over (the draft prefix read then,
+    /// meant to be a grey suggestion of Claude Code). The next delivery of the agent ignores that draft, and only it,
+    /// while the box still shows it (`DispatchPolicy.draftOverrideHolds`); any other text lapses the agreement.
+    private(set) var draftOverrides: [AgentID: String] = [:]
     private(set) var notices: [AgentID: DeliveryNotice] = [:]
 
     /// Items of 16 KB or more the user agreed to send.
@@ -55,6 +59,8 @@ final class TaskDispatcher {
     @ObservationIgnored private var deliveries: [AgentID: Task<Void, Never>] = [:]
     @ObservationIgnored private var pumpRequests: Set<AgentID> = []
     @ObservationIgnored private var delayedPumps: [AgentID: (at: Date, task: Task<Void, Never>)] = [:]
+    /// Pumps in a row that the screen alone held (rule 11): the backoff of the next look.
+    @ObservationIgnored private var screenRechecks: [AgentID: Int] = [:]
     /// "Lancer un nouvel agent avec ce post-it": the item and the text given as the positional prompt, until the
     /// process starts.
     @ObservationIgnored private var positionalLaunches: [AgentID: (item: QueueItem, text: String)] = [:]
@@ -127,10 +133,16 @@ final class TaskDispatcher {
 
     // MARK: - User actions
 
-    /// "Envoyer quand même": the next delivery goes despite a draft in the input box. Every other guard stays.
-    func sendAnyway(_ agentID: AgentID) {
-        draftOverrides.insert(agentID)
+    /// "Envoyer quand même", agreed for `shown` (the draft prefix the user was warned about): the next delivery goes
+    /// despite that text in the input box, as long as the box still shows it. Every other guard stays.
+    func sendAnyway(_ agentID: AgentID, over shown: String) {
+        draftOverrides[agentID] = shown
         pump(agentID)
+    }
+
+    /// Whether "Envoyer quand même" lifts the draft of `screen` for this agent (the text agreed to, still shown).
+    func draftOverride(for agentID: AgentID, screen: ScreenFacts?) -> Bool {
+        DispatchPolicy.draftOverrideHolds(agreed: draftOverrides[agentID], screen: screen)
     }
 
     /// "Envoyer" on a text of 16 KB or more.
@@ -153,7 +165,8 @@ final class TaskDispatcher {
         delayedPumps.removeValue(forKey: agentID)?.task.cancel()
         positionalLaunches[agentID] = nil
         lastTurnEndedAt[agentID] = nil
-        draftOverrides.remove(agentID)
+        draftOverrides[agentID] = nil
+        screenRechecks[agentID] = nil
         notices[agentID] = nil
     }
 
@@ -199,7 +212,8 @@ final class TaskDispatcher {
         let queue = model.queue(of: agentID)
         guard let head = queue.first else {
             notices[agentID] = nil
-            draftOverrides.remove(agentID)
+            draftOverrides[agentID] = nil
+            screenRechecks[agentID] = nil
             return
         }
         if case .needsConfirmation(let item, _)? = notices[agentID], item != head { notices[agentID] = nil }
@@ -207,6 +221,8 @@ final class TaskDispatcher {
         let before = DispatchPolicy.decisionBeforeScreen(agent: agent, runtime: runtime, queue: queue, now: Date(),
                                                          lastTurnEndedAt: lastTurnEndedAt[agentID], settings: settings)
         guard case .deliver = before else {
+            // Busy, waiting, paused, offline…: a hook, the clock or the user brings the queue back.
+            screenRechecks[agentID] = nil
             if before == .wait(.cooldown) { pumpAfterCooldown(agentID, settings: settings) }
             return
         }
@@ -216,29 +232,48 @@ final class TaskDispatcher {
         model.sampleScreen(agentID)
         sampling = nil
         guard let fresh = model.runtime(for: agentID), let current = model.agent(agentID) else { return }
-        if !Self.showsDraft(fresh.screen) { draftOverrides.remove(agentID) }
-        let decision = DispatchPolicy.nextDelivery(agent: current, runtime: fresh, queue: model.queue(of: agentID),
-                                                   now: Date(), lastTurnEndedAt: lastTurnEndedAt[agentID],
-                                                   settings: settings, draftOverride: draftOverrides.contains(agentID))
+        let overridesDraft = draftOverride(for: agentID, screen: fresh.screen)
+        if !overridesDraft { draftOverrides[agentID] = nil }
+        let freshQueue = model.queue(of: agentID)
+        let now = Date()
+        let decision = DispatchPolicy.nextDelivery(agent: current, runtime: fresh, queue: freshQueue, now: now,
+                                                   lastTurnEndedAt: lastTurnEndedAt[agentID], settings: settings,
+                                                   draftOverride: overridesDraft)
         switch decision {
         case .deliver(let item):
+            screenRechecks[agentID] = nil
             start(item, for: agentID)
         case .wait(.cooldown):
+            screenRechecks[agentID] = nil
             pumpAfterCooldown(agentID, settings: settings)
-        case .wait, .none:
-            break
+        case .wait:
+            let beforeScreen = DispatchPolicy.decisionBeforeScreen(agent: current, runtime: fresh, queue: freshQueue,
+                                                                   now: now, lastTurnEndedAt: lastTurnEndedAt[agentID],
+                                                                   settings: settings)
+            if case .deliver = beforeScreen {
+                recheckScreen(agentID)
+            } else {
+                screenRechecks[agentID] = nil
+            }
+        case .none:
+            screenRechecks[agentID] = nil
         }
+    }
+
+    /// The screen alone holds the queue (rule 11: not recognised, no input box yet, a spinner, a dialog or the
+    /// usage-limit line without any hook, a draft). For an idle agent no hook will come and only a keystroke reads
+    /// the screen again, so the pump looks again itself: 0.5 s, 1 s, 2 s, then every 4 s
+    /// (`DispatchPolicy.screenRecheckDelay`), until the screen lets the delivery start or another rule takes over.
+    private func recheckScreen(_ agentID: AgentID) {
+        let attempt = screenRechecks[agentID, default: 0]
+        screenRechecks[agentID] = min(attempt + 1, DispatchPolicy.screenRecheckDelays.count)
+        pump(agentID, after: DispatchPolicy.screenRecheckDelay(attempt: attempt))
     }
 
     private func pumpAfterCooldown(_ agentID: AgentID, settings: DispatchSettings) {
         guard let remaining = DispatchPolicy.cooldownRemaining(now: Date(), lastTurnEndedAt: lastTurnEndedAt[agentID],
                                                                settings: settings) else { return }
         pump(agentID, after: remaining + 0.05)
-    }
-
-    private static func showsDraft(_ screen: ScreenFacts?) -> Bool {
-        if case .draft = screen?.inputBox { return true }
-        return false
     }
 
     // MARK: - Delivery
@@ -252,7 +287,7 @@ final class TaskDispatcher {
             notices[agentID] = .needsConfirmation(item, bytes: bytes)
             return
         }
-        let draftOverride = draftOverrides.remove(agentID) != nil
+        let agreedDraft = draftOverrides.removeValue(forKey: agentID)
         let steps = prompt.isEmpty ? nil : DeliveryPlan.make(prompt, bracketedPaste: host.bracketedPasteMode)
         let pending = PendingDelivery(itemID: Self.itemID(item), prefix: DeliveryPlan.prefix(for: prompt),
                                       startedAt: Date(), hookSeqAtStart: model.hookServer.arrivals.count(for: agentID))
@@ -266,7 +301,7 @@ final class TaskDispatcher {
         }
         AppLog.sessions.info("delivery to \(agentID.description, privacy: .public): \(bytes) bytes, \(prompt.isShort ? "typed" : "pasted", privacy: .public)")
         deliveries[agentID] = Task { [weak self] in
-            await self?.execute(steps, pending: pending, agentID: agentID, host: host, draftOverride: draftOverride)
+            await self?.execute(steps, pending: pending, agentID: agentID, host: host, agreedDraft: agreedDraft)
             self?.deliveries[agentID] = nil
         }
     }
@@ -290,7 +325,7 @@ final class TaskDispatcher {
     /// Runs the plan (then, once, the retry of 5.6 step 7). Stops at once when the delivery is no longer the
     /// agent's pending one (confirmed, or ended by the process's exit: the reducer already told the card).
     private func execute(_ plan: [DeliveryStep], pending: PendingDelivery, agentID: AgentID, host: TerminalHost,
-                         draftOverride: Bool) async {
+                         agreedDraft: String?) async {
         var steps = plan[...]
         var retried = false
         var textWritten = false
@@ -300,7 +335,7 @@ final class TaskDispatcher {
             case .check(let check):
                 guard isLive(host, agentID) else { return abort(.processGone, agentID: agentID) }
                 let inputs = guardInputs(check, pending: pending, agentID: agentID, host: host,
-                                         draftOverride: draftOverride)
+                                         agreedDraft: agreedDraft)
                 if case .abort(let reason) = DeliveryPlan.evaluate(check, inputs) {
                     let detail = DeliveryPlan.abortDetail(reason, textWritten: textWritten)
                     return abort(.guardFailed(detail), agentID: agentID)
@@ -350,9 +385,10 @@ final class TaskDispatcher {
         return isPending(pending, agentID)
     }
 
-    /// What the guard reads, right now: the screen, then the hook counter, then the state.
+    /// What the guard reads, right now: the screen, then the hook counter, then the state. "Envoyer quand même"
+    /// counts before the text only, and only while the input box shows the very text the user agreed to type over.
     private func guardInputs(_ check: DeliveryGuard, pending: PendingDelivery, agentID: AgentID, host: TerminalHost,
-                             draftOverride: Bool) -> GuardInputs {
+                             agreedDraft: String?) -> GuardInputs {
         let screen = ScreenPatterns.parse(lines: host.visibleLines())
         let screenAt = Date()
         let hookSeqNow = model?.hookServer.arrivals.count(for: agentID) ?? .max
@@ -361,7 +397,8 @@ final class TaskDispatcher {
         return GuardInputs(runtime: runtime, queuePaused: paused, hookSeqAtStart: pending.hookSeqAtStart,
                            hookSeqNow: hookSeqNow, screen: screen, screenAt: screenAt,
                            lastOutputAt: host.lastOutputAt, now: Date(),
-                           draftOverride: draftOverride && check == .beforeText)
+                           draftOverride: check == .beforeText
+                               && DispatchPolicy.draftOverrideHolds(agreed: agreedDraft, screen: screen))
     }
 
     /// T31: the machine flags the card and pauses the queue; the card of the agent says why.
