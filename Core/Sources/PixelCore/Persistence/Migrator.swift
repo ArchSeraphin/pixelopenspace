@@ -18,6 +18,8 @@ public enum Migrator {
     public static let workspaceSteps: [MigrationStep] = []
     /// `settings.json`: v1 is the first version, nothing to migrate yet.
     public static let settingsSteps: [MigrationStep] = []
+    /// `tasks.json`: v1 is the first version, nothing to migrate yet.
+    public static let tasksSteps: [MigrationStep] = []
 
     /// `schemaVersion` of a JSON object, read before any typed decoding; `nil` when absent.
     /// Throws `corrupt` when the data is not a JSON object or the version is not an integer.

@@ -64,6 +64,21 @@ public enum PersistenceCodec {
         return (settings, from)
     }
 
+    // MARK: - Tasks
+
+    public static func encodeTasks(_ board: TaskBoardState) throws -> Data {
+        try makeEncoder().encode(board)
+    }
+
+    /// Same rules as `decodeWorkspace`. Missing optional fields take their defaults.
+    /// Run `TaskBoardValidator.validate` on the result.
+    public static func decodeTasks(_ data: Data, migrations: [MigrationStep] = Migrator.tasksSteps,
+                                   allowNewerSchema: Bool = false) throws -> (board: TaskBoardState, migratedFrom: Int?) {
+        let (board, from) = try decode(TaskBoardState.self, from: data, current: TaskBoardState.currentSchemaVersion,
+                                       migrations: migrations, allowNewerSchema: allowNewerSchema)
+        return (board, from)
+    }
+
     // MARK: - Shared
 
     /// A missing `schemaVersion` reads as the current version (hand-written or truncated-header files).
