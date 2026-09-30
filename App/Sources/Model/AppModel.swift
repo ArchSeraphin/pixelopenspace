@@ -8,9 +8,10 @@ import PixelIPC
 /// global issues, hook and Claude Code status, selection and transient UI state.
 ///
 /// The UI only reads these properties and calls the intents (`AppModel+Intents.swift`, `AppModel+Sessions.swift`,
-/// `AppModel+Quit.swift`).
+/// `AppModel+Tasks.swift`, `AppModel+Quit.swift`).
 /// Runtime state changes only through `AgentStateMachine.reduce` (`dispatch`, `AppModel+Engine.swift`), whose
 /// effects are executed here: workspace writes, notifications, global issues, screen readings, toasts.
+/// The cork board changes only through `TaskLifecycle.reduce` (`applyTask`, `AppModel+Tasks.swift`).
 @MainActor
 @Observable
 final class AppModel {
@@ -20,6 +21,11 @@ final class AppModel {
     private(set) var workspace: Workspace
     /// Persisted (`state/settings.json`); changed with `updateSettings(_:)`.
     private(set) var settings: AppSettings
+    /// Post-its, queued instructions and prompt templates, persisted (`state/tasks.json`); changed with
+    /// `applyTask(_:)`.
+    private(set) var board: TaskBoardState
+    /// What the board panel shows (project, tags, text); not persisted.
+    var boardFilter = BoardFilter()
     /// Runtime state of every agent of the workspace.
     private(set) var runtimes: [AgentID: AgentRuntime] = [:]
     /// Account-wide problems (usage limit, signed out): one banner and one notification for all agents.
@@ -80,12 +86,13 @@ final class AppModel {
     static let toastLifetime: TimeInterval = 6
     static let maxToasts = 4
 
-    init(workspace: LoadedFile<Workspace>, settings: LoadedFile<AppSettings>, extraWarnings: [String],
-         sessions: SessionManager, hookServer: HookServer, notifications: NotificationBridge,
-         persistence: PersistenceStore, locator: ClaudeLocator) {
+    init(workspace: LoadedFile<Workspace>, settings: LoadedFile<AppSettings>, board: LoadedFile<TaskBoardState>,
+         extraWarnings: [String], sessions: SessionManager, hookServer: HookServer,
+         notifications: NotificationBridge, persistence: PersistenceStore, locator: ClaudeLocator) {
         self.workspace = workspace.value
         self.settings = settings.value
-        loadWarnings = extraWarnings + settings.warnings + workspace.warnings
+        self.board = board.value
+        loadWarnings = extraWarnings + settings.warnings + workspace.warnings + board.warnings
         reducerConfig = ReducerConfig(settings: settings.value)
         self.sessions = sessions
         self.hookServer = hookServer
@@ -236,6 +243,17 @@ final class AppModel {
         Task { await store.scheduleSave(newSettings, version: version) }
     }
 
+    /// Replaces the board and schedules its save. The board changes through `applyTask(_:)`, which calls this.
+    func commitBoard(_ newBoard: TaskBoardState) {
+        guard newBoard != board else { return }
+        board = newBoard
+        guard !isPersistenceSuspended else { return }
+        saveVersion += 1
+        let version = saveVersion
+        let store = persistence
+        Task { await store.scheduleSave(newBoard, version: version) }
+    }
+
     func storeRuntime(_ runtime: AgentRuntime, for id: AgentID) {
         if runtimes[id] != runtime { runtimes[id] = runtime }
     }
@@ -256,6 +274,8 @@ final class AppModel {
         await persistence.scheduleSave(workspace, version: saveVersion)
         saveVersion += 1
         await persistence.scheduleSave(settings, version: saveVersion)
+        saveVersion += 1
+        await persistence.scheduleSave(board, version: saveVersion)
         await persistence.flush()
     }
 

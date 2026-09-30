@@ -37,6 +37,8 @@ final class AppEnvironment {
         let persistence = PersistenceStore(directories: directories)
         let settings = persistence.loadSettings()
         let workspace = persistence.loadWorkspace()
+        let board = persistence.loadTasks(agents: Set(workspace.value.agents.map(\.id)),
+                                          projects: Set(workspace.value.projects.map(\.id)))
         self.persistence = persistence
 
         let hookServer = HookServer(directories: directories)
@@ -44,9 +46,9 @@ final class AppEnvironment {
         let sessions = SessionManager(presenter: presenter, terminalPrefs: settings.value.terminal)
         let locator = ClaudeLocator(scratchDirectory: directories.run, home: directories.home)
         let notifications = NotificationBridge(prefs: settings.value.notifications)
-        let model = AppModel(workspace: workspace, settings: settings, extraWarnings: directoryProblems,
-                             sessions: sessions, hookServer: hookServer, notifications: notifications,
-                             persistence: persistence, locator: locator)
+        let model = AppModel(workspace: workspace, settings: settings, board: board,
+                             extraWarnings: directoryProblems, sessions: sessions, hookServer: hookServer,
+                             notifications: notifications, persistence: persistence, locator: locator)
         self.hookServer = hookServer
         self.presenter = presenter
         self.sessions = sessions

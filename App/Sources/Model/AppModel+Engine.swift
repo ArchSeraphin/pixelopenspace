@@ -31,10 +31,10 @@ extension AppModel {
             // Sounds arrive with SoundPlayer (step 4); notifications already play the system sound.
             AppLog.model.debug("sound \(sound.rawValue, privacy: .public)")
         case .card(let signal):
-            // Post-it lifecycle (step 2b).
-            AppLog.model.debug("card signal \(String(describing: signal), privacy: .public)")
+            // The agent's post-it follows its turn (proposal 4.3b: C7, C8, C10 to C13).
+            applyTask(.agentSignal(agentID, signal))
         case .pumpQueue(let delay):
-            // Task queue (step 2b).
+            // Deliveries arrive with the dispatcher (step 2b-2).
             AppLog.model.debug("pump queue in \(delay) s")
         case .setQueuePaused, .recordSession, .endSession, .updateSessionCwd, .recordProcess:
             var updated = workspace

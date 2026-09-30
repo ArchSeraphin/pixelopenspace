@@ -3,7 +3,7 @@ import PixelIPC
 
 /// Paths of the app's files (proposal 4.5):
 /// `~/Library/Application Support/PixelOpenSpace/{state,run,logs,backups}`. Every directory is private (0700):
-/// `run/` holds the hook socket and token, `state/` the workspace, `logs/` the optional hook log.
+/// `run/` holds the hook socket and token, `state/` the workspace and the board, `logs/` the optional hook log.
 struct AppDirectories: Sendable {
     let home: String
     let support: URL
@@ -19,6 +19,8 @@ struct AppDirectories: Sendable {
 
     var workspaceFile: URL { state.appendingPathComponent("workspace.json", isDirectory: false) }
     var settingsFile: URL { state.appendingPathComponent("settings.json", isDirectory: false) }
+    /// The cork board: post-its, queued instructions, prompt templates.
+    var tasksFile: URL { state.appendingPathComponent("tasks.json", isDirectory: false) }
     /// Passed to `claude --settings`; regenerated at every app launch.
     var hookSettingsFile: URL { run.appendingPathComponent("hooks-settings.json", isDirectory: false) }
     /// Token for sessions started outside the app, next to the socket (`HookWire.tokenPath`).

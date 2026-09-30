@@ -8,7 +8,7 @@ struct LoadedFile<Value: Sendable>: Sendable {
     var warnings: [String]
 }
 
-/// Single writer of `state/workspace.json` and `state/settings.json` (proposal 3.14, 4.5).
+/// Single writer of `state/workspace.json`, `state/settings.json` and `state/tasks.json` (proposal 3.14, 4.5).
 ///
 /// Loading is synchronous (a few kilobytes, read once at launch, before the UI shows anything). Saving is debounced
 /// (500 ms) and atomic, with mode 0600. Each save carries a version number from the caller: saves that arrive out of
@@ -31,6 +31,11 @@ actor PersistenceStore {
     private var pendingSettingsVersion: UInt64 = 0
     private var writtenSettingsVersion: UInt64 = 0
     private var settingsTask: Task<Void, Never>?
+
+    private var pendingBoard: TaskBoardState?
+    private var pendingBoardVersion: UInt64 = 0
+    private var writtenBoardVersion: UInt64 = 0
+    private var boardTask: Task<Void, Never>?
 
     init(directories: AppDirectories) {
         self.directories = directories
@@ -55,6 +60,22 @@ actor PersistenceStore {
             let (settings, migratedFrom) = try PersistenceCodec.decodeSettings(data, allowNewerSchema: allowNewer)
             return (settings, migratedFrom)
         }
+    }
+
+    /// The cork board, repaired against the workspace's agents and projects (`TaskBoardValidator`). A missing
+    /// file (first launch) gives an empty board with the starter templates.
+    nonisolated func loadTasks(agents: Set<AgentID>, projects: Set<ProjectID>,
+                               now: Date = Date()) -> LoadedFile<TaskBoardState> {
+        let fresh = TaskBoardState.initial(templateIDs: [PromptTemplateID(), PromptTemplateID(), PromptTemplateID()])
+        var loaded = load(file: directories.tasksFile, label: "les post-its", defaultValue: fresh,
+                          now: now) { data, allowNewer in
+            let (board, migratedFrom) = try PersistenceCodec.decodeTasks(data, allowNewerSchema: allowNewer)
+            return (board, migratedFrom)
+        }
+        let (validated, issues) = TaskBoardValidator.validate(loaded.value, agents: agents, projects: projects)
+        loaded.value = validated
+        loaded.warnings += issues
+        return loaded
     }
 
     private nonisolated func load<Value: Sendable>(
@@ -144,12 +165,25 @@ actor PersistenceStore {
         }
     }
 
+    func scheduleSave(_ board: TaskBoardState, version: UInt64) {
+        guard version > writtenBoardVersion, version > pendingBoardVersion else { return }
+        pendingBoard = board
+        pendingBoardVersion = version
+        guard boardTask == nil else { return }
+        boardTask = Task {
+            try? await Task.sleep(for: Self.debounce)
+            self.writePendingBoard()
+        }
+    }
+
     /// Writes whatever is pending now (app quit).
     func flush() {
         workspaceTask?.cancel()
         settingsTask?.cancel()
+        boardTask?.cancel()
         writePendingWorkspace()
         writePendingSettings()
+        writePendingBoard()
     }
 
     private func writePendingWorkspace() {
@@ -177,6 +211,20 @@ actor PersistenceStore {
             writtenSettingsVersion = max(writtenSettingsVersion, version)
         } catch {
             AppLog.persistence.error("encode settings failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    private func writePendingBoard() {
+        boardTask = nil
+        guard let board = pendingBoard else { return }
+        pendingBoard = nil
+        let version = pendingBoardVersion
+        do {
+            let data = try PersistenceCodec.encodeTasks(board)
+            write(data, to: directories.tasksFile, currentSchema: TaskBoardState.currentSchemaVersion)
+            writtenBoardVersion = max(writtenBoardVersion, version)
+        } catch {
+            AppLog.persistence.error("encode tasks failed: \(String(describing: error), privacy: .public)")
         }
     }
 

@@ -101,7 +101,8 @@ extension AppModel {
         if updated.renameAgent(id, to: name) { commit(updated) }
     }
 
-    /// Removes an offline agent (its session history goes with it; the conversations stay in Claude Code).
+    /// Removes an offline agent (its session history goes with it; the conversations stay in Claude Code). Its
+    /// post-its stay on the board, unassigned (`.agentRemoved`); its queued instructions go.
     @discardableResult
     func removeAgent(_ id: AgentID) -> Bool {
         guard runtimes[id]?.pid == nil, !sessions.isRunning(id) else {
@@ -111,6 +112,7 @@ extension AppModel {
         var updated = workspace
         guard updated.removeAgent(id) else { return false }
         commit(updated)
+        applyTask(.agentRemoved(id))
         forgetRuntime(id)
         sessions.discard(id)
         notifications.withdraw(agentID: id)
