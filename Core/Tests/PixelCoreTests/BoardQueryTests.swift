@@ -44,6 +44,22 @@ import Testing
         #expect(FuzzyMatcher.matches("aeg", "Æg"))
     }
 
+    @Test func lettersWithoutDecompositionMatchTheirBaseLetter() {
+        // Foundation leaves these unchanged: they have no canonical decomposition.
+        #expect(FuzzyMatcher.matches("oslo", "Øslo"))
+        #expect(FuzzyMatcher.matches("lodz", "Łódź"))
+        #expect(FuzzyMatcher.matches("dakovo", "Đakovo"))
+        #expect(FuzzyMatcher.matches("ØSLO", "oslo"))
+        #expect(!FuzzyMatcher.matches("oslo", "Łódź"))
+    }
+
+    @Test func fullWidthCharactersMatchTheirAsciiForm() {
+        #expect(FuzzyMatcher.matches("abc", "ＡＢＣ"))
+        #expect(FuzzyMatcher.matches("ＡＰＩ", "api"))
+        #expect(FuzzyMatcher.matches("/users", "／ｕｓｅｒｓ"))
+        #expect(!FuzzyMatcher.matches("abd", "ＡＢＣ"))
+    }
+
     @Test func everyQueryWordMustMatch() {
         #expect(FuzzyMatcher.matches("corr login", "Corriger le login"))
         #expect(FuzzyMatcher.matches("login corr", "Corriger le login"))
@@ -209,6 +225,21 @@ import Testing
         #expect(Self.filtered(BoardFilter(text: "login #bug")).flat == [S.card(3)])
     }
 
+    @Test func textSearchesTagsAsTheTagFilterSeesThem() {
+        // A board never validated: tags stored with a "#" or a space. The search, the tag filter and `allTags`
+        // all read them normalized ("api", "montag").
+        var board = TaskBoardState()
+        board.cards = [
+            TaskCard(id: S.card(1), title: "a", projectID: nil, rank: "a", tags: ["mon tag", "##api"], createdAt: S.at(1)),
+        ]
+        #expect(BoardQuery.allTags(board) == ["api", "montag"])
+        #expect(Self.filtered(BoardFilter(tags: ["montag"]), board).flat == [S.card(1)])
+        #expect(Self.filtered(BoardFilter(text: "#montag"), board).flat == [S.card(1)])
+        #expect(Self.filtered(BoardFilter(text: "montag"), board).flat == [S.card(1)])
+        #expect(Self.filtered(BoardFilter(text: "#api"), board).flat == [S.card(1)])
+        #expect(Self.filtered(BoardFilter(text: "##"), board).flat.isEmpty)
+    }
+
     @Test func filterByAssignee() {
         let nova = Self.filtered(BoardFilter(assignee: S.agent(1)))
         #expect(nova[.todo] == [S.card(1), S.card(3)])
@@ -235,6 +266,10 @@ import Testing
         #expect(BoardFilter(tags: ["", "#"], text: " \t\n").isEmpty)
         #expect(!BoardFilter(projectID: S.project(1)).isEmpty)
         #expect(!BoardFilter(columns: [.done]).isEmpty)
+        #expect(!BoardFilter(columns: [.todo, .inProgress, .review]).isEmpty)
+        // Every column chosen leaves none out.
+        #expect(BoardFilter(columns: Set(Column.allCases)).isEmpty)
+        #expect(Self.filtered(BoardFilter(columns: Set(Column.allCases))) == Self.filtered(BoardFilter()))
         #expect(!BoardFilter(tags: ["bug"]).isEmpty)
         #expect(!BoardFilter(text: "login").isEmpty)
         #expect(!BoardFilter(assignee: S.agent(1)).isEmpty)
@@ -259,6 +294,27 @@ import Testing
                                     assignee: S.agent(2), createdAt: S.at(10)))
         #expect(BoardQuery.queue(of: S.agent(1), in: board) == [.card(S.card(3)), .card(S.card(1))])
         #expect(BoardQuery.queue(of: S.agent(2), in: board).isEmpty)
+    }
+
+    @Test func aStaleQueueRankOutsideTodoDoesNotQueueTheCard() throws {
+        // The validator clears the queue rank of a card that leaves todo; if another path forgets to, the card
+        // still stays out of the queue the deliveries come from (a done card never receives one).
+        var board = Self.board()
+        board.instructions = []
+        for id in [S.card(8), S.card(5), S.card(6)] {   // in progress, waiting for review, done; all agent 1
+            let index = try #require(board.cards.firstIndex { $0.id == id })
+            board.cards[index].queueRank = "a"          // ahead of cards 3 ("d") and 1 ("m")
+        }
+        board.cards.append(TaskCard(id: S.card(10), title: "Refonte terminée", projectID: nil, column: .done,
+                                    rank: "z", assignee: S.agent(2), queueRank: "a", createdAt: S.at(10)))
+
+        #expect(BoardQuery.queue(of: S.agent(1), in: board) == [.card(S.card(3)), .card(S.card(1))])
+        #expect(BoardQuery.queue(of: S.agent(2), in: board).isEmpty)
+        #expect(BoardQuery.queuePosition(of: S.card(3), in: board) == 1)
+        #expect(BoardQuery.queuePosition(of: S.card(1), in: board) == 2)
+        for id in [S.card(8), S.card(5), S.card(6), S.card(10)] {
+            #expect(BoardQuery.queuePosition(of: id, in: board) == nil)
+        }
     }
 
     @Test func queueTiesAreBrokenDeterministically() {

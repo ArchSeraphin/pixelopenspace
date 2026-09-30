@@ -5,12 +5,12 @@ import Foundation
 public struct BoardFilter: Equatable, Sendable {
     /// nil = all projects. A card without a project only shows with all projects.
     public var projectID: ProjectID?
-    /// Empty = all columns.
+    /// Empty = all columns (as is every column chosen).
     public var columns: Set<Column>
     /// All must be present on the card, case-insensitive, with or without a leading "#" (as the validator
     /// stores them). Blank ones are ignored.
     public var tags: Set<String>
-    /// Fuzzy (`FuzzyMatcher`) on the title, the details and the tags (written "#tag").
+    /// Fuzzy (`FuzzyMatcher`) on the title, the details and the tags (normalized, written "#tag").
     public var text: String
     /// nil = assigned to anyone, or to nobody.
     public var assignee: AgentID?
@@ -24,10 +24,15 @@ public struct BoardFilter: Equatable, Sendable {
         self.assignee = assignee
     }
 
-    /// True exactly when the filter keeps every card: no project, column or assignee chosen, and no tag or
-    /// search word left once blank ones are ignored.
+    /// True exactly when the filter keeps every card of any board: no project or assignee chosen, no column
+    /// left out (none chosen, or all of them), and no tag or search word left once blank ones are ignored.
     public var isEmpty: Bool {
-        projectID == nil && columns.isEmpty && assignee == nil && tagKeys.isEmpty && FuzzyMatcher.words(text).isEmpty
+        projectID == nil && keepsEveryColumn && assignee == nil && tagKeys.isEmpty && FuzzyMatcher.words(text).isEmpty
+    }
+
+    /// No column chosen, or every one of them.
+    var keepsEveryColumn: Bool {
+        columns.isEmpty || columns.isSuperset(of: Column.allCases)
     }
 
     /// The tags as the board compares them (`TaskBoardValidator.tagKey` of the normalized tags).
@@ -38,7 +43,8 @@ public struct BoardFilter: Equatable, Sendable {
 
 /// Approximate matching for the board's search and the ⌘K palette (proposal 3.5, 3.16).
 public enum FuzzyMatcher {
-    /// Case- and diacritic-insensitive ("é" is "e"; the ligatures "œ" and "æ" are "oe" and "ae"); invisible
+    /// Case- and diacritic-insensitive ("é" is "e"; the ligatures "œ" and "æ" are "oe" and "ae"; "ø", "ł" and
+    /// "đ" are "o", "l" and "d"), full-width letters and signs are their ASCII form ("ＡＰＩ" is "api"); invisible
     /// characters (zero-width and bidi marks, controls) are ignored. Every whitespace-separated word of `query`
     /// must be a subsequence of some whitespace-separated word of `candidate`: "pagi" and "pgn" find
     /// "Pagination", "corr login" finds "Corriger le login". A query word never spans two candidate words:
@@ -58,9 +64,10 @@ public enum FuzzyMatcher {
         fold(text).split(whereSeparator: \.isWhitespace).map(Array.init)
     }
 
-    /// Case, diacritics and French ligatures folded away, invisible scalars removed (whitespace kept).
+    /// Case, diacritics, width and French ligatures folded away, invisible scalars removed (whitespace kept).
     /// `folding` is the Foundation one, available on Linux too; `lowercased()` makes the case identical
-    /// whatever the platform folds to.
+    /// whatever the platform folds to. The letters Foundation leaves alone (no canonical decomposition) and
+    /// the full-width forms are mapped here, the same on every platform.
     static func fold(_ text: String) -> String {
         let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).lowercased()
         var result = ""
@@ -69,6 +76,11 @@ public enum FuzzyMatcher {
             switch scalar {
             case "œ": result.unicodeScalars.append(contentsOf: "oe".unicodeScalars)
             case "æ": result.unicodeScalars.append(contentsOf: "ae".unicodeScalars)
+            case "ø": result.unicodeScalars.append("o")
+            case "ł": result.unicodeScalars.append("l")
+            case "đ": result.unicodeScalars.append("d")
+            // Full-width "！" to "～" (U+FF01 to U+FF5E), already lowercased: their ASCII form, 0xFEE0 below.
+            case "\u{FF01}"..."\u{FF5E}": result.unicodeScalars.append(Unicode.Scalar(scalar.value - 0xFEE0)!)
             default: result.unicodeScalars.append(scalar)
             }
         }
@@ -104,7 +116,7 @@ public enum BoardQuery {
         let words = FuzzyMatcher.words(filter.text)
         var result: [Column: [TaskCard]] = [:]
         for column in Column.allCases {
-            guard filter.columns.isEmpty || filter.columns.contains(column) else {
+            guard filter.keepsEveryColumn || filter.columns.contains(column) else {
                 result[column] = []
                 continue
             }
@@ -167,12 +179,14 @@ public enum BoardQuery {
                               words: [[Character]]) -> Bool {
         if let project = filter.projectID, card.projectID != project { return false }
         if let agent = filter.assignee, card.assignee != agent { return false }
+        guard !tagKeys.isEmpty || !words.isEmpty else { return true }
+        // Normalized as the validator stores them, as the tag filter and `allTags` see them.
+        let tags = TaskBoardValidator.normalizedTags(card.tags)
         if !tagKeys.isEmpty {
-            let cardKeys = Set(TaskBoardValidator.normalizedTags(card.tags).map(TaskBoardValidator.tagKey))
-            guard tagKeys.isSubset(of: cardKeys) else { return false }
+            guard tagKeys.isSubset(of: Set(tags.map(TaskBoardValidator.tagKey))) else { return false }
         }
         if !words.isEmpty {
-            let searched = ([card.title, card.details] + card.tags.map { "#" + $0 }).joined(separator: " ")
+            let searched = ([card.title, card.details] + tags.map { "#" + $0 }).joined(separator: " ")
             guard FuzzyMatcher.matches(words: words, in: FuzzyMatcher.words(searched)) else { return false }
         }
         return true
