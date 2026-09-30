@@ -17,6 +17,8 @@ struct SettingsView: View {
                 .tabItem { Label("Notifications", systemImage: "bell") }
             TerminalSettingsTab(draft: $draft)
                 .tabItem { Label("Terminal", systemImage: "character.cursor.ibeam") }
+            AdvancedSettingsTab()
+                .tabItem { Label("Avancé", systemImage: "gearshape.2") }
         }
         .frame(width: 620)
         .frame(minHeight: 420)

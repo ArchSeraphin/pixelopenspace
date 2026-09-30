@@ -53,6 +53,8 @@ final class AppModel {
     var notificationsDenied = false
     /// Clock of the time-dependent texts ("depuis 2 min", asleep after 10 min): advanced every second.
     var now = Date()
+    /// Hook → screen latency of the last 500 accepted hook events (Réglages › Avancé); written by `receive(_:)` only.
+    var hookLatency = LatencyWindow()
 
     // MARK: - Services
 

@@ -107,6 +107,9 @@ extension AppModel {
         case .accept(let agentID):
             hookSeq += 1
             dispatch(.hook(envelope.event, seq: hookSeq), to: agentID)
+            // Hook → screen latency (MVP criterion 2): from the helper's `ts_ns` to the new state stored and its
+            // effects run, on the same monotonic clock; SwiftUI draws it at the next pass of the main run loop.
+            hookLatency.record(sentNs: envelope.timestampNs, appliedNs: HookWire.monotonicNanos())
         case .ignoreNested(let agentID):
             AppLog.hooks.debug("\(event, privacy: .public) from a nested claude of \(agentID.description, privacy: .public): ignored")
         case .rejectToken:
