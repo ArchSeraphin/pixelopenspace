@@ -1,0 +1,8 @@
+Building for production...
+[0/5] Write sources
+[2/5] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Compiling PixelIPC HookWire.swift
+[5/7] Compiling pixel_hook main.swift
+[5/7] Write Objects.LinkFileList
+[6/7] Linking pixel-hook
+Build of product 'pixel-hook' complete! (5.23s)

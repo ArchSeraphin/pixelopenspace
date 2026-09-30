@@ -1,0 +1,37 @@
+# worktree-pret · session worktree · t=71.7 s · curseur ligne 33 col 3 · écran alternatif
+
+ ▐▛███▛█   Claude Code v2.1.285
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   /…/l9/s3ffyh850pgfhq7bfsvh3qfh0000gn/T/pos-spikes-20260930-185108/S4/projet/.claude/worktrees/spike-s4
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Try "create a util logging.py that..."
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 4.5 | spike-s4
+  ⏸ manual mode on

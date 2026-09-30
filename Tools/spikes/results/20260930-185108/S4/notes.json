@@ -1,0 +1,681 @@
+{
+  "id": "S4",
+  "title": "Identifiants : /clear, /compact, /resume, --resume, --fork-session ; --worktree",
+  "status": "ok",
+  "timeout_s": 420,
+  "launches": [
+    {
+      "label": "nouvelle-session",
+      "argv": [
+        "--settings",
+        "<tmp>/spike-settings.json",
+        "--model",
+        "haiku",
+        "--permission-mode",
+        "default",
+        "--name",
+        "pos-spike-s4",
+        "--session-id",
+        "4a5a6985-a1aa-4ee3-a8c7-8dd2093d7efb"
+      ],
+      "cwd": "<tmp>/S4/projet",
+      "trust_dialog": true,
+      "t_start_ms": 84.0,
+      "trust_seen_ms": 498.7,
+      "trust_focus": [
+        "No, exit",
+        "Yes, I trust this folder"
+      ],
+      "trust_moves": 1,
+      "trust_accepted_ms": 1043.0,
+      "trust_dialog_closed": true,
+      "hooks_before_trust_dialog": [],
+      "hooks_before_trust_accept": [],
+      "session_start": {
+        "source": "startup",
+        "session_id": "4a5a6985-a1aa-4ee3-a8c7-8dd2093d7efb",
+        "cwd": "<tmp>/S4/projet",
+        "model": "claude-haiku-4-5-20251001",
+        "session_title": "pos-spike-s4",
+        "t_ms": 1557.7,
+        "keys": [
+          "cwd",
+          "hook_event_name",
+          "model",
+          "scratchpad_dir",
+          "session_id",
+          "session_title",
+          "source",
+          "transcript_path"
+        ]
+      },
+      "startup_dialogs": [],
+      "ready_ms": 2730.0,
+      "input_left": false,
+      "exit": {
+        "method": "/exit",
+        "exit_status": 0,
+        "session_end": "prompt_input_exit"
+      },
+      "terminal": {
+        "bracketed_paste_enabled": true,
+        "alternate_screen_used": true,
+        "private_modes_seen": [
+          "?1000h",
+          "?1000l",
+          "?1002h",
+          "?1002l",
+          "?1003h",
+          "?1003l",
+          "?1004h",
+          "?1004l",
+          "?1006h",
+          "?1006l",
+          "?1016l",
+          "?1049h",
+          "?1049l",
+          "?2004h",
+          "?2004l",
+          "?2026h",
+          "?2026l",
+          "?2031h",
+          "?2031l",
+          "?25h",
+          "?25l"
+        ],
+        "queries": [
+          "CSI 16 t",
+          "DA1",
+          "DECRQM ?1016",
+          "DECRQM ?2026",
+          "OSC 11 ?",
+          "XTVERSION",
+          "kitty keyboard ?"
+        ],
+        "osc_codes": [
+          "0",
+          "11"
+        ],
+        "titles": [
+          "◐ pos-spike-s4-apres-clear",
+          "◑ pos-spike-s4-apres-clear",
+          "✳ pos-spike-s4-apres-clear",
+          "◑ pos-spike-s4-apres-clear",
+          ""
+        ],
+        "kitty_keyboard_flags_history": [
+          5,
+          0,
+          5,
+          0,
+          5,
+          0,
+          5,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "label": "reprise",
+      "argv": [
+        "--settings",
+        "<tmp>/spike-settings.json",
+        "--model",
+        "haiku",
+        "--permission-mode",
+        "default",
+        "--resume",
+        "1bc0f21d-68d1-43d3-b612-24f1504ef645"
+      ],
+      "cwd": "<tmp>/S4/projet",
+      "trust_dialog": false,
+      "t_start_ms": 61839.3,
+      "hooks_before_trust_dialog": [],
+      "hooks_before_trust_accept": [],
+      "session_start": {
+        "source": "resume",
+        "session_id": "1bc0f21d-68d1-43d3-b612-24f1504ef645",
+        "cwd": "<tmp>/S4/projet",
+        "model": null,
+        "session_title": "pos-spike-s4-apres-clear",
+        "t_ms": 62671.2,
+        "keys": [
+          "cwd",
+          "hook_event_name",
+          "scratchpad_dir",
+          "session_id",
+          "session_title",
+          "source",
+          "transcript_path"
+        ]
+      },
+      "startup_dialogs": [],
+      "ready_ms": 64132.9,
+      "exit": {
+        "method": "/exit",
+        "exit_status": 0,
+        "session_end": "prompt_input_exit"
+      },
+      "terminal": {
+        "bracketed_paste_enabled": true,
+        "alternate_screen_used": true,
+        "private_modes_seen": [
+          "?1000h",
+          "?1000l",
+          "?1002h",
+          "?1002l",
+          "?1003h",
+          "?1003l",
+          "?1004h",
+          "?1004l",
+          "?1006h",
+          "?1006l",
+          "?1016l",
+          "?1049h",
+          "?1049l",
+          "?2004h",
+          "?2004l",
+          "?2026h",
+          "?2026l",
+          "?2031h",
+          "?2031l",
+          "?25h",
+          "?25l"
+        ],
+        "queries": [
+          "CSI 16 t",
+          "DA1",
+          "DECRQM ?1016",
+          "DECRQM ?2026",
+          "OSC 11 ?",
+          "XTVERSION",
+          "kitty keyboard ?"
+        ],
+        "osc_codes": [
+          "0",
+          "11"
+        ],
+        "titles": [
+          "✳ pos-spike-s4-apres-clear",
+          "◐ pos-spike-s4-apres-clear",
+          ""
+        ],
+        "kitty_keyboard_flags_history": [
+          0,
+          5,
+          0,
+          0,
+          5,
+          0,
+          5,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "label": "fork",
+      "argv": [
+        "--settings",
+        "<tmp>/spike-settings.json",
+        "--model",
+        "haiku",
+        "--permission-mode",
+        "default",
+        "--resume",
+        "1bc0f21d-68d1-43d3-b612-24f1504ef645",
+        "--fork-session"
+      ],
+      "cwd": "<tmp>/S4/projet",
+      "trust_dialog": false,
+      "t_start_ms": 65620.3,
+      "hooks_before_trust_dialog": [],
+      "hooks_before_trust_accept": [],
+      "session_start": {
+        "source": "fork",
+        "session_id": "a3f0ffb5-f2f0-418c-9273-dce57d9f8068",
+        "cwd": "<tmp>/S4/projet",
+        "model": null,
+        "session_title": "pos-spike-s4-apres-clear",
+        "t_ms": 66472.8,
+        "keys": [
+          "cwd",
+          "hook_event_name",
+          "scratchpad_dir",
+          "session_id",
+          "session_title",
+          "source",
+          "transcript_path"
+        ]
+      },
+      "startup_dialogs": [],
+      "ready_ms": 67917.5,
+      "exit": {
+        "method": "/exit",
+        "exit_status": 0,
+        "session_end": "prompt_input_exit"
+      },
+      "terminal": {
+        "bracketed_paste_enabled": true,
+        "alternate_screen_used": true,
+        "private_modes_seen": [
+          "?1000h",
+          "?1000l",
+          "?1002h",
+          "?1002l",
+          "?1003h",
+          "?1003l",
+          "?1004h",
+          "?1004l",
+          "?1006h",
+          "?1006l",
+          "?1016l",
+          "?1049h",
+          "?1049l",
+          "?2004h",
+          "?2004l",
+          "?2026h",
+          "?2026l",
+          "?2031h",
+          "?2031l",
+          "?25h",
+          "?25l"
+        ],
+        "queries": [
+          "CSI 16 t",
+          "DA1",
+          "DECRQM ?1016",
+          "DECRQM ?2026",
+          "OSC 11 ?",
+          "XTVERSION",
+          "kitty keyboard ?"
+        ],
+        "osc_codes": [
+          "0",
+          "11"
+        ],
+        "titles": [
+          "✳ pos-spike-s4-apres-clear",
+          "◐ pos-spike-s4-apres-clear",
+          ""
+        ],
+        "kitty_keyboard_flags_history": [
+          0,
+          5,
+          0,
+          0,
+          5,
+          0,
+          5,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "label": "worktree",
+      "argv": [
+        "--settings",
+        "<tmp>/spike-settings.json",
+        "--model",
+        "haiku",
+        "--permission-mode",
+        "default",
+        "--worktree",
+        "spike-s4"
+      ],
+      "cwd": "<tmp>/S4/projet",
+      "trust_dialog": false,
+      "t_start_ms": 69244.8,
+      "hooks_before_trust_dialog": [],
+      "hooks_before_trust_accept": [],
+      "session_start": {
+        "source": "startup",
+        "session_id": "6c6135c6-087c-4778-b177-77cb1e4bbe0c",
+        "cwd": "<tmp>/S4/projet/.claude/worktrees/spike-s4",
+        "model": "claude-haiku-4-5-20251001",
+        "session_title": null,
+        "t_ms": 70276.2,
+        "keys": [
+          "cwd",
+          "hook_event_name",
+          "model",
+          "scratchpad_dir",
+          "session_id",
+          "source",
+          "transcript_path"
+        ]
+      },
+      "startup_dialogs": [],
+      "ready_ms": 71733.1,
+      "exit": {
+        "method": "/exit",
+        "exit_status": 0,
+        "session_end": "prompt_input_exit"
+      },
+      "terminal": {
+        "bracketed_paste_enabled": true,
+        "alternate_screen_used": true,
+        "private_modes_seen": [
+          "?1000h",
+          "?1000l",
+          "?1002h",
+          "?1002l",
+          "?1003h",
+          "?1003l",
+          "?1004h",
+          "?1004l",
+          "?1006h",
+          "?1006l",
+          "?1016l",
+          "?1049h",
+          "?1049l",
+          "?2004h",
+          "?2004l",
+          "?2026h",
+          "?2026l",
+          "?2031h",
+          "?2031l",
+          "?25h",
+          "?25l"
+        ],
+        "queries": [
+          "CSI 16 t",
+          "DA1",
+          "DECRQM ?1016",
+          "DECRQM ?2026",
+          "OSC 11 ?",
+          "XTVERSION",
+          "kitty keyboard ?"
+        ],
+        "osc_codes": [
+          "0",
+          "11"
+        ],
+        "titles": [
+          "✳ Claude Code",
+          "◐ Claude Code",
+          "✳ Claude Code",
+          ""
+        ],
+        "kitty_keyboard_flags_history": [
+          0,
+          5,
+          0,
+          0,
+          5,
+          0,
+          5,
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "timeline": [
+    {
+      "t_ms": 84.1,
+      "msg": "nouvelle-session : claude --settings <tmp>/spike-settings.json --model haiku --permission-mode default --name pos-spike-s4 --session-id 4a5a6985-a1aa-4ee3-a8c7-8dd2093d7efb"
+    },
+    {
+      "t_ms": 1054.7,
+      "msg": "nouvelle-session : dialogue de confiance accepté"
+    },
+    {
+      "t_ms": 3097.7,
+      "msg": "tour-1 : UserPromptSubmit après 70 ms"
+    },
+    {
+      "t_ms": 15863.1,
+      "msg": "tour-2 : UserPromptSubmit après 87 ms"
+    },
+    {
+      "t_ms": 60673.5,
+      "msg": "/resume pos-spike-s4 : aucun SessionStart en 20 s"
+    },
+    {
+      "t_ms": 61836.1,
+      "msg": "nouvelle-session : fin (/exit, SessionEnd=prompt_input_exit)"
+    },
+    {
+      "t_ms": 61839.5,
+      "msg": "reprise : claude --settings <tmp>/spike-settings.json --model haiku --permission-mode default --resume 1bc0f21d-68d1-43d3-b612-24f1504ef645"
+    },
+    {
+      "t_ms": 65617.1,
+      "msg": "reprise : fin (/exit, SessionEnd=prompt_input_exit)"
+    },
+    {
+      "t_ms": 65620.5,
+      "msg": "fork : claude --settings <tmp>/spike-settings.json --model haiku --permission-mode default --resume 1bc0f21d-68d1-43d3-b612-24f1504ef645 --fork-session"
+    },
+    {
+      "t_ms": 69242.2,
+      "msg": "fork : fin (/exit, SessionEnd=prompt_input_exit)"
+    },
+    {
+      "t_ms": 69245.0,
+      "msg": "worktree : claude --settings <tmp>/spike-settings.json --model haiku --permission-mode default --worktree spike-s4"
+    },
+    {
+      "t_ms": 73453.3,
+      "msg": "worktree : fin (/exit, SessionEnd=prompt_input_exit)"
+    }
+  ],
+  "answer": {
+    "steps": [
+      {
+        "step": "lancement --session-id",
+        "event": "SessionStart",
+        "detail": "startup",
+        "session_id": "4a5a6985-a1aa-4ee3-a8c7-8dd2093d7efb",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "/clear",
+        "event": "SessionEnd",
+        "detail": "clear",
+        "session_id": "4a5a6985-a1aa-4ee3-a8c7-8dd2093d7efb",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "/clear",
+        "event": "SessionStart",
+        "detail": "clear",
+        "session_id": "1bc0f21d-68d1-43d3-b612-24f1504ef645",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "/compact",
+        "event": "PreCompact",
+        "detail": "manual",
+        "session_id": "1bc0f21d-68d1-43d3-b612-24f1504ef645",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "/compact",
+        "event": "SessionStart",
+        "detail": "compact",
+        "session_id": "1bc0f21d-68d1-43d3-b612-24f1504ef645",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "/compact",
+        "event": "PostCompact",
+        "detail": "manual",
+        "session_id": "1bc0f21d-68d1-43d3-b612-24f1504ef645",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "/exit",
+        "event": "SessionEnd",
+        "detail": "prompt_input_exit",
+        "session_id": "1bc0f21d-68d1-43d3-b612-24f1504ef645",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "--resume",
+        "event": "SessionStart",
+        "detail": "resume",
+        "session_id": "1bc0f21d-68d1-43d3-b612-24f1504ef645",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "/exit (reprise)",
+        "event": "SessionEnd",
+        "detail": "prompt_input_exit",
+        "session_id": "1bc0f21d-68d1-43d3-b612-24f1504ef645",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "--resume --fork-session",
+        "event": "SessionStart",
+        "detail": "fork",
+        "session_id": "a3f0ffb5-f2f0-418c-9273-dce57d9f8068",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "/exit (fork)",
+        "event": "SessionEnd",
+        "detail": "prompt_input_exit",
+        "session_id": "a3f0ffb5-f2f0-418c-9273-dce57d9f8068",
+        "cwd": "<tmp>/S4/projet"
+      },
+      {
+        "step": "--worktree",
+        "event": "SessionStart",
+        "detail": "startup",
+        "session_id": "6c6135c6-087c-4778-b177-77cb1e4bbe0c",
+        "cwd": "<tmp>/S4/projet/.claude/worktrees/spike-s4"
+      },
+      {
+        "step": "/exit (worktree)",
+        "event": "SessionEnd",
+        "detail": "prompt_input_exit",
+        "session_id": "6c6135c6-087c-4778-b177-77cb1e4bbe0c",
+        "cwd": "<tmp>/S4/projet"
+      }
+    ],
+    "requested_id": "4a5a6985-a1aa-4ee3-a8c7-8dd2093d7efb",
+    "resume_picker": {
+      "focused": "/clear",
+      "options": []
+    },
+    "resume_id": "1bc0f21d-68d1-43d3-b612-24f1504ef645",
+    "worktree": {
+      "workspace": "<tmp>/S4/projet",
+      "session_start_cwd": "<tmp>/S4/projet/.claude/worktrees/spike-s4",
+      "cwd_changed": []
+    },
+    "derived": {
+      "startup_id_is_requested": true,
+      "clear_changes_id": true,
+      "clear_source": "clear",
+      "compact_keeps_id": true,
+      "compact_source": "compact",
+      "resume_in_session_returns_to_first_id": false,
+      "resume_in_session_source": null,
+      "resume_keeps_id": true,
+      "resume_source": "resume",
+      "fork_new_id": true,
+      "fork_source": "fork",
+      "worktree_cwd_is_a_worktree": true
+    }
+  },
+  "duration_s": 73.5,
+  "screens": [
+    {
+      "label": "nouvelle-session-confiance",
+      "session": "nouvelle-session",
+      "t_ms": 717.6,
+      "alt_screen": false,
+      "cursor": [
+        14,
+        2
+      ],
+      "file": "screens/01-nouvelle-session-confiance.txt"
+    },
+    {
+      "label": "nouvelle-session-pret",
+      "session": "nouvelle-session",
+      "t_ms": 2730.1,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/02-nouvelle-session-pret.txt"
+    },
+    {
+      "label": "apres-compact",
+      "session": "nouvelle-session",
+      "t_ms": 38773.8,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/03-apres-compact.txt"
+    },
+    {
+      "label": "selecteur-resume",
+      "session": "nouvelle-session",
+      "t_ms": 40166.6,
+      "alt_screen": true,
+      "cursor": [
+        32,
+        4
+      ],
+      "file": "screens/04-selecteur-resume.txt"
+    },
+    {
+      "label": "apres-resume",
+      "session": "nouvelle-session",
+      "t_ms": 60673.7,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/05-apres-resume.txt"
+    },
+    {
+      "label": "reprise-pret",
+      "session": "reprise",
+      "t_ms": 64132.9,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/06-reprise-pret.txt"
+    },
+    {
+      "label": "fork-pret",
+      "session": "fork",
+      "t_ms": 67917.5,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/07-fork-pret.txt"
+    },
+    {
+      "label": "worktree-pret",
+      "session": "worktree",
+      "t_ms": 71733.2,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/08-worktree-pret.txt"
+    }
+  ]
+}

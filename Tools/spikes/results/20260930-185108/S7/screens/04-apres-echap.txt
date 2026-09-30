@@ -1,0 +1,37 @@
+# apres-echap · session lancement-1 · t=16.9 s · curseur ligne 33 col 3 · écran alternatif
+
+ ▐▛███▛█   Claude Code v2.1.285
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   <tmp>/S7/projet
+
+
+❯ Utilise l'outil AskUserQuestion pour me demander de choisir entre rouge et bleu, puis attends ma réponse.
+
+⏺ User declined to answer questions
+  ⎿  · Choisissez votre couleur préférée entre les deux options suivantes (Rouge / Bleu)
+
+✻ Baked for 4s · done 18:53
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────── pos-spike-s7 ─
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 4.5 | Contexte: 23% | 5h: █░░░░░░░░░ 9%  7j: 2% | projet
+  ⏸ manual mode on

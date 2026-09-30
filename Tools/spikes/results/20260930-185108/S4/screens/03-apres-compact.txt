@@ -1,0 +1,37 @@
+# apres-compact · session nouvelle-session · t=38.8 s · curseur ligne 33 col 3 · écran alternatif
+
+ ▐▛███▛█   Claude Code v2.1.285
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   <tmp>/S4/projet
+
+
+❯ /clear
+
+❯ /rename pos-spike-s4-apres-clear
+  ⎿  Session renamed to: pos-spike-s4-apres-clear
+
+❯ Second sujet : réponds juste OK.
+
+⏺ OK.
+
+✻ Sautéed for 4s · done 18:52
+
+❯ /compact
+  ⎿  Compacted (ctrl+o to see full summary)
+     PreCompact ['/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13'
+     '<tmp>/hooklog.py' --tag 'app']
+     completed successfully
+     PostCompact ['/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13'
+     '<tmp>/hooklog.py' --tag 'app']
+     completed successfully
+
+
+
+
+
+
+───────────────────────────────────────────────────────────────────────────────────────────── pos-spike-s4-apres-clear ─
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 4.5 | 5h: █░░░░░░░░░ 9%  7j: 2% | projet
+  ⏸ manual mode on

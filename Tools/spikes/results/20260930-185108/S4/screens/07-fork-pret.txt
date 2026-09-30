@@ -1,0 +1,37 @@
+# fork-pret · session fork · t=67.9 s · curseur ligne 33 col 3 · écran alternatif
+
+ ▐▛███▛█   Claude Code v2.1.285
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   <tmp>/S4/projet
+
+
+❯ /compact
+  ⎿  Compacted (ctrl+o to see full summary)
+     PreCompact ['/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13'
+     '<tmp>/hooklog.py' --tag 'app']
+     completed successfully
+     PostCompact ['/Library/Frameworks/Python.framework/Versions/3.13/bin/python3.13'
+     '<tmp>/hooklog.py' --tag 'app']
+     completed successfully
+
+❯ /resume
+  ⎿  Resume cancelled
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+───────────────────────────────────────────────────────────────────────────────────────────── pos-spike-s4-apres-clear ─
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 4.5 | projet
+  ⏸ manual mode on

@@ -1,0 +1,37 @@
+# deux-lignes-brouillon · session lancement-1 · t=3.0 s · curseur ligne 33 col 26 · écran alternatif
+
+ ▐▛███▛█   Claude Code v2.1.285
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   <tmp>/S3.b-lf/projet
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                 ctrl+g to edit in Vim
+──────────────────────────────────────────────────────────────────────────────────────────────────── pos-spike-s3.b-lf ─
+❯ Ligne 1 : réponds juste OK.
+  Ligne 2 : rien d'autre.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 4.5 | projet
+  ⏸ manual mode on

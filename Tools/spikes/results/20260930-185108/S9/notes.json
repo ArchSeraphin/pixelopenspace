@@ -1,0 +1,73 @@
+{
+  "id": "S9",
+  "title": "Latence de pixel-hook",
+  "status": "ok",
+  "timeout_s": 900,
+  "launches": [],
+  "timeline": [
+    {
+      "t_ms": 0.2,
+      "msg": "swift build -c release --product pixel-hook (1 à 3 minutes)"
+    }
+  ],
+  "answer": {
+    "swift_version": [
+      "swift-driver version: 1.148.6 Apple Swift version 6.3.2 (swiftlang-6.3.2.1.108 clang-2100.1.1.101)"
+    ],
+    "build": "ok",
+    "binary": "<tmp>/S9/build/arm64-apple-macosx/release/pixel-hook",
+    "sample_message": {
+      "ts_ns": 35705269026000,
+      "claude_pid": 61660,
+      "token": "<jeton de test>",
+      "agent": "5be31b32-5dd5-4fec-997b-bc054a4e317d",
+      "v": 1,
+      "hook": {
+        "session_id": "3ecfe7bc-826d-4283-b3c2-1b93887b133c",
+        "transcript_path": "/tmp/t.jsonl",
+        "cwd": "/tmp/projet",
+        "permission_mode": "default",
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {
+          "command": "npm test",
+          "description": "Run test suite xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "tool_use_id": "toolu_01ABC"
+      }
+    },
+    "runs": 50,
+    "delivery_ms": {
+      "n": 50,
+      "min": 6.9,
+      "p50": 7.7,
+      "p95": 9.3,
+      "max": 195.3
+    },
+    "exit_ms": {
+      "n": 50,
+      "min": 7.5,
+      "p50": 10.2,
+      "p95": 12.1,
+      "max": 197.9
+    },
+    "no_socket_exit_ms": {
+      "n": 10,
+      "min": 10.6,
+      "p50": 13.1,
+      "p95": 18.3,
+      "max": 18.3
+    },
+    "baseline_true_ms": {
+      "n": 20,
+      "min": 2.6,
+      "p50": 2.8,
+      "p95": 3.4,
+      "max": 3.9
+    },
+    "failures": [],
+    "failure_count": 0
+  },
+  "duration_s": 8.0,
+  "screens": []
+}

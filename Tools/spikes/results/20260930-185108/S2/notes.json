@@ -1,0 +1,155 @@
+{
+  "id": "S2",
+  "title": "--session-id, puis fermeture du PTY",
+  "status": "ok",
+  "timeout_s": 90.0,
+  "launches": [
+    {
+      "label": "lancement-1",
+      "argv": [
+        "--settings",
+        "<tmp>/spike-settings.json",
+        "--model",
+        "haiku",
+        "--permission-mode",
+        "default",
+        "--name",
+        "pos-spike-s2",
+        "--session-id",
+        "d6acd40d-4066-4a37-b44f-5dbe71b2a700"
+      ],
+      "cwd": "<tmp>/S2/projet",
+      "trust_dialog": true,
+      "t_start_ms": 88.5,
+      "trust_seen_ms": 503.2,
+      "trust_focus": [
+        "No, exit",
+        "Yes, I trust this folder"
+      ],
+      "trust_moves": 1,
+      "trust_accepted_ms": 1116.0,
+      "trust_dialog_closed": true,
+      "hooks_before_trust_dialog": [],
+      "hooks_before_trust_accept": [],
+      "session_start": {
+        "source": "startup",
+        "session_id": "d6acd40d-4066-4a37-b44f-5dbe71b2a700",
+        "cwd": "<tmp>/S2/projet",
+        "model": "claude-haiku-4-5-20251001",
+        "session_title": "pos-spike-s2",
+        "t_ms": 1638.0,
+        "keys": [
+          "cwd",
+          "hook_event_name",
+          "model",
+          "scratchpad_dir",
+          "session_id",
+          "session_title",
+          "source",
+          "transcript_path"
+        ]
+      },
+      "startup_dialogs": [],
+      "ready_ms": 2903.4,
+      "terminal": {
+        "bracketed_paste_enabled": true,
+        "alternate_screen_used": true,
+        "private_modes_seen": [
+          "?1000h",
+          "?1002h",
+          "?1003h",
+          "?1004h",
+          "?1004l",
+          "?1006h",
+          "?1049h",
+          "?2004h",
+          "?2004l",
+          "?2026h",
+          "?2026l",
+          "?2031h",
+          "?2031l",
+          "?25h",
+          "?25l"
+        ],
+        "queries": [
+          "CSI 16 t",
+          "DA1",
+          "DECRQM ?1016",
+          "DECRQM ?2026",
+          "OSC 11 ?",
+          "XTVERSION",
+          "kitty keyboard ?"
+        ],
+        "osc_codes": [
+          "0",
+          "11"
+        ],
+        "titles": [
+          "✳ pos-spike-s2"
+        ],
+        "kitty_keyboard_flags_history": [
+          0,
+          5,
+          0,
+          0,
+          5,
+          0,
+          0,
+          5,
+          0,
+          5
+        ]
+      }
+    }
+  ],
+  "timeline": [
+    {
+      "t_ms": 88.6,
+      "msg": "lancement-1 : claude --settings <tmp>/spike-settings.json --model haiku --permission-mode default --name pos-spike-s2 --session-id d6acd40d-4066-4a37-b44f-5dbe71b2a700"
+    },
+    {
+      "t_ms": 1128.2,
+      "msg": "lancement-1 : dialogue de confiance accepté"
+    },
+    {
+      "t_ms": 2903.5,
+      "msg": "fermeture du PTY (SIGHUP)"
+    }
+  ],
+  "answer": {
+    "requested": "d6acd40d-4066-4a37-b44f-5dbe71b2a700",
+    "received": "d6acd40d-4066-4a37-b44f-5dbe71b2a700",
+    "equal": true,
+    "source": "startup",
+    "hangup": {
+      "exited": true,
+      "exit_status": 129,
+      "session_end_reason": "other"
+    }
+  },
+  "duration_s": 5.1,
+  "screens": [
+    {
+      "label": "lancement-1-confiance",
+      "session": "lancement-1",
+      "t_ms": 774.0,
+      "alt_screen": false,
+      "cursor": [
+        14,
+        2
+      ],
+      "file": "screens/01-lancement-1-confiance.txt"
+    },
+    {
+      "label": "lancement-1-pret",
+      "session": "lancement-1",
+      "t_ms": 2903.5,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/02-lancement-1-pret.txt"
+    }
+  ]
+}
