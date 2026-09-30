@@ -67,7 +67,8 @@ import Testing
     @Test func rule3RemovesZeroWidthBidiControlsAndByteOrderMark() {
         let invisibles: [Unicode.Scalar] = [
             "\u{200B}", "\u{200C}", "\u{200D}", "\u{2060}",
-            "\u{200E}", "\u{200F}", "\u{202A}", "\u{202B}", "\u{202C}", "\u{202D}", "\u{202E}",
+            // Every Bidi_Control, the Arabic letter mark U+061C included.
+            "\u{061C}", "\u{200E}", "\u{200F}", "\u{202A}", "\u{202B}", "\u{202C}", "\u{202D}", "\u{202E}",
             "\u{2066}", "\u{2067}", "\u{2068}", "\u{2069}",
             "\u{FEFF}",
         ]
@@ -77,8 +78,49 @@ import Testing
             raw.append(invisible)
         }
         let prompt = sanitize(String(raw))
-        #expect(prompt.text == "abcdefghijklmnop")
-        #expect(prompt.removedCount == 16)
+        #expect(prompt.text == "abcdefghijklmnopq")
+        #expect(prompt.removedCount == 17)
+    }
+
+    @Test func rule3RemovesTheArabicLetterMarkBeforeACommand() {
+        let prompt = sanitize("\u{061C}/clear")
+        #expect(prompt.text == "Tâche : /clear")
+        #expect(prompt.prefixed)
+        #expect(prompt.removedCount == 1)
+    }
+
+    @Test func rule3RemovesEveryTagCharacter() {
+        // Claude Code removes tag characters on Enter and holds the prompt back for a second Enter.
+        var raw = String.UnicodeScalarView()
+        for value in UInt32(0xE0000)...0xE007F {
+            raw.append("x")
+            raw.append(Unicode.Scalar(value)!)
+        }
+        let prompt = sanitize(String(raw))
+        #expect(prompt.text == String(repeating: "x", count: 128))
+        #expect(prompt.removedCount == 128)
+        #expect(sanitize("\u{E0001}\u{E0065}\u{E006E}Bonjour\u{E007F}").text == "Bonjour")
+    }
+
+    @Test func rule3RemovesTheTagsOfASubdivisionFlagToo() {
+        // England: black flag, tags "gbeng", cancel tag. Lossy on purpose, like the joiners below: a flag left
+        // with its tags could make Claude Code hold the prompt back if it removes them.
+        let england = "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}"
+        let prompt = sanitize("Drapeau " + england)
+        #expect(scalars(prompt.text) == scalars("Drapeau \u{1F3F4}"))
+        #expect(prompt.removedCount == 6)
+    }
+
+    @Test func rule3TagCharactersCannotHideACommand() {
+        let shell = sanitize("\u{E0041}!rm -rf ~")
+        #expect(shell.text == "Tâche : !rm -rf ~")
+        #expect(shell.prefixed)
+        #expect(shell.removedCount == 1)
+        let clear = sanitize("\u{E0020}/clear")
+        #expect(clear.text == "Tâche : /clear")
+        #expect(clear.prefixed)
+        #expect(PromptSanitizer.summary(clear)
+            == "14 caractères · saisie courte · 1 caractère retiré · préfixé par « Tâche : »")
     }
 
     @Test func rule3NeutralizesAReversedFileName() {
@@ -87,11 +129,17 @@ import Testing
         #expect(prompt.removedCount == 2)
     }
 
-    @Test func rule3RemovesTheJoinerEvenInsideAnEmoji() {
-        // Claude Code strips it itself on Enter and waits for a second Enter (5.6): the preview must show it gone.
-        let prompt = sanitize("\u{1F469}\u{200D}\u{1F4BB} au travail")
-        #expect(scalars(prompt.text) == scalars("\u{1F469}\u{1F4BB} au travail"))
-        #expect(prompt.removedCount == 1)
+    @Test func rule3RemovesJoinersEvenWhereClaudeCodeKeepsThem() {
+        // Claude Code keeps the joiners of Persian and Indic words and of emoji sequences. Rule 3 removes U+200C
+        // and U+200D everywhere (plan): a deliberate lossy choice, since removing more than Claude Code does
+        // never makes it hold the prompt back for a second Enter. To revisit once spike S3 pins down its rule.
+        let emoji = sanitize("\u{1F469}\u{200D}\u{1F4BB} au travail")
+        #expect(scalars(emoji.text) == scalars("\u{1F469}\u{1F4BB} au travail"))
+        #expect(emoji.removedCount == 1)
+        // A Persian word ("I want", with U+200C after its second letter): the non-joiner goes too.
+        let persian = sanitize("\u{0645}\u{06CC}\u{200C}\u{062E}\u{0648}\u{0627}\u{0647}\u{0645}")
+        #expect(scalars(persian.text) == scalars("\u{0645}\u{06CC}\u{062E}\u{0648}\u{0627}\u{0647}\u{0645}"))
+        #expect(persian.removedCount == 1)
     }
 
     @Test func rules2And3AddUpInTheRemovedCount() {
@@ -125,6 +173,44 @@ import Testing
         #expect(prompt.removedCount == 2)
     }
 
+    /// Default-ignorable scalars that rule 3 keeps (selectors, soft hyphen, invisible operators, fillers...).
+    static let invisibleLeads: [String] = [
+        "\u{FE0F}", "\u{FE0E}", "\u{00AD}", "\u{2061}", "\u{2062}", "\u{2063}", "\u{2064}", "\u{180E}",
+        "\u{034F}", "\u{3164}", "\u{115F}", "\u{E0100}",
+    ]
+
+    @Test(arguments: invisibleLeads)
+    func rule4DropsLeadingInvisibleCharactersAndLooksPastThem(_ lead: String) {
+        let clear = sanitize(lead + "/clear")
+        #expect(clear.text == "Tâche : /clear")
+        #expect(clear.prefixed)
+        #expect(clear.removedCount == 1)
+        let shell = sanitize(lead + "!rm -rf ~")
+        #expect(shell.text == "Tâche : !rm -rf ~")
+        #expect(shell.prefixed)
+        let plain = sanitize(lead + "Corrige le bug")
+        #expect(scalars(plain.text) == scalars("Corrige le bug"))
+        #expect(!plain.prefixed)
+        #expect(plain.removedCount == 1)
+    }
+
+    @Test func rule4LooksPastBlanksAndInvisibleCharactersMixed() {
+        let prompt = sanitize(" \u{00AD} \u{FE0F}\n\u{2063}!ls")
+        #expect(prompt.text == "Tâche : !ls")
+        #expect(prompt.prefixed)
+        #expect(prompt.removedCount == 3)
+        #expect(PromptSanitizer.summary(prompt)
+            == "11 caractères · saisie courte · 3 caractères retirés · préfixé par « Tâche : »")
+    }
+
+    @Test func rule4KeepsInvisibleCharactersAfterTheFirstVisibleOne() {
+        // A selector ends an emoji, a soft hyphen sits inside a word: only a leading one is dropped.
+        let raw = "J'aime \u{2764}\u{FE0F} la co\u{00AD}opération \u{2764}\u{FE0F}"
+        let prompt = sanitize(raw)
+        #expect(scalars(prompt.text) == scalars(raw))
+        #expect(prompt.removedCount == 0)
+    }
+
     @Test func rule4LeavesOtherTextAlone() {
         let prompt = sanitize("Corrige /users et @api, sans !important")
         #expect(prompt.text == "Corrige /users et @api, sans !important")
@@ -142,6 +228,19 @@ import Testing
         #expect(sanitize("Fais ceci \t ").text == "Fais ceci")
     }
 
+    @Test func rule5KeepsAFinalBackslashFromTurningEnterIntoALineBreak() {
+        // A backslash then Enter inserts a line break in Claude Code: a space after it lets the "\r" submit.
+        #expect(sanitize("Nettoie C:\\Temp\\").text == "Nettoie C:\\Temp\\ ")
+        #expect(sanitize("Nettoie C:\\Temp\\ \n\n").text == "Nettoie C:\\Temp\\ ")
+        #expect(sanitize("\\").text == "\\ ")
+        #expect(sanitize("a\\\\").text == "a\\\\ ")
+        // Also when an invisible character trails the backslash (Claude Code may remove it first).
+        #expect(scalars(sanitize("a\\\u{00AD}").text) == scalars("a\\\u{00AD} "))
+        // A backslash elsewhere is left alone.
+        #expect(sanitize("a\\\nb").text == "a\\\nb")
+        #expect(sanitize("C:\\Temp").text == "C:\\Temp")
+    }
+
     @Test func rule5KeepsInnerLinesAsWritten() {
         #expect(sanitize("a  \n\n  b \n").text == "a  \n\n  b")
     }
@@ -157,7 +256,10 @@ import Testing
     }
 
     @Test func emptyOrControlOnlyTextIsEmpty() {
-        for raw in ["", "\u{1B}", "\u{1B}\u{7}\u{7F}", "\u{200B}\u{FEFF}", " \n\t\r\n ", "\u{85}\u{200E}\n\u{0}"] {
+        for raw in [
+            "", "\u{1B}", "\u{1B}\u{7}\u{7F}", "\u{200B}\u{FEFF}", " \n\t\r\n ", "\u{85}\u{200E}\n\u{0}",
+            "\u{E0020}\u{E007F}", "\u{00AD} \u{FE0F}\n",
+        ] {
             let prompt = sanitize(raw)
             #expect(prompt.isEmpty, "\(raw.unicodeScalars.map(\.value))")
             #expect(!prompt.prefixed)

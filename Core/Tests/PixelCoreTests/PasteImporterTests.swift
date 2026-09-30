@@ -90,6 +90,22 @@ import Testing
         ])
     }
 
+    @Test func tabsAndSpacesAreComparedByWidth() {
+        // A tab moves to the next multiple of 4 columns: a list mixing both reads by how it looks.
+        #expect(PasteImporter.cards(from: "\t- A\n    - B\n\t  détail de B") == [
+            PastedCard(title: "A", details: ""),
+            PastedCard(title: "B", details: "détail de B"),
+        ])
+        #expect(PasteImporter.cards(from: "  - A\n\t- détail") == [PastedCard(title: "A", details: "- détail")])
+        #expect(PasteImporter.cards(from: "- A\n \tdétail") == [PastedCard(title: "A", details: "détail")])
+    }
+
+    @Test func indentationIsMeasuredFromTheLeastIndentedLine() {
+        // One column deeper than the shallowest line is not an indentation, as flush left ("A\n B").
+        #expect(titles(" A\n  B") == ["A", "B"])
+        #expect(PasteImporter.cards(from: " A\n   détail") == [PastedCard(title: "A", details: "détail")])
+    }
+
     @Test func aBlankLineDoesNotDetachTheDetails() {
         #expect(PasteImporter.cards(from: "A\n\n  détail\nB") == [
             PastedCard(title: "A", details: "détail"),
