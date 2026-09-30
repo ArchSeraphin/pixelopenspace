@@ -103,7 +103,33 @@ import Testing
     @Test func indentationIsMeasuredFromTheLeastIndentedLine() {
         // One column deeper than the shallowest line is not an indentation, as flush left ("A\n B").
         #expect(titles(" A\n  B") == ["A", "B"])
+        #expect(titles("\tA\n\tB") == ["A", "B"])
         #expect(PasteImporter.cards(from: " A\n   détail") == [PastedCard(title: "A", details: "détail")])
+    }
+
+    @Test func aCopyStartingAtTheFirstBulletOfAnIndentedBlockNestsTheRest() {
+        // The first bullet lost its indentation, the others kept it: this reads as a nested list, which it cannot
+        // be told apart from ("- Pagination" then "    - 20 par page").
+        #expect(PasteImporter.cards(from: "- A\n    - B\n    - C") == [PastedCard(title: "A", details: "- B\n- C")])
+    }
+
+    @Test func invisibleCharactersDoNotHideAMarker() {
+        #expect(titles("\u{FEFF}- A\n\u{200B}- B\n\u{2060}1. [ ] C\n- \u{FEFF}D\u{200B}\n-\u{200B} E") == [
+            "A", "B", "C", "D", "E",
+        ])
+        // Glued to a word, invisible characters aside: still as written.
+        #expect(titles("-\u{200B}v pour verbeux") == ["-\u{200B}v pour verbeux"])
+    }
+
+    @Test func aLineOfInvisibleCharactersIsBlank() {
+        #expect(titles("A\n\u{FEFF}\n\u{200B} \u{2060}\nB") == ["A", "B"])
+    }
+
+    @Test func anInvisibleCharacterTakesNoColumn() {
+        #expect(PasteImporter.cards(from: "\u{FEFF}- A\n\u{200B}  détail\n\u{FEFF}- B") == [
+            PastedCard(title: "A", details: "détail"),
+            PastedCard(title: "B", details: ""),
+        ])
     }
 
     @Test func aBlankLineDoesNotDetachTheDetails() {

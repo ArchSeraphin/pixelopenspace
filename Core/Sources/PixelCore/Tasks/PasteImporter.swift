@@ -14,16 +14,22 @@ public struct PastedCard: Equatable, Sendable {
 /// Turns a pasted list into post-its (proposal 3.5, "Import collé"). Pure.
 ///
 /// - One card per line (LF, CRLF or CR); blank lines are ignored.
+/// - Blank means drawn as space or as nothing: Unicode `White_Space` and `Default_Ignorable_Code_Point` (BOM, zero
+///   width space, selectors...), the same on every platform. Blanks are trimmed from both ends of a line, so an
+///   invisible character before a bullet does not hide it.
 /// - A list marker is removed from a card's line: "-", "*", "•", a number of 1 to 9 digits followed by "." or ")",
 ///   then a checkbox "[ ]", "[x]" or "[X]", in any combination ("- [ ] A", "1. [x] B"). A marker counts only when a
-///   blank or the end of the line follows it: "-v", "1.5 kg" and "*important*" stay as written. A line made of
-///   markers only is ignored.
-/// - An indented line (a tab, or at least 2 spaces) under a card is appended to its details, trimmed and joined
-///   by "\n", as written (its own bullet included). An indented line with no card above it starts a card.
-/// - Indentation is a width in columns: a tab moves to the next multiple of 4, any other blank counts one, so
-///   "\t- A" and "    - B" sit at the same depth. It is measured from the least indented line, so a list copied
-///   from an indented block reads like the same list flush left. A line is indented when it sits at least 2
-///   columns deeper than that line: " A" then "  B" are two cards, as "A" then " B" would be.
+///   blank or the end of the line follows it, invisible characters aside: "-v", "1.5 kg" and "*important*" stay
+///   as written. A line made of markers only is ignored.
+/// - A line indented under a card is appended to its details, trimmed and joined by "\n", as written (its own
+///   bullet included). An indented line with no card above it starts a card.
+/// - Indentation is a width in columns: a tab moves to the next multiple of 4, an invisible character takes none,
+///   any other blank takes one, so "\t- A" and "    - B" sit at the same depth. It is measured from the least
+///   indented line, so a list copied whole from an indented block reads like the same list flush left. A line is
+///   indented when it sits at least 2 columns deeper than that line: " A" then "  B" are two cards, as "A" then
+///   " B" would be, and so are "\tA" then "\tB".
+/// - A copy that starts at the first bullet of an indented block loses that bullet's indentation only: "- A" then
+///   "    - B" reads as A with B in its details, like the nested list it cannot be told apart from.
 public enum PasteImporter {
     static let bullets: Set<Character> = ["-", "*", "•"]
     static let checkboxes = ["[ ]", "[x]", "[X]"]
@@ -33,30 +39,51 @@ public enum PasteImporter {
     static let detailIndent = 2
 
     /// One card per line; bullets "-", "*", "•", "1.", "1)", "[ ]", "[x]", "- [ ]" removed; blank lines ignored;
-    /// an indented line (tab or ≥ 2 spaces) under a card is appended to its details (joined by "\n").
+    /// a line at least 2 columns deeper than the least indented line (a tab reaching the next multiple of 4) is
+    /// appended to the details of the card above it (joined by "\n").
     public static func cards(from text: String) -> [PastedCard] {
-        let lines = text.split(whereSeparator: \.isNewline).filter { !$0.allSatisfy(\.isWhitespace) }
+        let lines = text.split(whereSeparator: \.isNewline).filter { !$0.allSatisfy(isBlank) }
         let margin = lines.map(indentWidth).min() ?? 0
         var cards: [PastedCard] = []
         for line in lines {
-            let content = line.trimmingCharacters(in: .whitespaces)
+            let content = trimmed(line)
             if indentWidth(line) - margin >= detailIndent, !cards.isEmpty {
                 let last = cards.count - 1
-                cards[last].details += cards[last].details.isEmpty ? content : "\n" + content
+                cards[last].details += (cards[last].details.isEmpty ? "" : "\n") + content
                 continue
             }
-            let title = withoutMarkers(content[...])
+            let title = withoutMarkers(content)
             if !title.isEmpty { cards.append(PastedCard(title: title)) }
         }
         return cards
     }
 
-    // MARK: - Indentation
+    // MARK: - Blanks and indentation
 
-    /// Columns taken by a line's leading blanks: a tab moves to the next multiple of `tabWidth`.
+    /// Drawn as space or as nothing: every scalar is `White_Space` or `Default_Ignorable_Code_Point`. Not
+    /// `CharacterSet.whitespaces`, which differs between platforms (U+200B is in it on macOS).
+    static func isBlank(_ character: Character) -> Bool {
+        character.unicodeScalars.allSatisfy { $0.properties.isWhitespace || $0.properties.isDefaultIgnorableCodePoint }
+    }
+
+    /// Drawn as nothing: every scalar is `Default_Ignorable_Code_Point`.
+    static func isInvisible(_ character: Character) -> Bool {
+        character.unicodeScalars.allSatisfy(\.properties.isDefaultIgnorableCodePoint)
+    }
+
+    /// `text` without the blanks at both ends.
+    static func trimmed(_ text: Substring) -> Substring {
+        let start = text.firstIndex { !isBlank($0) } ?? text.endIndex
+        let end = text.lastIndex { !isBlank($0) }.map(text.index(after:)) ?? start
+        return text[start..<end]
+    }
+
+    /// Columns taken by a line's leading blanks: a tab moves to the next multiple of `tabWidth`, an invisible
+    /// character takes none.
     static func indentWidth(_ line: Substring) -> Int {
-        line.prefix(while: \.isWhitespace).reduce(0) { column, blank in
-            blank == "\t" ? (column / tabWidth + 1) * tabWidth : column + 1
+        line.prefix(while: isBlank).reduce(0) { column, blank in
+            if blank == "\t" { return (column / tabWidth + 1) * tabWidth }
+            return isInvisible(blank) ? column : column + 1
         }
     }
 
@@ -67,7 +94,7 @@ public enum PasteImporter {
         var rest = line
         if let afterBullet = afterListMarker(rest) { rest = afterBullet }
         if let afterBox = afterCheckbox(rest) { rest = afterBox }
-        return rest.trimmingCharacters(in: .whitespaces)
+        return String(trimmed(rest))
     }
 
     static func afterListMarker(_ line: Substring) -> Substring? {
@@ -86,9 +113,9 @@ public enum PasteImporter {
         return afterMarker(line.dropFirst(box.count))
     }
 
-    /// What follows a marker, or nil when the marker is glued to a word ("-v", "1.5").
+    /// What follows a marker, or nil when the marker is glued to a word ("-v", "1.5"), invisible characters aside.
     static func afterMarker(_ rest: Substring) -> Substring? {
-        guard let next = rest.first else { return rest }
-        return next.isWhitespace ? rest.drop(while: \.isWhitespace) : nil
+        if let next = rest.first(where: { !isInvisible($0) }), !isBlank(next) { return nil }
+        return rest.drop(while: isBlank)
     }
 }

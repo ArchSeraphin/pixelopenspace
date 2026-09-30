@@ -1,11 +1,12 @@
 import Foundation
 
 /// A prompt as it will be typed (or pasted) into Claude Code's input box. The editor's preview shows exactly this
-/// text (mockup 6(l)); only `PromptSanitizer.sanitize` makes one, and nothing outside this file can change it.
+/// text (mockup 6(l)). Outside PixelCore, only `PromptSanitizer.sanitize` makes one; nothing outside this file
+/// can change one.
 public struct SanitizedPrompt: Equatable, Sendable {
     public private(set) var text: String
-    /// Characters removed by rules 2 and 3, and the invisible characters rule 4 drops at the start (Unicode
-    /// scalars: each removed character is one).
+    /// Characters removed by rules 2 and 3, and the invisible characters rules 4 and 5 drop at the start and at
+    /// the end (Unicode scalars: each removed character is one).
     public private(set) var removedCount: Int
     /// Rule 4 added "Tâche : ".
     public private(set) var prefixed: Bool
@@ -35,9 +36,12 @@ public struct SanitizedPrompt: Equatable, Sendable {
 ///    (shell mode, run without approval), `/` (command or skill), `?` (help) or `@` (path completion) is
 ///    prefixed with "Tâche : ". Looking past every invisible character, whatever Claude Code strips, means no
 ///    hidden lead can turn into a command once Claude Code has cleaned the text.
-/// 5. Trailing line breaks and spaces are removed. A text that then ends with a backslash (trailing invisible
-///    characters aside) gets one space after it: in Claude Code, a backslash followed by Enter inserts a line
-///    break instead of submitting.
+/// 5. Trailing line breaks, spaces and invisible characters are removed, the latter counted as removed, a whole
+///    character (grapheme) at a time: a lone selector after the last line break goes, the selector of a final
+///    emoji stays. A text that then ends with a backslash (a selector attached to it aside) gets one space after
+///    it: in Claude Code, a backslash followed by Enter inserts a line break instead of submitting. Claude Code
+///    may trim that space from the prompt it reports, so the delivery check of step 2b-2 must compare texts with
+///    their trailing blanks trimmed.
 public enum PromptSanitizer {
     public static let shortMaxCharacters = 800
     public static let shortMaxLines = 3
@@ -61,11 +65,14 @@ public enum PromptSanitizer {
         scalars.removeAll(where: isControl)
         scalars.removeAll(where: isInvisible)
 
-        // Rule 4: nothing blank or invisible at the start. Rule 5: nothing blank at the end.
+        // Rule 4: nothing blank or invisible at the start, scalar by scalar.
         let start = scalars.firstIndex { !isBlank($0) && !isDefaultIgnorable($0) } ?? scalars.endIndex
+        // Rule 5: nothing blank or invisible at the end, character by character.
+        let rest = String(String.UnicodeScalarView(scalars[start...]))
+        let end = rest.lastIndex { !isBlankOrInvisible($0) }.map(rest.index(after:)) ?? rest.startIndex
+        let body = rest[..<end].unicodeScalars
         let droppedInvisibles = scalars[..<start].count(where: isDefaultIgnorable)
-        let end = scalars[start...].lastIndex { !isBlank($0) }.map { $0 + 1 } ?? start
-        let body = scalars[start..<end]
+            + rest[end...].unicodeScalars.count(where: isDefaultIgnorable)
         let removedCount = countBefore - scalars.count + droppedInvisibles
         let prefixed = body.first.map(commandCharacters.contains) ?? false
 
@@ -142,6 +149,11 @@ public enum PromptSanitizer {
     /// Drawn as nothing (Unicode `Default_Ignorable_Code_Point`), whether rule 3 removes it or not.
     static func isDefaultIgnorable(_ scalar: Unicode.Scalar) -> Bool {
         scalar.properties.isDefaultIgnorableCodePoint
+    }
+
+    /// Rule 5: a character made only of blanks and invisible scalars. An emoji with its selector is not one.
+    static func isBlankOrInvisible(_ character: Character) -> Bool {
+        character.unicodeScalars.allSatisfy { isBlank($0) || isDefaultIgnorable($0) }
     }
 
     // MARK: - Summary

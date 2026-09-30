@@ -234,11 +234,38 @@ import Testing
         #expect(sanitize("Nettoie C:\\Temp\\ \n\n").text == "Nettoie C:\\Temp\\ ")
         #expect(sanitize("\\").text == "\\ ")
         #expect(sanitize("a\\\\").text == "a\\\\ ")
-        // Also when an invisible character trails the backslash (Claude Code may remove it first).
-        #expect(scalars(sanitize("a\\\u{00AD}").text) == scalars("a\\\u{00AD} "))
+        // Also when a selector is attached to the backslash (Claude Code may remove it first).
+        #expect(scalars(sanitize("a\\\u{FE0F}").text) == scalars("a\\\u{FE0F} "))
+        // A trailing invisible character on its own goes first (rule 5), then the space is added.
+        let softHyphen = sanitize("a\\\u{00AD}")
+        #expect(scalars(softHyphen.text) == scalars("a\\ "))
+        #expect(softHyphen.removedCount == 1)
         // A backslash elsewhere is left alone.
         #expect(sanitize("a\\\nb").text == "a\\\nb")
         #expect(sanitize("C:\\Temp").text == "C:\\Temp")
+    }
+
+    @Test func rule5RemovesTrailingInvisibleCharactersToo() {
+        // Symmetric with rule 4: a lone selector or soft hyphen after the last line break does not keep it.
+        let selector = sanitize("Fais ceci\n\u{FE0F}")
+        #expect(scalars(selector.text) == scalars("Fais ceci"))
+        #expect(selector.removedCount == 1)
+        #expect(scalars(sanitize("Fais ceci\n\n\u{00AD}").text) == scalars("Fais ceci"))
+        let mixed = sanitize("Fais ceci \u{FE0F}\n\u{2063} \n")
+        #expect(scalars(mixed.text) == scalars("Fais ceci"))
+        #expect(mixed.removedCount == 2)
+        // Lines are counted on the trimmed text: three lines stay a short text.
+        let threeLines = sanitize("a\nb\nc\n\u{FE0F}")
+        #expect(threeLines.text == "a\nb\nc")
+        #expect(threeLines.isShort)
+        #expect(threeLines.removedCount == 1)
+    }
+
+    @Test func rule5KeepsTheSelectorOfAFinalEmoji() {
+        // Trimmed a whole character at a time: U+FE0F belongs to the heart before it.
+        let prompt = sanitize("Merci \u{2764}\u{FE0F}\n")
+        #expect(scalars(prompt.text) == scalars("Merci \u{2764}\u{FE0F}"))
+        #expect(prompt.removedCount == 0)
     }
 
     @Test func rule5KeepsInnerLinesAsWritten() {
