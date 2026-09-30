@@ -77,6 +77,28 @@ extension Workspace {
         return true
     }
 
+    /// "Défaut du projet" (template manager, mockup 6(l)): the prompt template a card of the project uses when it
+    /// has none (`PromptComposer.resolveTemplate`); `nil` = none. The template is not checked against the board.
+    @discardableResult
+    public mutating func setProjectTemplate(_ id: ProjectID, to templateID: PromptTemplateID?) -> Bool {
+        guard let i = projects.firstIndex(where: { $0.id == id }), projects[i].defaults.templateID != templateID else {
+            return false
+        }
+        projects[i].defaults.templateID = templateID
+        return true
+    }
+
+    /// A template was deleted: no project (archived ones included) keeps it as its default.
+    @discardableResult
+    public mutating func forgetTemplate(_ templateID: PromptTemplateID) -> Bool {
+        var changed = false
+        for i in projects.indices where projects[i].defaults.templateID == templateID {
+            projects[i].defaults.templateID = nil
+            changed = true
+        }
+        return changed
+    }
+
     /// Moves a live project to position `order` (clamped) in the sidebar and renumbers live projects 0…n-1.
     /// Slots are never touched: the island stays where it is.
     @discardableResult

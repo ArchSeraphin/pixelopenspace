@@ -3,11 +3,14 @@ import PixelCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The main window (mockup 6(b), step 2a): status bar and waiting tray, banners, projects sidebar and agent board,
-/// terminal panel. Performs the model's UI requests (sheets, Settings, terminal), focus requests and quit sheet.
+/// The main window (mockup 6(b)): status bar and waiting tray, banners, projects sidebar, agent board and the
+/// post-its board panel (⌘B), terminal panel. Performs the model's UI requests (sheets, Settings, terminal,
+/// board), focus requests and quit sheet.
 struct RootView: View {
     static let minimumPanelHeight: Double = 200
     static let minimumBoardHeight: Double = 180
+    /// The agents keep at least this width when the board panel widens.
+    static let minimumAgentsWidth: Double = 300
 
     @Environment(AppModel.self) private var model
     @Environment(WorkbenchState.self) private var workbench
@@ -15,6 +18,8 @@ struct RootView: View {
     @Environment(\.openSettings) private var openSettings
 
     @AppStorage("terminalPanelHeight") private var panelHeight: Double = 300
+    @AppStorage("boardPanelVisible") private var isBoardVisible = true
+    @AppStorage("boardPanelWidth") private var boardWidth: Double = 340
     @AppStorage("welcomeShown") private var welcomeShown = false
     @State private var isDropTargeted = false
 
@@ -31,6 +36,9 @@ struct RootView: View {
                     mainSplit
                         .overlay(alignment: .bottomTrailing) {
                             ToastOverlay()
+                        }
+                        .taskConfirmation($bindable.pendingTask) { pending in
+                            model.applyTask(pending.input)
                         }
                     if showsPanel {
                         PanelDivider(height: $panelHeight, range: Self.minimumPanelHeight...maxPanel)
@@ -82,8 +90,25 @@ struct RootView: View {
             ProjectSidebar()
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
         } detail: {
-            AgentBoardView()
+            GeometryReader { geometry in
+                HStack(spacing: 0) {
+                    AgentBoardView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if isBoardVisible {
+                        let range = boardWidthRange(available: Double(geometry.size.width))
+                        BoardPanelDivider(width: $boardWidth, range: range)
+                        BoardPanelView()
+                            .frame(width: min(max(boardWidth, range.lowerBound), range.upperBound))
+                    }
+                }
+            }
         }
+    }
+
+    /// From the panel's minimum to what leaves the agents `minimumAgentsWidth`.
+    private func boardWidthRange(available: Double) -> ClosedRange<Double> {
+        let lower = BoardPanelView.minimumWidth
+        return lower...max(lower, available - Self.minimumAgentsWidth)
     }
 
     private var showsPanel: Bool {
@@ -102,7 +127,7 @@ struct RootView: View {
             } label: {
                 Label("Projet", systemImage: AppCommand.newProject.symbolName)
             }
-            .help("Nouveau projet (⌥⌘N) — ou dépose un dossier sur la fenêtre")
+            .help("Nouveau projet (⌥⌘N), ou dépose un dossier sur la fenêtre")
             Button {
                 workbench.commands.perform(.newAgent)
             } label: {
@@ -110,6 +135,13 @@ struct RootView: View {
             }
             .disabled(model.projects.isEmpty)
             .help("Nouvel agent dans le projet sélectionné (⇧⌘N)")
+            Button {
+                isBoardVisible.toggle()
+            } label: {
+                Label(isBoardVisible ? "Masquer le tableau" : "Afficher le tableau",
+                      systemImage: AppCommand.toggleBoard.symbolName)
+            }
+            .help("Afficher ou masquer le tableau des post-its (⌘B)")
             Button {
                 workbench.togglePanel()
             } label: {
@@ -158,6 +190,17 @@ struct RootView: View {
             workbench.showTerminal(for: agentID, focus: true)
         case .claudeSetup:
             presentSheet(.claudeSetup)
+        case .newCard:
+            isBoardVisible = true
+            workbench.requestQuickAdd()
+            workbench.bringMainWindowForward()
+        case .pasteCards:
+            isBoardVisible = true
+            presentSheet(.pasteCards)
+        case .manageTemplates:
+            presentSheet(.templates)
+        case .toggleBoard:
+            isBoardVisible.toggle()
         }
     }
 

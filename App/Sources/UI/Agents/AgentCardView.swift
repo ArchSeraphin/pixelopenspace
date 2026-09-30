@@ -1,14 +1,18 @@
 import PixelCore
 import SwiftUI
 
-/// One agent (mockup 6(b)): name, state symbol and title (never color alone), detail, since, badges, and the
-/// actions that apply now (6(d)). Click selects (its terminal shows in the panel); double-click opens the terminal.
+/// One agent (mockup 6(b)): name, state symbol and title (never color alone), detail, since, badges, its queue
+/// and current post-it, and the actions that apply now (6(d)). Click selects (its terminal shows in the panel);
+/// double-click opens the terminal. A post-it dropped on it is given to the agent (`.assign`, confirmed when it
+/// comes from another project).
 struct AgentCardView: View {
     let agent: Agent
     let project: Project
 
     @Environment(AppModel.self) private var model
     @Environment(WorkbenchState.self) private var workbench
+
+    @State private var isDropTargeted = false
 
     var body: some View {
         let isSelected = model.selectedAgentID == agent.id
@@ -22,6 +26,7 @@ struct AgentCardView: View {
                 .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
                 .accessibilityAction { model.select(agent: agent.id) }
                 .accessibilityAction(named: "Ouvrir le terminal") { openTerminal(actions) }
+            AgentQueueLine(agentID: agent.id)
             AgentCardButtons(agent: agent, actions: actions)
         }
         .padding(12)
@@ -39,10 +44,29 @@ struct AgentCardView: View {
         }
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.12),
-                              lineWidth: isSelected ? 2 : 1)
+                .strokeBorder(isSelected || isDropTargeted ? Color.accentColor : Color.primary.opacity(0.12),
+                              lineWidth: isDropTargeted ? 3 : isSelected ? 2 : 1)
         )
+        .overlay(alignment: .topTrailing) {
+            if isDropTargeted {
+                Label("Donner à \(agent.name)", systemImage: "note.text")
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(.regularMaterial))
+                    .overlay(Capsule().strokeBorder(Color.accentColor, lineWidth: 1))
+                    .padding(6)
+                    .allowsHitTesting(false)
+            }
+        }
         .contentShape(RoundedRectangle(cornerRadius: 10))
+        .dropDestination(for: CardDragPayload.self) { payloads, _ in
+            guard let cardID = payloads.first?.cardID else { return false }
+            workbench.requestTask(.assign(cardID, to: agent.id))
+            return true
+        } isTargeted: { targeted in
+            isDropTargeted = targeted
+        }
         .onTapGesture(count: 2) { openTerminal(actions) }
         .onTapGesture { model.select(agent: agent.id) }
         .contextMenu {
@@ -57,6 +81,55 @@ struct AgentCardView: View {
         } else {
             model.select(agent: agent.id)
         }
+    }
+}
+
+/// "▣ Refonte du header" (the post-it the agent works on, click to edit it) and "file : 2 post-its" (mockup 6(b)).
+private struct AgentQueueLine: View {
+    let agentID: AgentID
+
+    @Environment(AppModel.self) private var model
+    @Environment(WorkbenchState.self) private var workbench
+
+    var body: some View {
+        let queue = model.queue(of: agentID)
+        let cards = queue.filter { if case .card = $0 { return true } else { return false } }.count
+        let instructions = queue.count - cards
+        let current = model.currentCard(of: agentID)
+        VStack(alignment: .leading, spacing: 2) {
+            if let current {
+                Button {
+                    workbench.editCard(current.id)
+                } label: {
+                    Label(currentText(current), systemImage: "note.text")
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .buttonStyle(.plain)
+                .font(.callout)
+                .help("Post-it en cours : \(current.title)")
+                .accessibilityLabel("Post-it en cours : \(currentText(current))")
+                .accessibilityHint("Ouvre l'éditeur du post-it")
+            }
+            Text(Self.queueText(cards: cards, instructions: instructions))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The title, with the flags that stopped it in words ("Refonte du header (interrompue)").
+    private func currentText(_ card: TaskCard) -> String {
+        let flags = CardPresentation.flags(of: card).map(CardPresentation.flagText)
+        return flags.isEmpty ? card.title : "\(card.title) (\(flags.joined(separator: ", ")))"
+    }
+
+    /// "file vide", "file : 1 post-it", "file : 2 post-its · 1 consigne".
+    static func queueText(cards: Int, instructions: Int) -> String {
+        guard cards > 0 || instructions > 0 else { return "file vide" }
+        var parts: [String] = []
+        if cards > 0 { parts.append(cards > 1 ? "\(cards) post-its" : "1 post-it") }
+        if instructions > 0 { parts.append(instructions > 1 ? "\(instructions) consignes" : "1 consigne") }
+        return "file : " + parts.joined(separator: " · ")
     }
 }
 

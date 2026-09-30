@@ -57,6 +57,9 @@ struct CommandShortcut: Equatable, Sendable {
 /// only way to run one, so no action exists only in one place. "Aller au projet n" (⌘1…⌘9) is separate:
 /// `CommandCenter.selectProject(number:)`.
 enum AppCommand: String, CaseIterable, Identifiable, Sendable {
+    case newCard
+    case pasteCards
+    case manageTemplates
     case newProject
     case newAgent
     case openTerminal
@@ -68,6 +71,7 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
     case previousWaitingAgent
     case nextAgent
     case previousAgent
+    case toggleBoard
     case toggleTerminalPanel
     case redetectClaude
     case showSettings
@@ -77,6 +81,9 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
     /// French menu title.
     var title: String {
         switch self {
+        case .newCard: return "Nouveau post-it"
+        case .pasteCards: return "Coller une liste de post-its…"
+        case .manageTemplates: return "Gérer les modèles de prompt…"
         case .newProject: return "Nouveau projet…"
         case .newAgent: return "Nouvel agent…"
         case .openTerminal: return "Ouvrir le terminal"
@@ -88,6 +95,7 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
         case .previousWaitingAgent: return "Agent en attente précédent"
         case .nextAgent: return "Agent suivant"
         case .previousAgent: return "Agent précédent"
+        case .toggleBoard: return "Afficher ou masquer le tableau"
         case .toggleTerminalPanel: return "Afficher ou masquer le terminal"
         case .redetectClaude: return "Rechercher Claude Code"
         case .showSettings: return "Réglages…"
@@ -96,10 +104,10 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
 
     var menu: AppMenu {
         switch self {
-        case .newProject, .newAgent: return .file
+        case .newCard, .pasteCards, .manageTemplates, .newProject, .newAgent: return .file
         case .nextWaitingAgent, .previousWaitingAgent, .nextAgent, .previousAgent: return .go
         case .openTerminal, .interrupt, .relaunchSession, .closeSession, .removeAgent: return .agent
-        case .toggleTerminalPanel: return .view
+        case .toggleBoard, .toggleTerminalPanel: return .view
         case .redetectClaude, .showSettings: return .app
         }
     }
@@ -107,6 +115,9 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
     /// SF Symbol for the palette and toolbar buttons.
     var symbolName: String {
         switch self {
+        case .newCard: return "note.text.badge.plus"
+        case .pasteCards: return "list.bullet.clipboard"
+        case .manageTemplates: return "doc.text"
         case .newProject: return "folder.badge.plus"
         case .newAgent: return "person.badge.plus"
         case .openTerminal: return "terminal"
@@ -118,6 +129,7 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
         case .previousWaitingAgent: return "exclamationmark.bubble"
         case .nextAgent: return "arrow.right"
         case .previousAgent: return "arrow.left"
+        case .toggleBoard: return "sidebar.right"
         case .toggleTerminalPanel: return "rectangle.bottomthird.inset.filled"
         case .redetectClaude: return "magnifyingglass"
         case .showSettings: return "gearshape"
@@ -127,6 +139,8 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
     /// Table of proposal 3.16. ⌘. is ⇧⌘; on an AZERTY keyboard (checked in step 5). `nil` = menu and palette only.
     var shortcut: CommandShortcut? {
         switch self {
+        case .newCard: return CommandShortcut(key: .character("n"))
+        case .pasteCards: return CommandShortcut(key: .character("v"), shift: true)
         case .newProject: return CommandShortcut(key: .character("n"), option: true)
         case .newAgent: return CommandShortcut(key: .character("n"), shift: true)
         case .openTerminal: return CommandShortcut(key: .character("t"))
@@ -136,9 +150,10 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
         case .previousWaitingAgent: return CommandShortcut(key: .character("'"), shift: true)
         case .nextAgent: return CommandShortcut(key: .rightArrow, option: true)
         case .previousAgent: return CommandShortcut(key: .leftArrow, option: true)
+        case .toggleBoard: return CommandShortcut(key: .character("b"))
         case .toggleTerminalPanel: return CommandShortcut(key: .character("t"), option: true)
         // ⌘, already belongs to the "Réglages…" item SwiftUI adds for the Settings scene.
-        case .showSettings, .closeSession, .removeAgent, .redetectClaude: return nil
+        case .showSettings, .closeSession, .removeAgent, .redetectClaude, .manageTemplates: return nil
         }
     }
 

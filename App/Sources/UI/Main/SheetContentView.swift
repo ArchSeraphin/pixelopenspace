@@ -35,6 +35,22 @@ struct SheetContentView: View {
             }
         case .quit:
             QuitSheet()
+        case .cardEditor(let cardID):
+            if model.board.card(cardID) != nil {
+                CardEditorSheet(cardID: cardID)
+            } else {
+                MissingItemSheet()
+            }
+        case .pasteCards:
+            PasteListSheet()
+        case .templates:
+            TemplateManagerSheet()
+        case .resendCard(let cardID):
+            if model.board.card(cardID) != nil {
+                ResendPrecisionSheet(cardID: cardID)
+            } else {
+                MissingItemSheet()
+            }
         }
     }
 }

@@ -36,6 +36,14 @@ enum UIRequest: Equatable, Sendable {
     case openTerminal(AgentID)
     /// Welcome sheet: Claude Code not found (mockup 6(r)).
     case claudeSetup
+    /// ⌘N: the board panel shows, with the title field at the top of "À faire" (mockup 6(c)).
+    case newCard
+    /// ⇧⌘V: "Coller une liste" sheet, prefilled with the clipboard.
+    case pasteCards
+    /// "Gérer les modèles" sheet (mockup 6(l)).
+    case manageTemplates
+    /// ⌘B: show or hide the board panel.
+    case toggleBoard
 }
 
 struct PendingUIRequest: Identifiable, Equatable, Sendable {

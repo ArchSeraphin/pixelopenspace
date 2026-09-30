@@ -74,6 +74,13 @@ targets:
           Les sessions Claude Code tournent à l'intérieur de Pixel Open Space. Quand Claude contacte une machine
           de ton réseau local (serveur de développement, base de données…), macOS attribue cette demande à
           l'app : autorise-la pour que ces commandes fonctionnent comme dans ton terminal.
+        # A post-it dragged on the board or onto an agent card (CardDragPayload): a type of its own, so that it
+        # never mixes with the folder drop of the window.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: fr.vv2.pixelopenspace.task-card
+            UTTypeDescription: Post-it de Pixel Open Space
+            UTTypeConformsTo:
+              - public.data
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: fr.vv2.pixelopenspace

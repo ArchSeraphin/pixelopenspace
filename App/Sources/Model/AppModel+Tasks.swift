@@ -101,7 +101,12 @@ extension AppModel {
     /// The card's prompt exactly as the dispatcher will type it (step 2b-2): its template (the card's, else its
     /// project's default), filled by `PromptComposer`, cleaned by `PromptSanitizer` (mockup 6(l)).
     func promptPreview(for cardID: TaskCardID) -> SanitizedPrompt? {
-        guard let card = board.card(cardID) else { return nil }
+        board.card(cardID).map(promptPreview(for:))
+    }
+
+    /// Same as `promptPreview(for:)` for a card value: the editor passes the stored card with the fields being
+    /// edited, so that the preview follows the typing before anything is saved.
+    func promptPreview(for card: TaskCard) -> SanitizedPrompt {
         let project = card.projectID.flatMap { workspace.project($0) }
         let template = PromptComposer.resolveTemplate(card: card, projectDefault: project?.defaults.templateID,
                                                       in: board)

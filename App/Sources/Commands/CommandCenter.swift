@@ -15,6 +15,12 @@ final class CommandCenter {
     func perform(_ command: AppCommand) {
         guard isEnabled(command) else { return }
         switch command {
+        case .newCard:
+            model.post(.newCard)
+        case .pasteCards:
+            model.post(.pasteCards)
+        case .manageTemplates:
+            model.post(.manageTemplates)
         case .newProject:
             model.post(.newProject)
         case .newAgent:
@@ -37,6 +43,8 @@ final class CommandCenter {
             model.selectAdjacentAgent(offset: 1)
         case .previousAgent:
             model.selectAdjacentAgent(offset: -1)
+        case .toggleBoard:
+            model.post(.toggleBoard)
         case .toggleTerminalPanel:
             model.post(.toggleTerminalPanel)
         case .redetectClaude:
@@ -51,7 +59,7 @@ final class CommandCenter {
         let runtime = model.selectedAgentID.flatMap { model.runtime(for: $0) }
         let running = runtime?.pid != nil
         switch command {
-        case .newProject, .toggleTerminalPanel, .showSettings:
+        case .newCard, .pasteCards, .manageTemplates, .toggleBoard, .newProject, .toggleTerminalPanel, .showSettings:
             return true
         case .newAgent:
             return !model.projects.isEmpty

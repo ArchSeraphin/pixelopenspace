@@ -4,7 +4,7 @@ import SwiftUI
 /// Menus built from `AppCommand` (proposal 3.16). Every item runs through `CommandCenter.perform(_:)`, except the
 /// two that need a confirmation dialog first (closing a busy session, removing an agent).
 ///
-/// "Nouveau post-it" will take ⌘N in step 2b: the standard "New Window" item is removed and ⌘N stays free.
+/// "Nouveau post-it" takes ⌘N: the standard "New Window" item is replaced by the "Fichier" commands.
 /// "Réglages…" (⌘,) comes from the `Settings` scene.
 struct AppMenuCommands: Commands {
     let workbench: WorkbenchState

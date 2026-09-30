@@ -24,6 +24,14 @@ enum ActiveSheet: Identifiable, Equatable {
     case renameAgent(AgentID)
     /// Quit sheet (mockup 6(p)) for `AppModel.quitRequest` with this id.
     case quit(UUID)
+    /// Post-it editor (mockup 6(l)).
+    case cardEditor(TaskCardID)
+    /// "Coller une liste": one post-it per line, prefilled with the clipboard.
+    case pasteCards
+    /// "Gérer les modèles" (mockup 6(l)).
+    case templates
+    /// "Renvoyer avec une précision" (↺, C17) for a card of "À valider".
+    case resendCard(TaskCardID)
 
     var id: String {
         switch self {
@@ -33,6 +41,10 @@ enum ActiveSheet: Identifiable, Equatable {
         case .renameProject(let projectID): return "renameProject-\(projectID)"
         case .renameAgent(let agentID): return "renameAgent-\(agentID)"
         case .quit(let requestID): return "quit-\(requestID)"
+        case .cardEditor(let cardID): return "cardEditor-\(cardID)"
+        case .pasteCards: return "pasteCards"
+        case .templates: return "templates"
+        case .resendCard(let cardID): return "resendCard-\(cardID)"
         }
     }
 }
@@ -47,6 +59,13 @@ enum AgentConfirmation: Equatable {
         case .closeSession(let agentID), .remove(let agentID): return agentID
         }
     }
+}
+
+/// A board input that waits for the user's confirmation (`TaskLifecycle.confirmation(for:)`: C3, C18 from
+/// "À faire" or "En cours", C20 from "En cours").
+struct PendingTaskInput: Equatable {
+    let input: TaskInput
+    let kind: ConfirmationKind
 }
 
 /// "Scroll the board to this card or section". A new `id` each time, so the same target can be asked twice.
@@ -72,6 +91,11 @@ final class WorkbenchState {
     var activeSheet: ActiveSheet?
     /// Confirmation dialog of the main window.
     var confirmation: AgentConfirmation?
+    /// Board input waiting for a confirmation dialog (assign across projects, done without review, delete a card
+    /// in progress).
+    var pendingTask: PendingTaskInput?
+    /// Changes when ⌘N asks for the title field at the top of "À faire".
+    private(set) var quickAddRequest: UUID?
     /// The terminal panel under the board (shown for the selected agent).
     var isTerminalPanelVisible = true
     /// Status-bar filter: only agents in this state are shown on the board.
@@ -225,6 +249,38 @@ final class WorkbenchState {
         } else {
             bringMainWindowForward()
         }
+    }
+
+    // MARK: - Cork board
+
+    /// Applies a board input (context menu, drop), after the main window's confirmation dialog
+    /// (`.taskConfirmation`) when the reducer asks for one. A refusal shows as a toast (the reducer's message).
+    func requestTask(_ input: TaskInput) {
+        if let kind = model.taskConfirmation(for: input) {
+            pendingTask = PendingTaskInput(input: input, kind: kind)
+        } else {
+            model.applyTask(input)
+        }
+    }
+
+    /// ⌘N: the board panel shows the title field at the top of "À faire".
+    func requestQuickAdd() {
+        quickAddRequest = UUID()
+    }
+
+    /// The board panel showed the title field.
+    func consumeQuickAdd() {
+        quickAddRequest = nil
+    }
+
+    func editCard(_ cardID: TaskCardID) {
+        guard model.board.card(cardID) != nil, activeSheet.map(Self.isQuit) != true else { return }
+        present(.cardEditor(cardID))
+    }
+
+    private static func isQuit(_ sheet: ActiveSheet) -> Bool {
+        if case .quit = sheet { return true }
+        return false
     }
 
     // MARK: - Board

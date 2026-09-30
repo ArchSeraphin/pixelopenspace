@@ -54,6 +54,25 @@ extension AppModel {
         moveProject(id, toOrder: index + offset)
     }
 
+    /// "Défaut du projet" (template manager, mockup 6(l)): the template the project's cards use when they have
+    /// none; `nil` = none.
+    func setDefaultTemplate(_ templateID: PromptTemplateID?, forProject projectID: ProjectID) {
+        if let templateID, board.template(templateID) == nil {
+            showToast("Ce modèle n'existe plus.", style: .warning)
+            return
+        }
+        var updated = workspace
+        if updated.setProjectTemplate(projectID, to: templateID) { commit(updated) }
+    }
+
+    /// Deletes a prompt template: the cards using it fall back to their project's default, and no project keeps it
+    /// as its default.
+    func deleteTemplate(_ templateID: PromptTemplateID) {
+        applyTask(.deleteTemplate(templateID))
+        var updated = workspace
+        if updated.forgetTemplate(templateID) { commit(updated) }
+    }
+
     /// Archives a project (its slot becomes free). Its agents must all be offline.
     @discardableResult
     func archiveProject(_ id: ProjectID) -> Bool {

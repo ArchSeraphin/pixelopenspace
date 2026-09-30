@@ -130,6 +130,46 @@ import Testing
         #expect(!hueChanged3)
     }
 
+    @Test func projectDefaultTemplate() {
+        var w = Workspace()
+        let a = w.addProject(path: "/p/a", now: Self.t0)
+        let b = w.addProject(path: "/p/b", now: Self.t0)
+        let template = PromptTemplateID()
+        let set = w.setProjectTemplate(a, to: template)
+        #expect(set)
+        #expect(w.project(a)!.defaults.templateID == template)
+        #expect(w.project(b)!.defaults.templateID == nil)
+        let setAgain = w.setProjectTemplate(a, to: template)
+        #expect(!setAgain)
+        let unknown = w.setProjectTemplate(ProjectID(), to: template)
+        #expect(!unknown)
+        let cleared = w.setProjectTemplate(a, to: nil)
+        #expect(cleared)
+        #expect(w.project(a)!.defaults.templateID == nil)
+        // The other defaults are untouched.
+        #expect(w.project(a)!.defaults.permissionMode == .default)
+    }
+
+    @Test func forgettingATemplateClearsEveryProjectUsingIt() {
+        var w = Workspace()
+        let a = w.addProject(path: "/p/a", now: Self.t0)
+        let b = w.addProject(path: "/p/b", now: Self.t0)
+        let c = w.addProject(path: "/p/c", now: Self.t0)
+        let template = PromptTemplateID()
+        let other = PromptTemplateID()
+        w.setProjectTemplate(a, to: template)
+        w.setProjectTemplate(b, to: template)
+        w.setProjectTemplate(c, to: other)
+        w.archiveProject(b)
+        let forgotten = w.forgetTemplate(template)
+        #expect(forgotten)
+        #expect(w.project(a)!.defaults.templateID == nil)
+        #expect(w.project(b)!.defaults.templateID == nil)
+        #expect(w.project(c)!.defaults.templateID == other)
+        let forgottenAgain = w.forgetTemplate(template)
+        #expect(!forgottenAgain)
+    }
+
     // MARK: - Agents
 
     @Test func addAgentTakesTheLowestFreeDesk() throws {
