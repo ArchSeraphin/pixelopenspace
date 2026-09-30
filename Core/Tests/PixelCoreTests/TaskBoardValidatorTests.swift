@@ -251,6 +251,144 @@ import Testing
         #expect(issues.count == 3)
     }
 
+    @Test func duplicateOrInvalidQueueRanksAreRenumbered() throws {
+        let first = TaskCard(id: S.card(1), title: "Un", projectID: nil, rank: "c", assignee: S.agent(1),
+                             queueRank: "k", createdAt: S.at(1))
+        let second = TaskCard(id: S.card(2), title: "Deux", projectID: nil, rank: "m", assignee: S.agent(1),
+                              queueRank: "k", createdAt: S.at(2))
+        let empty = TaskCard(id: S.card(3), title: "Vide", projectID: nil, rank: "t", assignee: S.agent(1),
+                             queueRank: "", createdAt: S.at(3))
+        let trailingZero = TaskCard(id: S.card(4), title: "Zéro final", projectID: nil, rank: "x", assignee: S.agent(2),
+                                    queueRank: "k0", createdAt: S.at(4))
+        let (fixed, issues) = Self.validate(Self.board([first, second, empty, trailingZero]))
+        // Renumbered in their current order ("" < "k", then createdAt).
+        let spread = RankKey.spread(3)
+        #expect(fixed.card(S.card(3))?.queueRank == spread[0])
+        #expect(fixed.card(S.card(1))?.queueRank == spread[1])
+        #expect(fixed.card(S.card(2))?.queueRank == spread[2])
+        #expect(fixed.card(S.card(4))?.queueRank == RankKey.spread(1)[0])
+        // Column ranks are untouched.
+        #expect(fixed.cards(in: .todo).map(\.rank) == ["c", "m", "t", "x"])
+        #expect(issues.count == 2)
+    }
+
+    @Test func queueKeysAscendThroughInstructionsThenCards() throws {
+        let olderInstruction = QueuedInstruction(id: S.instruction(1), agentID: S.agent(1), text: "Première",
+                                                 queueRank: "m", createdAt: S.at(1))
+        let newerInstruction = QueuedInstruction(id: S.instruction(2), agentID: S.agent(1), text: "Seconde",
+                                                 queueRank: "m", createdAt: S.at(2))
+        // Below the instructions' keys, though the queue shows it after them.
+        let card = TaskCard(id: S.card(1), title: "Carte", projectID: nil, rank: "i", assignee: S.agent(1),
+                            queueRank: "c", createdAt: S.at(3))
+        // Agent 2's queue is already in order: untouched.
+        let otherInstruction = QueuedInstruction(id: S.instruction(3), agentID: S.agent(2), text: "Autre",
+                                                 queueRank: "a", createdAt: S.at(4))
+        let otherCard = TaskCard(id: S.card(2), title: "Autre carte", projectID: nil, rank: "r", assignee: S.agent(2),
+                                 queueRank: "k", createdAt: S.at(5))
+        let (fixed, issues) = Self.validate(Self.board([card, otherCard],
+                                                       instructions: [newerInstruction, olderInstruction, otherInstruction]))
+        let spread = RankKey.spread(3)
+        #expect(fixed.instructions.first { $0.id == S.instruction(1) }?.queueRank == spread[0])
+        #expect(fixed.instructions.first { $0.id == S.instruction(2) }?.queueRank == spread[1])
+        #expect(fixed.card(S.card(1))?.queueRank == spread[2])
+        #expect(fixed.instructions.first { $0.id == S.instruction(3) }?.queueRank == "a")
+        #expect(fixed.card(S.card(2))?.queueRank == "k")
+        #expect(issues.count == 1)
+    }
+
+    @Test func missingQueueRankGoesAfterRepairedRanks() throws {
+        // "é" is not a key: appended after it, the card would sort before it ("zi" < "é").
+        let ranked = TaskCard(id: S.card(1), title: "Rangée", projectID: nil, rank: "c", assignee: S.agent(1),
+                              queueRank: "c", createdAt: S.at(1))
+        let invalid = TaskCard(id: S.card(2), title: "Invalide", projectID: nil, rank: "m", assignee: S.agent(1),
+                               queueRank: "é", createdAt: S.at(2))
+        let missing = TaskCard(id: S.card(3), title: "Sans rang", projectID: nil, rank: "t", assignee: S.agent(1),
+                               createdAt: S.at(3))
+        let (fixed, issues) = Self.validate(Self.board([ranked, invalid, missing]))
+        let order = fixed.cards.filter { $0.assignee == S.agent(1) }
+            .sorted { ($0.queueRank ?? "") < ($1.queueRank ?? "") }
+            .map(\.id)
+        #expect(order == [S.card(1), S.card(2), S.card(3)])
+        #expect(fixed.cards.allSatisfy { $0.queueRank.map(RankKey.isValid) ?? false })
+        #expect(issues.count == 2)
+    }
+
+    @Test func cardSentBackToTodoGoesLastEvenAfterInvalidRanks() throws {
+        // "~" is not a key: a rank computed after it ("zi") would sort before it once the column is renumbered.
+        let invalid = TaskCard(id: S.card(1), title: "Tilde", projectID: nil, rank: "~", createdAt: S.at(1))
+        let valid = TaskCard(id: S.card(2), title: "Valide", projectID: nil, rank: "c", createdAt: S.at(2))
+        let orphan = TaskCard(id: S.card(3), title: "Orpheline", projectID: nil, column: .inProgress, rank: "i",
+                              assignee: S.agent(9), createdAt: S.at(3))
+        let (fixed, issues) = Self.validate(Self.board([invalid, valid, orphan]))
+        let todo = fixed.cards(in: .todo)
+        #expect(todo.map(\.id) == [S.card(2), S.card(1), S.card(3)])
+        #expect(todo.allSatisfy { RankKey.isValid($0.rank) })
+        #expect(issues.count == 2)
+    }
+
+    @Test func inProgressCardWithoutAgentGoesBackToTodo() throws {
+        let waiting = TaskCard(id: S.card(1), title: "En attente", projectID: nil, rank: "i", createdAt: S.at(1))
+        let adrift = TaskCard(id: S.card(2), title: "Sans agent", projectID: nil, column: .inProgress, rank: "i",
+                              queueRank: "k", delivery: DeliveryInfo(promptID: "p-7", sentAt: S.at(2), confirmedAt: S.at(3)),
+                              flags: [.interrupted], createdAt: S.at(2), updatedAt: S.at(4))
+        // Waiting for review without an agent: still validable, left alone.
+        let reviewing = TaskCard(id: S.card(3), title: "À relire", projectID: nil, column: .review, rank: "i",
+                                 delivery: DeliveryInfo(promptID: "p-8", sentAt: S.at(5), confirmedAt: S.at(6)),
+                                 createdAt: S.at(5))
+        let (fixed, issues) = Self.validate(Self.board([waiting, adrift, reviewing]))
+        #expect(fixed.cards(in: .todo).map(\.id) == [S.card(1), S.card(2)])
+        let card = try #require(fixed.card(S.card(2)))
+        #expect(card.assignee == nil && card.queueRank == nil)
+        #expect(card.flags.isEmpty && card.delivery == nil)
+        #expect(card.updatedAt == S.at(4))
+        let event = try #require(card.history.last)
+        #expect(event.kind == .putBack && event.from == .inProgress && event.to == .todo && event.at == S.at(4))
+        #expect(event.note?.contains("p-7") == true)
+        #expect(fixed.card(S.card(3)) == reviewing)
+        #expect(issues.count == 1)
+    }
+
+    @Test func pendingDeliveryIsClearedOutsideTheQueue() throws {
+        let pending = DeliveryInfo(sessionID: "s", sentAt: S.at(1))
+        let confirmed = DeliveryInfo(promptID: "p", sentAt: S.at(1), confirmedAt: S.at(2), turnEndedAt: S.at(3))
+        let doneNeverConfirmed = TaskCard(id: S.card(1), title: "Fait sans envoi", projectID: nil, column: .done, rank: "i",
+                                          delivery: pending, createdAt: S.at(1))
+        let doneDelivered = TaskCard(id: S.card(2), title: "Fait livré", projectID: nil, column: .done, rank: "r",
+                                     delivery: confirmed, validatedOnce: true, createdAt: S.at(2))
+        let unassigned = TaskCard(id: S.card(3), title: "Libre", projectID: nil, rank: "i", delivery: pending,
+                                  createdAt: S.at(3))
+        let queued = TaskCard(id: S.card(4), title: "En tête", projectID: nil, rank: "r", assignee: S.agent(1),
+                              queueRank: "k", delivery: pending, createdAt: S.at(4))
+        let (fixed, issues) = Self.validate(Self.board([doneNeverConfirmed, doneDelivered, unassigned, queued]))
+        #expect(fixed.card(S.card(1))?.delivery == nil)
+        #expect(fixed.card(S.card(2))?.delivery == confirmed)
+        #expect(fixed.card(S.card(3))?.delivery == nil)
+        #expect(fixed.card(S.card(4))?.delivery == pending)
+        #expect(fixed.cards.allSatisfy { $0.column != .done || $0.delivery?.isPending != true })
+        #expect(issues.count == 2)
+    }
+
+    @Test func instructionOfUnknownCardIsRemoved() {
+        let card = TaskCard(id: S.card(1), title: "Là", projectID: nil, column: .inProgress, rank: "i", assignee: S.agent(1),
+                            flags: [.interrupted], createdAt: S.t0)
+        let lost = QueuedInstruction(id: S.instruction(1), agentID: S.agent(1), text: "Continue la tâche : Disparue",
+                                     cardID: S.card(9), queueRank: "c", createdAt: S.t0)
+        let linked = QueuedInstruction(id: S.instruction(2), agentID: S.agent(1), text: "Continue la tâche : Là",
+                                       cardID: S.card(1), queueRank: "i", createdAt: S.t0)
+        let adHoc = QueuedInstruction(id: S.instruction(3), agentID: S.agent(1), text: "Lance les tests",
+                                      queueRank: "r", createdAt: S.t0)
+        let (fixed, issues) = Self.validate(Self.board([card], instructions: [lost, linked, adHoc]))
+        #expect(fixed.instructions.map(\.id) == [S.instruction(2), S.instruction(3)])
+        #expect(issues.count == 1)
+    }
+
+    @Test func invisibleTagsAreDroppedAndCaseIsFolded() {
+        #expect(TaskBoardValidator.normalizedTags(["\u{200B}", "a\u{200B}b", "\u{202E}x", "\u{FEFF}#", "\u{00AD}",
+                                                   "ß", "SS", "ς", "Σ", "\u{1F469}\u{200D}\u{1F4BB}"])
+            == ["ab", "x", "ß", "ς", "\u{1F469}\u{200D}\u{1F4BB}"])
+        #expect(TaskBoardValidator.tagKey("Straße") == TaskBoardValidator.tagKey("STRASSE"))
+    }
+
     @Test func repairIsIdempotentAndNeverLosesACard() {
         let cards = [
             TaskCard(id: S.card(1), title: " ", projectID: S.project(9), rank: "m", tags: ["#a", "A"],
@@ -262,15 +400,41 @@ import Testing
                      queueRank: "z", createdAt: S.at(4)),
             TaskCard(id: S.card(5), title: "E", projectID: nil, column: .inProgress, rank: "i", assignee: S.agent(1),
                      createdAt: S.at(5)),
+            TaskCard(id: S.card(6), title: "F", projectID: nil, rank: "~", assignee: S.agent(1), queueRank: "k0",
+                     createdAt: S.at(6)),
+            TaskCard(id: S.card(7), title: "G", projectID: nil, column: .inProgress, rank: "é", queueRank: "k",
+                     createdAt: S.at(7)),
+            TaskCard(id: S.card(8), title: "H", projectID: nil, column: .done, rank: "i",
+                     delivery: DeliveryInfo(sentAt: S.at(8)), createdAt: S.at(8)),
         ]
-        let (fixed, issues) = Self.validate(Self.board(cards))
+        let instructions = [
+            QueuedInstruction(id: S.instruction(1), agentID: S.agent(1), text: "I", queueRank: "k", createdAt: S.at(1)),
+            QueuedInstruction(id: S.instruction(2), agentID: S.agent(1), text: "J", cardID: S.card(9), queueRank: "k",
+                              createdAt: S.at(2)),
+            QueuedInstruction(id: S.instruction(3), agentID: S.agent(1), text: "K", cardID: S.card(4), queueRank: "k",
+                              createdAt: S.at(3)),
+        ]
+        let (fixed, issues) = Self.validate(Self.board(cards, instructions: instructions))
         #expect(!issues.isEmpty)
         #expect(Set(fixed.cards.map(\.id)) == Set(cards.map(\.id)))
         for card in fixed.cards {
             #expect((card.queueRank != nil) == (card.column == .todo && card.assignee != nil))
             #expect(card.assignee.map(Self.agents.contains) ?? true)
             #expect(card.projectID.map(Self.projects.contains) ?? true)
+            #expect(card.column != .inProgress || card.assignee != nil)
+            #expect(card.column != .done || card.delivery?.isPending != true)
+            #expect(RankKey.isValid(card.rank))
         }
+        for column in Column.allCases {
+            let ranks = fixed.cards(in: column).map(\.rank)
+            #expect(zip(ranks, ranks.dropFirst()).allSatisfy { $0 < $1 })
+        }
+        let cardIDs = Set(fixed.cards.map(\.id))
+        #expect(fixed.instructions.allSatisfy { $0.cardID.map(cardIDs.contains) ?? true })
+        let queue = fixed.instructions.filter { $0.agentID == S.agent(1) }.map(\.queueRank).sorted()
+            + fixed.cards.filter { $0.column == .todo && $0.assignee == S.agent(1) }.compactMap(\.queueRank).sorted()
+        #expect(queue.allSatisfy(RankKey.isValid))
+        #expect(zip(queue, queue.dropFirst()).allSatisfy { $0 < $1 })
         let (again, noIssues) = Self.validate(fixed)
         #expect(again == fixed)
         #expect(noIssues.isEmpty)

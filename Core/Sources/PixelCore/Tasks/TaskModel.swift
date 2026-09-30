@@ -63,6 +63,33 @@ public struct CardEvent: Codable, Hashable, Sendable {
         self.agentID = agentID
         self.note = note
     }
+
+    enum CodingKeys: String, CodingKey {
+        case at, kind, from, to, agentID, note
+    }
+
+    /// A column unknown to this version (written by a newer app) reads as nil. An unknown kind throws: the card
+    /// skips such an entry (`KnownEvent`).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        at = try c.decode(Date.self, forKey: .at)
+        kind = try c.decode(CardEventKind.self, forKey: .kind)
+        from = try c.decodeIfPresent(String.self, forKey: .from).flatMap(Column.init(rawValue:))
+        to = try c.decodeIfPresent(String.self, forKey: .to).flatMap(Column.init(rawValue:))
+        agentID = try c.decodeIfPresent(AgentID.self, forKey: .agentID)
+        note = try c.decodeIfPresent(String.self, forKey: .note)
+    }
+}
+
+/// A history entry, or nil when its kind is unknown to this version (written by a newer app, e.g. a delivery
+/// event): the entry is skipped rather than the whole file refused. A kind that is not a string still throws.
+private struct KnownEvent: Decodable {
+    let event: CardEvent?
+
+    init(from decoder: Decoder) throws {
+        let kind = try decoder.container(keyedBy: CardEvent.CodingKeys.self).decode(String.self, forKey: .kind)
+        event = CardEventKind(rawValue: kind) == nil ? nil : try CardEvent(from: decoder)
+    }
 }
 
 /// A delivery of a card to its assignee's terminal (the agent is the assignee).
@@ -144,23 +171,30 @@ public struct TaskCard: Codable, Identifiable, Hashable, Sendable {
     }
 
     /// Fields added after the first version, and the ones with an obvious default, may be missing.
-    /// Unknown flags (written by a newer app) are ignored.
+    /// Values written by a newer app keep the board readable (read-only opening, proposal 3.14): unknown flags
+    /// and history entries of an unknown kind are skipped, an unknown column reads as `todo` (the validator then
+    /// repairs the card like any other), a priority above `high` as `high`, below `low` as `low`.
+    /// A value of the wrong type still throws.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(TaskCardID.self, forKey: .id)
         title = try c.decode(String.self, forKey: .title)
         details = try c.decodeIfPresent(String.self, forKey: .details) ?? ""
         projectID = try c.decodeIfPresent(ProjectID.self, forKey: .projectID)
-        column = try c.decode(Column.self, forKey: .column)
+        column = Column(rawValue: try c.decode(String.self, forKey: .column)) ?? .todo
         rank = try c.decode(String.self, forKey: .rank)
-        priority = try c.decodeIfPresent(Priority.self, forKey: .priority) ?? .normal
+        if let raw = try c.decodeIfPresent(Int.self, forKey: .priority) {
+            priority = raw > Priority.high.rawValue ? .high : Priority(rawValue: raw) ?? .low
+        } else {
+            priority = .normal
+        }
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         assignee = try c.decodeIfPresent(AgentID.self, forKey: .assignee)
         queueRank = try c.decodeIfPresent(String.self, forKey: .queueRank)
         templateID = try c.decodeIfPresent(PromptTemplateID.self, forKey: .templateID)
         delivery = try c.decodeIfPresent(DeliveryInfo.self, forKey: .delivery)
         flags = Set((try c.decodeIfPresent([String].self, forKey: .flags) ?? []).compactMap(CardFlag.init(rawValue:)))
-        history = try c.decodeIfPresent([CardEvent].self, forKey: .history) ?? []
+        history = (try c.decodeIfPresent([KnownEvent].self, forKey: .history) ?? []).compactMap(\.event)
         validatedOnce = try c.decodeIfPresent(Bool.self, forKey: .validatedOnce) ?? false
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? createdAt

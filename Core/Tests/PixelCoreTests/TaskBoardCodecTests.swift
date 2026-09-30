@@ -123,6 +123,46 @@ import Testing
         #expect(card.flags == [.interrupted])
     }
 
+    @Test func valuesOfANewerAppAreTolerated() throws {
+        // A newer app may add event kinds (delivery events), columns or priorities: the board still opens.
+        for version in [1, 2] {
+            let json = """
+            {"schemaVersion": \(version),
+             "cards": [{"id": "00000000-0000-0000-0000-000000000001", "title": "t", "column": "blocked", "rank": "i",
+                        "priority": 3, "createdAt": "2026-09-21T14:13:20.123Z",
+                        "history": [{"at": "2026-09-21T14:13:20.123Z", "kind": "created", "to": "todo"},
+                                    {"at": "2026-09-21T14:13:21.123Z", "kind": "deliveryAborted", "note": "garde G2"},
+                                    {"at": "2026-09-21T14:13:22.123Z", "kind": "reordered", "from": "blocked", "to": "todo"}]},
+                       {"id": "00000000-0000-0000-0000-000000000002", "title": "u", "column": "todo", "rank": "r",
+                        "priority": -1, "createdAt": "2026-09-21T14:13:20.123Z"}]}
+            """
+            let (board, _) = try PersistenceCodec.decodeTasks(Data(json.utf8), allowNewerSchema: true)
+            let card = try #require(board.card(S.card(1)))
+            #expect(card.column == .todo)
+            #expect(card.priority == .high)
+            #expect(card.history.map(\.kind) == [.created, .reordered])
+            #expect(card.history.last?.from == nil && card.history.last?.to == .todo)
+            #expect(board.card(S.card(2))?.priority == .low)
+        }
+        // A wrong type is still corruption, not a newer value.
+        for field in ["\"kind\": 3", "\"kind\": null"] {
+            let json = """
+            {"schemaVersion": 1,
+             "cards": [{"id": "00000000-0000-0000-0000-000000000001", "title": "t", "column": "todo", "rank": "i",
+                        "createdAt": "2026-09-21T14:13:20.123Z", "history": [{"at": "2026-09-21T14:13:20.123Z", \(field)}]}]}
+            """
+            #expect(throws: PersistenceError.self) { try PersistenceCodec.decodeTasks(Data(json.utf8)) }
+        }
+        for field in ["\"column\": \"todo\", \"priority\": \"haute\"", "\"column\": 2"] {
+            let json = """
+            {"schemaVersion": 1,
+             "cards": [{"id": "00000000-0000-0000-0000-000000000001", "title": "t", "rank": "i", \(field),
+                        "createdAt": "2026-09-21T14:13:20.123Z"}]}
+            """
+            #expect(throws: PersistenceError.self) { try PersistenceCodec.decodeTasks(Data(json.utf8)) }
+        }
+    }
+
     @Test func olderVersionsMigrateThroughTheCodec() throws {
         // A fake v0 → v1 step: v0 called the cards "notes".
         let step = MigrationStep(from: 0) { object in
