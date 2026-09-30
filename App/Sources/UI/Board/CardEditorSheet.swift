@@ -3,8 +3,9 @@ import SwiftUI
 
 /// Post-it editor (mockup 6(l)): title, description, project (locked while assigned), priority, tags, template,
 /// assignment, the prompt preview exactly as it will be typed (`PromptComposer` then `PromptSanitizer`, following
-/// the fields being edited), and the history. The fields apply with "Enregistrer" (`.edit`, one per changed
-/// field); "Donner à", "Retirer" and "Supprimer" apply at once, after a confirmation when the reducer asks for one.
+/// the fields being edited), and the history. The fields apply with "Enregistrer" (⌘↩: Return stays a line break
+/// in the description; Escape cancels); "Donner à…" (⌘D), "Retirer" and "Supprimer" apply at once, after a
+/// confirmation when the reducer asks for one.
 struct CardEditorSheet: View {
     let cardID: TaskCardID
 
@@ -22,6 +23,7 @@ struct CardEditorSheet: View {
     @State private var loaded = false
     @State private var pendingTask: PendingTaskInput?
     @State private var showsTemplates = false
+    @State private var showsAssignPicker = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -84,9 +86,11 @@ struct CardEditorSheet: View {
                 }
                 Button("Annuler", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
+                // ⌘↩, not Return: Return in the description (or a tag field) must never save and close.
                 Button("Enregistrer") { save(card) }
-                    .keyboardShortcut(.defaultAction)
+                    .keyboardShortcut(.return, modifiers: .command)
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .help("Enregistrer (⌘↩)")
             }
         }
         .padding(20)
@@ -218,12 +222,19 @@ struct CardEditorSheet: View {
             ForEach(CardPresentation.flags(of: card), id: \.self) { CardFlagLabel(flag: $0) }
             Spacer()
             if card.column == .todo {
-                Menu("Donner à…") {
-                    AssignMenuContent(card: card, model: model) { agentID in
-                        request(.assign(card.id, to: agentID))
+                Button("Donner à…") { showsAssignPicker = true }
+                    .keyboardShortcut("d", modifiers: .command)
+                    .help("Donner ce post-it à un agent (⌘D)")
+                    .popover(isPresented: $showsAssignPicker, arrowEdge: .bottom) {
+                        AssignAgentPicker(card: card) { agentID in
+                            showsAssignPicker = false
+                            // After the popover has closed: the confirmation dialog (C3) opens on the sheet.
+                            Task { @MainActor in request(.assign(card.id, to: agentID)) }
+                        } cancel: {
+                            showsAssignPicker = false
+                        }
+                        .environment(model)
                     }
-                }
-                .fixedSize()
                 if card.assignee != nil {
                     Button("Retirer") { request(.unassign(card.id)) }
                         .help("Retirer le post-it de la file de son agent")

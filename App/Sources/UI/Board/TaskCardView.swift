@@ -226,9 +226,11 @@ struct TaskCardView: View {
 
     @Environment(AppModel.self) private var model
     @Environment(WorkbenchState.self) private var workbench
+    @Environment(\.highlightedCard) private var highlightedCard
 
     var body: some View {
         let isFocused = focus.wrappedValue == card.id
+        let isHighlighted = highlightedCard == card.id
         let project = card.projectID.flatMap { model.project($0) }
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -272,10 +274,12 @@ struct TaskCardView: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(Color(nsColor: .controlBackgroundColor))
                 .overlay(RoundedRectangle(cornerRadius: 6).fill(tint(project).opacity(0.14)))
+                .overlay(RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(isHighlighted ? 0.22 : 0)))
         }
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(isFocused ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: isFocused ? 2 : 1)
+                .strokeBorder(isFocused || isHighlighted ? Color.accentColor : Color.primary.opacity(0.12),
+                              lineWidth: isFocused || isHighlighted ? 2 : 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: 6))
         .focusable()
@@ -296,7 +300,21 @@ struct TaskCardView: View {
         .accessibilityAddTraits(isFocused ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { workbench.editCard(card.id) }
         .accessibilityAction(named: "Modifier") { workbench.editCard(card.id) }
-        .modifier(ReviewAccessibilityActions(card: card))
+        .accessibilityActions { accessibilityActions }
+    }
+
+    /// VoiceOver actions (the card's buttons and menus are inside an ignored element): "Donner à…" in "À faire",
+    /// "Valider" and "Renvoyer avec une précision" in "À valider", "Supprimer" everywhere.
+    @ViewBuilder
+    private var accessibilityActions: some View {
+        if card.column == .todo {
+            Button("Donner à…") { workbench.assignCard(card.id) }
+        }
+        if card.column == .review {
+            Button("Valider") { workbench.requestTask(.validate(card.id)) }
+            Button("Renvoyer avec une précision") { workbench.present(.resendCard(card.id)) }
+        }
+        Button("Supprimer", role: .destructive) { workbench.requestTask(.delete(card.id)) }
     }
 
     private var reviewButtons: some View {
@@ -358,22 +376,15 @@ struct TaskCardView: View {
     }
 }
 
-/// "Valider" and "Renvoyer" for VoiceOver on a card of "À valider" (its buttons are inside an ignored element).
-private struct ReviewAccessibilityActions: ViewModifier {
-    let card: TaskCard
+/// The card just created with ⌘N, highlighted for a moment once the board has scrolled to it (`BoardPanelView`).
+private struct HighlightedCardKey: EnvironmentKey {
+    static let defaultValue: TaskCardID? = nil
+}
 
-    @Environment(WorkbenchState.self) private var workbench
-
-    func body(content: Content) -> some View {
-        if card.column == .review {
-            content
-                .accessibilityAction(named: "Valider") { workbench.requestTask(.validate(card.id)) }
-                .accessibilityAction(named: "Renvoyer avec une précision") {
-                    workbench.present(.resendCard(card.id))
-                }
-        } else {
-            content
-        }
+extension EnvironmentValues {
+    var highlightedCard: TaskCardID? {
+        get { self[HighlightedCardKey.self] }
+        set { self[HighlightedCardKey.self] = newValue }
     }
 }
 

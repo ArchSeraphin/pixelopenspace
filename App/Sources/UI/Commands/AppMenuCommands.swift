@@ -64,11 +64,13 @@ struct AppMenuCommands: Commands {
     }
 
     private func isEnabled(_ command: AppCommand) -> Bool {
-        availability?.isEnabled(command) ?? workbench.commands.isEnabled(command)
+        availability?.isEnabled(command) ?? workbench.isAvailable(command)
     }
 
     private func run(_ command: AppCommand) {
         let model = workbench.model
+        // A menu shortcut can outrun the greying out: never replace an open sheet.
+        guard workbench.isAvailable(command) else { return }
         switch command {
         case .closeSession:
             if let agentID = model.selectedAgentID { workbench.requestCloseSession(agentID) }

@@ -108,6 +108,46 @@ import Testing
         #expect(w.project(c)!.slot == 0)
     }
 
+    /// Agents of an archived project stay in the workspace (the validator of `tasks.json` knows them at load),
+    /// but they are neither assignees nor delivered to: the reducer's context and the dispatcher see live agents only.
+    @Test func liveAgentsLeaveOutArchivedProjects() throws {
+        var w = Workspace()
+        let a = w.addProject(path: "/p/a", now: Self.t0)
+        let b = w.addProject(path: "/p/b", now: Self.t0)
+        let addedA = w.addAgent(to: a, now: Self.t0)
+        let a0 = try #require(addedA)
+        let addedB = w.addAgent(to: b, now: Self.t0)
+        let b0 = try #require(addedB)
+        #expect(w.liveAgentProjects == [a0: a, b0: b])
+        w.archiveProject(b)
+        #expect(w.liveAgentProjects == [a0: a])
+        #expect(w.isLiveAgent(a0))
+        #expect(!w.isLiveAgent(b0))
+        #expect(!w.isLiveAgent(Self.agentID(9)))
+        #expect(w.liveProject(a)?.id == a)
+        #expect(w.liveProject(b) == nil)
+        #expect(w.liveProject(ProjectID()) == nil)
+        #expect(Set(w.agents.map(\.id)) == [a0, b0])
+    }
+
+    /// The reducer refuses to give a card to an agent missing from its context (an archived project's).
+    @Test func archivedProjectAgentIsNotAnAssignee() throws {
+        var w = Workspace()
+        let a = w.addProject(path: "/p/a", now: Self.t0)
+        let addedA = w.addAgent(to: a, now: Self.t0)
+        let a0 = try #require(addedA)
+        w.archiveProject(a)
+        let card = TaskCardID()
+        let context = TaskContext(now: Self.t0, agentProjects: w.liveAgentProjects, liveAgents: [])
+        let (board, _) = TaskLifecycle.reduce(TaskBoardState(), .create(id: card, title: "Pagination", details: "",
+                                                                         projectID: a, priority: .normal, tags: [],
+                                                                         templateID: nil), context: context)
+        let (after, effects) = TaskLifecycle.reduce(board, .assign(card, to: a0), context: context)
+        #expect(after == board)
+        #expect(effects.count == 1)
+        #expect(effects.allSatisfy { if case .rejected(.unknownAgent, _) = $0 { return true } else { return false } })
+    }
+
     @Test func renameAndHue() {
         var w = Workspace()
         let a = w.addProject(path: "/p/a", now: Self.t0)

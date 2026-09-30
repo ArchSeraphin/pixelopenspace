@@ -4,14 +4,22 @@ import SwiftUI
 /// ⌘N (mockup 6(c)): a title field at the top of "À faire". Return creates the post-it (project: the board's
 /// project filter, else the selected project) and leaves the field empty for the next one; Escape, or Return on
 /// an empty field, closes it. Goal: a post-it in less than 5 seconds.
+///
+/// The new post-it lands at the end of "À faire", often below the fold: `created` lets the board scroll to it and
+/// highlight it; `resumedTyping` (first letter of the next title) brings the field back into view.
 struct QuickAddField: View {
     @Binding var isPresented: Bool
     /// Changes when ⌘N is pressed again while the field is shown: it takes the focus back.
     let focusToken: UUID?
+    /// A post-it was created, and the board's filters show it.
+    var created: (TaskCardID) -> Void = { _ in }
+    /// The first letter of a title typed after `created`.
+    var resumedTyping: () -> Void = {}
 
     @Environment(AppModel.self) private var model
 
     @State private var title = ""
+    @State private var showedCreatedCard = false
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -32,6 +40,11 @@ struct QuickAddField: View {
         .onChange(of: focusToken) { _, _ in takeFocus() }
         .onChange(of: isFocused) { _, focused in
             if !focused, title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { close() }
+        }
+        .onChange(of: title) { old, new in
+            guard showedCreatedCard, old.isEmpty, !new.isEmpty else { return }
+            showedCreatedCard = false
+            resumedTyping()
         }
     }
 
@@ -60,7 +73,10 @@ struct QuickAddField: View {
         title = ""
         isFocused = true
         let shown = model.filteredBoard[.todo]?.contains { $0.id == cardID } ?? false
-        if !shown {
+        if shown {
+            showedCreatedCard = true
+            created(cardID)
+        } else {
             model.showToast("Post-it créé, mais masqué par les filtres du tableau.")
         }
     }

@@ -34,9 +34,6 @@ struct RootView: View {
                 let maxPanel = max(Self.minimumPanelHeight, Double(geometry.size.height) - Self.minimumBoardHeight)
                 VStack(spacing: 0) {
                     mainSplit
-                        .overlay(alignment: .bottomTrailing) {
-                            ToastOverlay()
-                        }
                         .taskConfirmation($bindable.pendingTask) { pending in
                             model.applyTask(pending.input)
                         }
@@ -68,7 +65,7 @@ struct RootView: View {
         } message: { confirmation in
             Text(confirmationMessage(confirmation))
         }
-        .focusedSceneValue(\.commandAvailability, CommandAvailability(model: model, commands: workbench.commands))
+        .focusedSceneValue(\.commandAvailability, CommandAvailability(model: model, workbench: workbench))
         .background(WindowReader { window in workbench.setMainWindow(window) })
         .onAppear(perform: appeared)
         .onDisappear { workbench.mainWindowDisappeared() }
@@ -94,6 +91,10 @@ struct RootView: View {
                 HStack(spacing: 0) {
                     AgentBoardView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // Over the agents, never over the board panel: its last cards stay visible.
+                        .overlay(alignment: .bottomTrailing) {
+                            ToastOverlay()
+                        }
                     if isBoardVisible {
                         let range = boardWidthRange(available: Double(geometry.size.width))
                         BoardPanelDivider(width: $boardWidth, range: range)
@@ -191,10 +192,13 @@ struct RootView: View {
         case .claudeSetup:
             presentSheet(.claudeSetup)
         case .newCard:
+            // The title field would take the focus behind an open sheet.
+            guard workbench.activeSheet == nil else { return workbench.bringMainWindowForward() }
             isBoardVisible = true
             workbench.requestQuickAdd()
             workbench.bringMainWindowForward()
         case .pasteCards:
+            guard workbench.activeSheet == nil else { return workbench.bringMainWindowForward() }
             isBoardVisible = true
             presentSheet(.pasteCards)
         case .manageTemplates:
@@ -204,9 +208,11 @@ struct RootView: View {
         }
     }
 
-    /// Never replaces the quit sheet: that question must be answered first.
+    /// Never replaces an open sheet: the quit sheet must be answered first, and another one may hold unsaved edits
+    /// (post-it editor, templates). The request is dropped and the open sheet comes forward; the menus grey these
+    /// commands out meanwhile (`WorkbenchState.isAvailable`).
     private func presentSheet(_ sheet: ActiveSheet) {
-        guard !isShowingQuitSheet else { return }
+        guard workbench.activeSheet == nil else { return workbench.bringMainWindowForward() }
         workbench.present(sheet)
         workbench.bringMainWindowForward()
     }

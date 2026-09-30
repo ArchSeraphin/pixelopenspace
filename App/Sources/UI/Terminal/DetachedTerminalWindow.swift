@@ -23,8 +23,7 @@ struct DetachedTerminalWindow: View {
                         workbench.openWindowAction = openWindow
                     }
                     .onDisappear { workbench.terminalWindowClosed(agentID) }
-                    .focusedSceneValue(\.commandAvailability,
-                                       CommandAvailability(model: model, commands: workbench.commands))
+                    .focusedSceneValue(\.commandAvailability, CommandAvailability(model: model, workbench: workbench))
             } else {
                 PanelMessageView(symbol: "questionmark.square.dashed", message: "Cet agent n'existe plus.") {
                     Button("Fermer") { dismissWindow() }

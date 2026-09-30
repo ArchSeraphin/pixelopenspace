@@ -57,6 +57,8 @@ struct SheetContentView: View {
             } else {
                 MissingItemSheet()
             }
+        case .assignCard(let cardID):
+            AssignCardSheet(cardID: cardID)
         }
     }
 }

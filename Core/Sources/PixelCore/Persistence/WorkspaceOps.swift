@@ -22,6 +22,24 @@ extension Workspace {
         agents.filter { $0.projectID == projectID }.sorted { ($0.deskIndex, $0.createdAt) < ($1.deskIndex, $1.createdAt) }
     }
 
+    /// A known project that is not archived.
+    public func liveProject(_ id: ProjectID) -> Project? {
+        project(id).flatMap { $0.archived ? nil : $0 }
+    }
+
+    /// Project of each agent of a live project: the agents a post-it can be given to and whose queue is delivered
+    /// (the reducer's `TaskContext.agentProjects`). Agents of archived projects stay in `agents`, and the validator
+    /// of `tasks.json` knows them at load, but they are left out here.
+    public var liveAgentProjects: [AgentID: ProjectID] {
+        let live = Set(projects.filter { !$0.archived }.map(\.id))
+        return Dictionary(agents.filter { live.contains($0.projectID) }.map { ($0.id, $0.projectID) }) { first, _ in first }
+    }
+
+    /// The agent exists and its project is live.
+    public func isLiveAgent(_ id: AgentID) -> Bool {
+        agent(id).map { liveProject($0.projectID) != nil } ?? false
+    }
+
     /// Live (non-archived) projects in sidebar order (⌘1…⌘9).
     public var projectsInOrder: [Project] {
         projects.filter { !$0.archived }.sorted {

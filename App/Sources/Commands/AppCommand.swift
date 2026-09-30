@@ -112,6 +112,15 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Opens a sheet of the main window, or takes the keyboard focus there (⌘N, the title field of the board):
+    /// unavailable while a sheet is open, which it would replace or hide (`WorkbenchState.isAvailable`).
+    var isBlockedBySheet: Bool {
+        switch self {
+        case .newCard, .pasteCards, .manageTemplates, .newProject, .newAgent: return true
+        default: return false
+        }
+    }
+
     /// SF Symbol for the palette and toolbar buttons.
     var symbolName: String {
         switch self {

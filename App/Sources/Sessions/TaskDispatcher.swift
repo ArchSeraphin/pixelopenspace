@@ -95,9 +95,10 @@ final class TaskDispatcher {
         delayedPumps[agentID] = (at, task)
     }
 
+    /// Every agent of a live project (an archived project's queue is never delivered).
     func pumpAll() {
         guard let model else { return }
-        for agent in model.workspace.agents { pump(agent.id) }
+        for agent in model.agentsInOrder { pump(agent.id) }
     }
 
     /// Called after every reduction: an agent whose runtime changed in a way that may free its queue (phase, waits,
@@ -207,7 +208,7 @@ final class TaskDispatcher {
     // MARK: - Decision
 
     private func runPump(_ agentID: AgentID) {
-        guard let model, deliveries[agentID] == nil, model.acceptsDeliveries,
+        guard let model, deliveries[agentID] == nil, model.acceptsDeliveries, model.workspace.isLiveAgent(agentID),
               let agent = model.agent(agentID), let runtime = model.runtime(for: agentID) else { return }
         let queue = model.queue(of: agentID)
         guard let head = queue.first else {

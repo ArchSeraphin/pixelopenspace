@@ -2,15 +2,16 @@ import PixelCore
 import SwiftUI
 
 /// Snapshot of which commands apply now, published by the focused window (`focusedSceneValue`), so that menu items
-/// are enabled or greyed out as the model changes.
+/// are enabled or greyed out as the model changes. A command that would replace or hide the main window's open sheet
+/// is greyed out while it is open (`WorkbenchState.isAvailable`).
 struct CommandAvailability: Equatable {
     var enabled: Set<AppCommand>
     /// Live projects in sidebar order, for "Aller au projet 1…9".
     var projectNames: [String]
 
     @MainActor
-    init(model: AppModel, commands: CommandCenter) {
-        enabled = Set(AppCommand.allCases.filter { commands.isEnabled($0) })
+    init(model: AppModel, workbench: WorkbenchState) {
+        enabled = Set(AppCommand.allCases.filter { workbench.isAvailable($0) })
         projectNames = model.projects.map(\.name)
     }
 

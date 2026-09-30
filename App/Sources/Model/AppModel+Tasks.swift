@@ -53,11 +53,13 @@ extension AppModel {
         }
     }
 
-    /// What the reducer reads about the world, now: each agent's project, the running agents and their current
-    /// session, the projects' names.
+    /// What the reducer reads about the world, now: the project of each agent of a live project, the running agents
+    /// and their current session, the projects' names. Agents of archived projects are left out: a card cannot be
+    /// given to them (the reducer refuses an unknown agent). Only the validator of `tasks.json`, at load, knows them
+    /// (`AppEnvironment`), so that their cards keep their assignee.
     func taskContext() -> TaskContext {
-        let live = runtimes.filter { $0.value.pid != nil }
-        let agentProjects = Dictionary(workspace.agents.map { ($0.id, $0.projectID) }) { first, _ in first }
+        let agentProjects = workspace.liveAgentProjects
+        let live = runtimes.filter { $0.value.pid != nil && agentProjects[$0.key] != nil }
         let projectNames = Dictionary(workspace.projects.map { ($0.id, $0.name) }) { first, _ in first }
         return TaskContext(now: Date(), agentProjects: agentProjects, liveAgents: Set(live.keys),
                            sessionIDs: live.compactMapValues(\.currentSessionID), projectNames: projectNames)
@@ -66,6 +68,8 @@ extension AppModel {
     private func perform(_ effect: TaskEffect) {
         switch effect {
         case .pump(let agentID):
+            // A queue left to an agent of an archived project is never delivered.
+            guard workspace.isLiveAgent(agentID) else { return }
             dispatcher.pump(agentID)
         case .notify(let text):
             showToast(text, style: .warning)
@@ -160,9 +164,9 @@ extension AppModel {
     }
 
     /// The project a card is given to by "Premier agent libre" or "Lancer un nouvel agent": its own, else the one
-    /// selected (a card without project).
+    /// selected (a card without project). Never an archived project (no agent can be added there); nil then.
     func dispatchProject(for card: TaskCard) -> ProjectID? {
-        (card.projectID ?? selectedProjectID).flatMap { workspace.project($0)?.id }
+        (card.projectID ?? selectedProjectID).flatMap { workspace.liveProject($0)?.id }
     }
 
     /// "Premier agent libre" (3.6): the agent of the card's project it would go to; nil when no agent of that

@@ -12,7 +12,8 @@ enum WindowID {
     static let terminal = "terminal"
 }
 
-/// The sheet shown by the main window. One at a time: presenting another one replaces it.
+/// The sheet shown by the main window. One at a time: the menus, the board and the model's requests never replace
+/// one that is open (it may hold unsaved edits); only the quit sheet does.
 enum ActiveSheet: Identifiable, Equatable {
     /// "Nouveau projet" (mockup 6(m)), with the folder already chosen or dropped.
     case newProject(URL?)
@@ -34,6 +35,8 @@ enum ActiveSheet: Identifiable, Equatable {
     case resendCard(TaskCardID)
     /// "Donner une consigne…" to an agent (proposal 5.6).
     case giveInstruction(AgentID)
+    /// "Donner à…" from a board card (VoiceOver action): the list of agents.
+    case assignCard(TaskCardID)
 
     var id: String {
         switch self {
@@ -48,6 +51,7 @@ enum ActiveSheet: Identifiable, Equatable {
         case .templates: return "templates"
         case .resendCard(let cardID): return "resendCard-\(cardID)"
         case .giveInstruction(let agentID): return "giveInstruction-\(agentID)"
+        case .assignCard(let cardID): return "assignCard-\(cardID)"
         }
     }
 }
@@ -215,6 +219,14 @@ final class WorkbenchState {
         activeSheet = nil
     }
 
+    /// Whether a command applies now (menus, `CommandAvailability`): `CommandCenter.isEnabled`, and, for a command
+    /// that opens a sheet or takes the keyboard focus in the main window, no sheet open there (it would replace or
+    /// hide it, and its unsaved edits would be lost).
+    func isAvailable(_ command: AppCommand) -> Bool {
+        guard commands.isEnabled(command) else { return false }
+        return !(command.isBlockedBySheet && activeSheet != nil)
+    }
+
     // MARK: - Confirmations
 
     /// For `.confirmationDialog(isPresented:)` (through `@Bindable`).
@@ -288,14 +300,17 @@ final class WorkbenchState {
         quickAddRequest = nil
     }
 
+    /// Opens the post-it editor (double-click, Return, "Modifier…", the agent card's current post-it line). Never
+    /// over an open sheet: the quit sheet, or one with unsaved edits the editor would replace.
     func editCard(_ cardID: TaskCardID) {
-        guard model.board.card(cardID) != nil, activeSheet.map(Self.isQuit) != true else { return }
+        guard model.board.card(cardID) != nil, activeSheet == nil else { return }
         present(.cardEditor(cardID))
     }
 
-    private static func isQuit(_ sheet: ActiveSheet) -> Bool {
-        if case .quit = sheet { return true }
-        return false
+    /// "Donner à…" from a board card (VoiceOver action): the list of agents, in a sheet. Same rule as `editCard`.
+    func assignCard(_ cardID: TaskCardID) {
+        guard model.board.card(cardID)?.column == .todo, activeSheet == nil else { return }
+        present(.assignCard(cardID))
     }
 
     // MARK: - Board
@@ -337,7 +352,8 @@ final class WorkbenchState {
             if let existing = model.liveProject(forFolder: url) {
                 reveal(project: existing.id)
                 model.showToast("Ce dossier est déjà suivi : projet « \(existing.name) ».")
-            } else if case .quit = activeSheet {
+            } else if activeSheet != nil {
+                // Never over an open sheet (the quit sheet, or unsaved edits).
                 return
             } else {
                 present(.newProject(url))

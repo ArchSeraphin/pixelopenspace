@@ -15,6 +15,11 @@ struct BoardPanelView: View {
     @State private var isQuickAdding = false
     @State private var quickAddFocusToken: UUID?
     @FocusState private var focusedCard: TaskCardID?
+    /// Where the board scrolls next (the card just created with ⌘N, or back to the title field).
+    @State private var scrollRequest: BoardScrollRequest?
+    /// The card just created with ⌘N, highlighted for a moment.
+    @State private var highlightedCard: TaskCardID?
+    @State private var highlightTask: Task<Void, Never>?
 
     var body: some View {
         let columns = model.filteredBoard
@@ -32,6 +37,7 @@ struct BoardPanelView: View {
                         }
                     }
                     .padding(8)
+                    .environment(\.highlightedCard, highlightedCard)
                 }
                 .onChange(of: focusedCard) { _, cardID in
                     guard let cardID else { return }
@@ -39,6 +45,16 @@ struct BoardPanelView: View {
                 }
                 .onChange(of: quickAddFocusToken) { _, _ in
                     withAnimation(.easeInOut(duration: 0.15)) { proxy.scrollTo(Column.todo, anchor: .top) }
+                }
+                .onChange(of: scrollRequest) { _, request in
+                    guard let request else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        switch request.target {
+                        // The least scroll that shows the whole card.
+                        case .card(let cardID): proxy.scrollTo(cardID)
+                        case .quickAdd: proxy.scrollTo(Column.todo, anchor: .top)
+                        }
+                    }
                 }
             }
             Divider()
@@ -99,7 +115,8 @@ struct BoardPanelView: View {
             BoardColumnView(column: column, cards: cards, total: total, isFiltered: isFiltered,
                             focus: $focusedCard, moveFocus: moveFocus) {
                 if isQuickAdding {
-                    QuickAddField(isPresented: $isQuickAdding, focusToken: quickAddFocusToken)
+                    QuickAddField(isPresented: $isQuickAdding, focusToken: quickAddFocusToken,
+                                  created: reveal, resumedTyping: { scrollRequest = BoardScrollRequest(.quickAdd) })
                 }
             }
             .id(column)
@@ -114,6 +131,20 @@ struct BoardPanelView: View {
         }
     }
 
+    /// ⌘N created this card at the end of "À faire": the board scrolls to it and highlights it for a moment (the
+    /// title field keeps the focus for the next one).
+    private func reveal(_ cardID: TaskCardID) {
+        // On the next turn: the new card is laid out by then.
+        Task { @MainActor in scrollRequest = BoardScrollRequest(.card(cardID)) }
+        highlightTask?.cancel()
+        withAnimation(.easeOut(duration: 0.15)) { highlightedCard = cardID }
+        highlightTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.6))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.5)) { highlightedCard = nil }
+        }
+    }
+
     /// ↑ / ↓ on a focused card: the previous or next card shown (the folded "Fait" section is skipped).
     private func moveFocus(from cardID: TaskCardID, by offset: Int) {
         let columns = model.filteredBoard
@@ -125,6 +156,22 @@ struct BoardPanelView: View {
         let next = index + offset
         guard shown.indices.contains(next) else { return }
         focusedCard = shown[next]
+    }
+}
+
+/// "Scroll the board panel to this card, or back to the ⌘N title field". A new `id` each time, so that the same
+/// target can be asked twice.
+private struct BoardScrollRequest: Equatable {
+    enum Target: Equatable {
+        case card(TaskCardID)
+        case quickAdd
+    }
+
+    let id = UUID()
+    let target: Target
+
+    init(_ target: Target) {
+        self.target = target
     }
 }
 

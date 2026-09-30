@@ -3,7 +3,9 @@ import SwiftUI
 
 /// "Gérer les modèles" (mockup 6(l)): the prompt templates, each with the projects it is the default of; create,
 /// duplicate, edit (name, body, variables), delete, and "Défaut du projet". Edits apply with "Enregistrer", when
-/// another template is selected, or with "Terminé" (`.upsertTemplate`).
+/// another template is selected, with "Terminé" (⌘↩: Return stays a line break in the body) or Escape, and when
+/// the sheet goes away (`.upsertTemplate`). A draft is never lost: with its name emptied, it is saved under its
+/// previous name, and the sheet says so.
 struct TemplateManagerSheet: View {
     var initialSelection: PromptTemplateID?
 
@@ -16,6 +18,8 @@ struct TemplateManagerSheet: View {
     @State private var loadedID: PromptTemplateID?
     @State private var pendingDelete: PromptTemplate?
     @State private var prepared = false
+    /// "Un modèle a besoin d'un nom : … garde le sien": a draft saved under its previous name.
+    @State private var notice: String?
 
     var body: some View {
         let templates = model.board.templates
@@ -49,17 +53,34 @@ struct TemplateManagerSheet: View {
                 defaultMenu
             }
             HStack {
-                Spacer()
-                Button("Terminé") {
-                    commitDraft()
-                    dismiss()
+                if let notice {
+                    Label(notice, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(StateStyle.tint(for: .waitingInput))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .keyboardShortcut(.defaultAction)
+                Spacer()
+                // ⌘↩, not Return: Return in the body must never close the sheet.
+                Button("Terminé", action: finish)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .help("Enregistrer le modèle modifié et fermer (⌘↩)")
             }
         }
         .padding(20)
         .frame(width: 720)
+        .background {
+            // Escape closes like "Terminé": the manager has nothing to cancel, and a draft is never dropped.
+            Button("Fermer", action: finish)
+                .keyboardShortcut(.cancelAction)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
         .onAppear(perform: prepare)
+        .onDisappear {
+            // Closed another way (the quit sheet, the editor that opened it closing): the draft is kept too.
+            if !commitDraft(), let notice { model.showToast(notice, style: .warning) }
+        }
         .onChange(of: selection) { _, newValue in
             commitDraft()
             load(newValue)
@@ -105,7 +126,8 @@ struct TemplateManagerSheet: View {
                 }
                 HStack {
                     if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("Un modèle a besoin d'un nom.")
+                        Text(storedName.map { "Un modèle a besoin d'un nom : sans nom, il garde « \($0) »." }
+                             ?? "Un modèle a besoin d'un nom.")
                             .font(.caption)
                             .foregroundStyle(StateStyle.tint(for: .error))
                     }
@@ -155,6 +177,11 @@ struct TemplateManagerSheet: View {
         return stored.name != name.trimmingCharacters(in: .whitespacesAndNewlines) || stored.body != text
     }
 
+    /// The saved name of the template being edited.
+    private var storedName: String? {
+        loadedID.flatMap { model.board.template($0)?.name }
+    }
+
     private func projects(defaulting templateID: PromptTemplateID) -> [String] {
         model.projects.filter { $0.defaults.templateID == templateID }.map(\.name)
     }
@@ -174,12 +201,33 @@ struct TemplateManagerSheet: View {
         text = template?.body ?? ""
     }
 
-    /// Saves the template being edited when it changed and has a name.
-    private func commitDraft() {
-        guard isDirty, let loadedID else { return }
+    /// Saves the template being edited when it changed. A draft whose name was emptied is not dropped: it is saved
+    /// under its previous name (put back in the field), and `notice` says so until the next save. Returns false in
+    /// that case only.
+    @discardableResult
+    private func commitDraft() -> Bool {
+        guard isDirty, let loadedID, let stored = model.board.template(loadedID) else { return true }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        model.applyTask(.upsertTemplate(PromptTemplate(id: loadedID, name: trimmed, body: text)))
+        guard trimmed.isEmpty else {
+            model.applyTask(.upsertTemplate(PromptTemplate(id: loadedID, name: trimmed, body: text)))
+            notice = nil
+            return true
+        }
+        let bodyChanged = stored.body != text
+        if bodyChanged {
+            model.applyTask(.upsertTemplate(PromptTemplate(id: loadedID, name: stored.name, body: text)))
+        }
+        name = stored.name
+        notice = "Un modèle a besoin d'un nom : « \(stored.name) » garde le sien"
+            + (bodyChanged ? ", avec tes modifications du texte." : ".")
+        return false
+    }
+
+    /// "Terminé" and Escape: saves the draft and closes; when the draft had to keep its previous name, the sheet
+    /// stays open once to say so.
+    private func finish() {
+        guard commitDraft() else { return }
+        dismiss()
     }
 
     private func create() {
@@ -199,6 +247,7 @@ struct TemplateManagerSheet: View {
 
     private func delete(_ template: PromptTemplate) {
         model.deleteTemplate(template.id)
+        notice = nil
         loadedID = nil
         let next = model.board.templates.first?.id
         selection = next
