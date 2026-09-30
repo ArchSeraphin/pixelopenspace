@@ -83,7 +83,7 @@ import Glibc
         let hook = try #require(root[HookWire.keyHook] as? [String: Any])
         #expect(hook["session_id"] as? String == Self.sessionID)
         #expect(hook["hook_event_name"] as? String == "Stop")
-        #expect(message.peer.pid == result.pid)
+        #expect(peerPIDMatches(message.peer.pid, result.pid))
         #expect(message.peer.uid == getuid())
     }
 

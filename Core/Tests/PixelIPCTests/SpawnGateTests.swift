@@ -24,8 +24,12 @@ import Glibc
                                         unrelated.fileHandleForWriting.fileDescriptor]
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        // Lists the descriptors open in the child: /dev/fd works on macOS and Linux.
-        process.arguments = ["-c", "ls /dev/fd"]
+        // Prints which of these descriptors are open in the child, by duplicating each one. Listing /dev/fd would
+        // not do: `ls` (or a glob) opens the directory itself, on the lowest free descriptor, often 3 or 4. The
+        // probe is an external command: for a builtin, bash first saves stdout on descriptor 10 or above, so
+        // `: >&10` succeeds even when 10 was never inherited.
+        let candidates = unrelatedFDs.sorted().map(String.init).joined(separator: " ")
+        process.arguments = ["-c", "for fd in \(candidates); do /usr/bin/true 2>/dev/null >&$fd && echo $fd; done; exit 0"]
         process.standardInput = FileHandle.nullDevice
         let output = Pipe()
         process.standardOutput = output

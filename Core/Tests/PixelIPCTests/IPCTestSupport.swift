@@ -233,26 +233,32 @@ enum ChildProcess {
         let started = Date()
         let pid = process.processIdentifier
 
+        // Dedicated threads, not DispatchQueue.global(): swift-testing runs these synchronous tests on the
+        // cooperative pool (one thread per core), and each one blocks below in waitUntilExit. Once every
+        // cooperative thread is blocked, GCD gives the width-limited default-QoS global queue no thread, so the
+        // stdin close that would let the child exit never runs (deadlock on an 8-core Mac).
         let writer = input.fileHandleForWriting
-        DispatchQueue.global().async(group: group) {
+        onThread(group) {
             let written = (try? writer.write(contentsOf: stdin)) != nil
             try? writer.close()
             box.setWritten(written)
         }
         let stdoutReader = output.fileHandleForReading
-        DispatchQueue.global().async(group: group) {
+        onThread(group) {
             box.set("out", (try? stdoutReader.readToEnd()) ?? Data())
         }
         let stderrReader = errors.fileHandleForReading
-        DispatchQueue.global().async(group: group) {
+        onThread(group) {
             box.set("err", (try? stderrReader.readToEnd()) ?? Data())
         }
         // Watchdog: never let a hung child hang the test run.
-        DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-            if !box.exited { kill(pid, SIGKILL) }
+        let exited = DispatchSemaphore(value: 0)
+        onThread(nil) {
+            if exited.wait(timeout: .now() + timeout) == .timedOut, !box.exited { kill(pid, SIGKILL) }
         }
         process.waitUntilExit()
         box.markExited()
+        exited.signal()
         let seconds = Date().timeIntervalSince(started)
         _ = group.wait(timeout: .now() + 10)
         return Result(
@@ -265,6 +271,25 @@ enum ChildProcess {
             stdinWritten: box.stdinWritten
         )
     }
+
+    /// Runs `body` on a new thread, inside `group` when given.
+    private static func onThread(_ group: DispatchGroup?, _ body: @escaping @Sendable () -> Void) {
+        group?.enter()
+        Thread {
+            body()
+            group?.leave()
+        }.start()
+    }
+}
+
+/// Whether a reported peer pid matches `expected`. macOS reads it with LOCAL_PEERPID, which fails (ENOTCONN) once the
+/// one-shot client has closed, often before `accept`: `nil` is then the expected answer. Linux caches it at connect.
+func peerPIDMatches(_ reported: Int32?, _ expected: Int32) -> Bool {
+    #if canImport(Darwin)
+    return reported == nil || reported == expected
+    #else
+    return reported == expected
+    #endif
 }
 
 /// Percentile of `values` (nearest rank), for latency reports.

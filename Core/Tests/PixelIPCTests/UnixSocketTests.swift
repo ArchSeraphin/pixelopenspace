@@ -23,7 +23,7 @@ import Glibc
         #expect(messages.map(\.text) == ["hello", "no newline", "first"])
         for message in messages {
             #expect(message.peer.uid == getuid())
-            #expect(message.peer.pid == getpid())
+            #expect(peerPIDMatches(message.peer.pid, getpid()))
         }
     }
 
