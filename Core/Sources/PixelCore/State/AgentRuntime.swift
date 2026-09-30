@@ -215,6 +215,9 @@ public struct AgentRuntime: Equatable, Sendable {
     public var committedStopPromptID: String?
     public var pendingDelivery: PendingDelivery?
     public var interruptRequestedAt: Date?
+    /// Esc typed in the terminal, as the last key, while a permission or question dialog waited (T28b). Claude Code
+    /// sends no hook for that refusal: the next screen readings close the wait when the dialog is gone.
+    public var escapedDialogAt: Date?
     /// Set by `closeRequested`: the next process exit is `offline(.closedByUser)`, not a crash.
     public var closeRequestedAt: Date?
     /// `agent_id`s between `SubagentStart` and `SubagentStop`. A set: `SubagentStart` fires again when a subagent
@@ -243,6 +246,7 @@ public struct AgentRuntime: Equatable, Sendable {
         self.committedStopPromptID = nil
         self.pendingDelivery = nil
         self.interruptRequestedAt = nil
+        self.escapedDialogAt = nil
         self.closeRequestedAt = nil
         self.activeSubagentIDs = []
         self.acknowledgedWaiting = false

@@ -2,18 +2,26 @@ import Foundation
 
 /// Reads the visible terminal lines of Claude Code's TUI (proposal 3.1, 5.6, 5.8). Pure and versioned.
 ///
-/// PROVISIONAL (version 1): synthetic patterns, plus the first real captures of Claude Code 2.1.285 (folder trust
-/// dialog, fullscreen renderer offer, input box whose top rule carries the `--name` label); to be tuned with the
-/// captures of spikes S3 and S7. Errors are meant to fall on the safe side: an unrecognised input box is
-/// `.unknown`, a prompt suggestion reads as a draft (never as empty), and anything that looks like a dialog blocks
-/// keystrokes.
+/// Version 2: tuned on the captures of Claude Code 2.1.285 taken by the step 2 spikes (S3 ready, draft, turn in
+/// progress, bracketed paste, permission dialog; S5 and S7 permission and question dialogs, then the screen after
+/// Esc; folder trust; `/resume` picker), which are test fixtures. The synthetic screens of version 1 (older
+/// layouts with a `╭╮` box) still parse the same. Errors are meant to fall on the safe side: an unrecognised input
+/// box is `.unknown`, a prompt suggestion reads as a draft (never as empty), and anything that looks like a dialog
+/// blocks keystrokes.
 ///
 /// Heuristics:
 /// - input box: the lowest line whose content (box borders `│` stripped) starts with ">" or "❯", directly below
 ///   a top border ("╭…", a "────" rule, or a rule with a label: "──── api-nova ─") and followed, within a few
 ///   lines, by a bottom border ("╰…" or a rule).
-///   Nothing after the marker, or the `Try "…"` placeholder → `.empty`; otherwise `.draft` (first 40 characters).
-/// - spinner: a line "<glyph> <Word>…" with glyph in ✻ ✶ ✳ ✢ ✽ · *, or any line with "esc to interrupt".
+///   Its text is the prompt row plus the rows down to the bottom border, joined by a space (a draft typed with line
+///   feeds; a word cut by the wrap of a very narrow terminal reads as two, which only makes a guard refuse).
+///   No text at all, or the `Try "…"` placeholder alone → `.empty`; otherwise `.draft`, whose prefix is
+///   normalised exactly like `PendingDelivery.prefix` (`AgentStateMachine.normalizedPromptPrefix`: whitespace
+///   runs, line breaks included, collapsed to one space, first 40 characters), so that a delivery guard can
+///   compare the two. A bracketed paste shows as `❯ <typed primer>[Pasted text #1 +12 lines]`: the primer
+///   comes first, so the prefix of a delivery made of a primer and a paste is the primer's.
+/// - spinner: a line "<glyph> <Word>…" with glyph in ✻ ✶ ✳ ✢ ✽ · *, or any line with "esc to interrupt"
+///   ("· Photosynthesizing… (1s · thinking)"; the turn summary "✻ Worked for 2s · done 18:53" is not one).
 /// - dialog: a "❯ 1."-style cursor line; or, when no input box is visible (a dialog replaces it),
 ///   "Do you want to…", at least two numbered options 1., 2., …, or an unnumbered "❯ <option>" line with an
 ///   "Enter to confirm" / "Esc to cancel" hint (the 2.1.285 trust dialog: "❯ No, exit" above "Yes, I trust this
@@ -22,7 +30,7 @@ import Foundation
 /// Spinner, dialog and quota are searched in the last `bottomRegionLines` non-empty lines only, so that
 /// the conversation above (lists, quoted text) does not match.
 public enum ScreenPatterns {
-    public static let version = 1
+    public static let version = 2
 
     /// Non-empty lines, from the bottom, where the spinner, dialogs and the quota line are looked for.
     public static let bottomRegionLines = 16
@@ -121,9 +129,12 @@ public enum ScreenPatterns {
             defer { i -= 1 }
             guard let text = promptText(lines[i]), isTopBorder(lines[i - 1]) else { continue }
             let end = min(lines.count - 1, i + maxInputLines)
-            guard i + 1 <= end, lines[(i + 1)...end].contains(where: isBottomBorder) else { continue }
-            if text.isEmpty || isPlaceholder(text) { return .empty }
-            return .draft(prefix: String(text.prefix(40)))
+            guard i + 1 <= end, let bottom = lines[(i + 1)...end].firstIndex(where: isBottomBorder) else { continue }
+            // Rows of a draft typed with line feeds (or wrapped), down to the bottom border.
+            let rows = lines[(i + 1)..<bottom].map(content).filter { !$0.isEmpty }
+            if rows.isEmpty && (text.isEmpty || isPlaceholder(text)) { return .empty }
+            let whole = ([text] + rows).joined(separator: " ")
+            return .draft(prefix: AgentStateMachine.normalizedPromptPrefix(whole))
         }
         return nil
     }

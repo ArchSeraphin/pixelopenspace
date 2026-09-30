@@ -15,6 +15,9 @@ public enum AgentStateMachine {
     static let screenLiftAfter: TimeInterval = 2
     /// T23: the screen is read again this long after a keystroke.
     static let keystrokeResampleDelay: TimeInterval = 0.3
+    /// T28b: how long after an Esc on a dialog the screen is read again while the dialog is still drawn. Past it,
+    /// the Esc did not close the dialog and no longer counts.
+    static let escapeRefusalWindow: TimeInterval = 3
 
     /// Key prefix of a tool wait whose tool call is unknown: `seq-<hook sequence number>`.
     static let unpairedWaitPrefix = "seq-"
@@ -207,6 +210,7 @@ private struct Step {
         r.pendingStop = nil
         r.pendingDelivery = nil
         r.interruptRequestedAt = nil
+        r.escapedDialogAt = nil
         r.closeRequestedAt = nil
         r.committedStopPromptID = nil
         r.currentPromptID = nil
@@ -678,7 +682,7 @@ private struct Step {
 
     // MARK: - Terminal signals
 
-    /// T28, then the checks that depend on the screen.
+    /// T28, T28b, then the checks that depend on the screen.
     mutating func screen(_ facts: ScreenFacts) {
         r.screen = facts
         if screenShowsPrompt {
@@ -693,22 +697,84 @@ private struct Step {
                 }
             }
         }
+        closeEscapedDialog(spinnerVisible: facts.spinnerVisible)
         commitStopIfQuiet()
         verifyInterrupt(canGiveUp: false)
+    }
+
+    /// A wait whose dialog Esc refuses (T28b): a permission or an AskUserQuestion.
+    static func isDialogWait(_ key: WaitKey, _ wait: PendingWait) -> Bool {
+        guard case .tool = key else { return false }
+        switch wait.reason {
+        case .permission, .question: return true
+        case .elicitation, .notification, .terminal: return false
+        }
+    }
+
+    /// T28b (next to T28; the rule is not in the table of proposal 4.3). Esc on a permission dialog or on an
+    /// AskUserQuestion refuses it without any hook (spikes S5 and S7, Claude Code 2.1.285): neither PostToolUse,
+    /// PermissionDenied, PostToolBatch nor Stop, and the turn ends ("Interrupted · What should Claude do
+    /// instead?", "User declined to answer questions"). Only the screen can tell, so after such an Esc (T23 records
+    /// it, Esc being the last key), a reading that shows the input box and no dialog closes the dialog waits that
+    /// were open at the Esc (their calls will never report). The phase goes back to the turn's: it goes on (spinner
+    /// visible, or a hook came after the Esc) → as after a tool result (`thinking`, or `working` for another main
+    /// call in flight); otherwise the refusal ended it → `idle`, as T10 would a minute later. No card moves and the
+    /// queue is not pumped. While the dialog is still drawn the screen is read again, for `escapeRefusalWindow` at
+    /// most. Without a prior Esc a screen without dialog closes nothing: the dialog may not be drawn yet.
+    mutating func closeEscapedDialog(spinnerVisible: Bool) {
+        guard let escapedAt = r.escapedDialogAt else { return }
+        let refused = r.pendingWaits.filter { key, wait in wait.since <= escapedAt && Self.isDialogWait(key, wait) }
+        guard !refused.isEmpty else {
+            // Resolved meanwhile by the hooks: nothing left to close.
+            r.escapedDialogAt = nil
+            return
+        }
+        guard screenShowsPrompt else {
+            if now.timeIntervalSince(escapedAt) < SM.escapeRefusalWindow {
+                emit(.resampleScreen(afterSeconds: SM.keystrokeResampleDelay))
+            } else {
+                r.escapedDialogAt = nil
+            }
+            return
+        }
+        r.escapedDialogAt = nil
+        liftWaits { key, _ in refused[key] != nil }
+        for case .tool(let toolUseID) in refused.keys {
+            r.inFlightTools.removeValue(forKey: toolUseID)
+        }
+        // A subagent's dialog says nothing about the main turn; after a Stop the phase is the Stop's.
+        guard refused.values.contains(where: { $0.subagentID == nil }), r.pendingStop == nil else { return }
+        switch r.phase {
+        case .thinking, .working:
+            break
+        default:
+            return
+        }
+        let hookSinceEscape = r.lastHookAt.map { $0 > escapedAt } ?? false
+        if spinnerVisible || hookSinceEscape {
+            resumeAfterTool()
+        } else {
+            clearInFlightTools(of: nil)
+            setPhase(.idle)
+        }
     }
 
     /// T23: a keystroke never lifts a wait, it only tones it down. Except in degraded mode: no hook will ever
     /// lift a "look at the terminal" wait (T25, bell), and when the screen patterns do not know this Claude Code
     /// version T28 cannot either; typing an answer in that terminal (not merely moving in it) is the only sign
-    /// left that the user dealt with it.
+    /// left that the user dealt with it. Esc on a permission or question dialog is recorded, and the screen read
+    /// again, for T28b; any other key cancels that record (an answer, a move in the dialog).
     mutating func userKeystroke(_ key: KeyClass) {
         if r.hookHealth == .degraded, key != .navigation, r.pendingWaits[.terminal] != nil {
             liftWaits { waitKey, _ in waitKey == .terminal }
         }
+        let onDialog = key == .escape && r.pendingWaits.contains { Self.isDialogWait($0.key, $0.value) }
+        r.escapedDialogAt = onDialog ? now : nil
         if r.pendingWaits.isEmpty {
             emit(.resampleScreen(afterSeconds: SM.keystrokeResampleDelay))
         } else {
             r.acknowledgedWaiting = true
+            if onDialog { emit(.resampleScreen(afterSeconds: SM.keystrokeResampleDelay)) }
         }
     }
 

@@ -162,6 +162,7 @@ extension AgentEffect {
         h.r.inFlightTools["t1"] = InFlightTool(tool: "Bash", subagentID: nil, summary: "ls")
         h.r.pendingStop = PendingStop(at: Harness.t0, promptID: "P0", stopHookActive: false, backgroundTasks: 0, sessionCrons: 0)
         h.r.interruptRequestedAt = Harness.t0
+        h.r.escapedDialogAt = Harness.t0
         h.r.closeRequestedAt = Harness.t0
         h.r.committedStopPromptID = "P0"
         h.r.currentPromptID = "P0"
@@ -176,6 +177,7 @@ extension AgentEffect {
         #expect(h.r.hookHealth == .unknown(since: h.now))
         #expect(h.r.pendingWaits.isEmpty && h.r.inFlightTools.isEmpty)
         #expect(h.r.pendingStop == nil && h.r.interruptRequestedAt == nil && h.r.closeRequestedAt == nil)
+        #expect(h.r.escapedDialogAt == nil)
         #expect(h.r.committedStopPromptID == nil && h.r.currentPromptID == nil)
         #expect(h.r.activeSubagents == 0)
     }
@@ -1331,6 +1333,163 @@ extension AgentEffect {
         #expect(h.r.pendingWaits.count == 1)
     }
 
+    // MARK: - T28b: Esc on a dialog, closed by the screen
+
+    static func realScreen(_ name: String) throws -> ScreenFacts {
+        try ScreenFixtures.facts("real-2.1.285/\(name)")
+    }
+
+    /// Spikes S5 and S7 (Claude Code 2.1.285): Esc on a permission dialog or on an AskUserQuestion fires no hook
+    /// at all; only the screen shows the dialog is gone and the input box is back. The wait closes, the turn it
+    /// ended is over (no spinner, no hook since the Esc): idle, no card signal, no queue effect.
+    @Test func escapeRefusalClearsWaitFromScreen() throws {
+        var h = Harness.thinking()
+        h.pre("Bash", "t1", "touch spike-refus.txt")
+        h.permission("Bash", nil, "touch spike-refus.txt")
+        h.send(.screen(try Self.realScreen("S5-03-permission")))
+        #expect(h.r.kind == .waitingInput)
+        h.advance(4)
+        #expect(h.send(.userKeystroke(.escape)) == [.resampleScreen(afterSeconds: 0.3)])
+        #expect(h.r.escapedDialogAt == h.now)
+        #expect(h.r.acknowledgedWaiting)
+        #expect(h.r.kind == .waitingInput)
+        h.advance(0.3)
+        #expect(h.send(.screen(try Self.realScreen("S5-04-apres-echap"))).isEmpty)
+        #expect(h.r.pendingWaits.isEmpty)
+        #expect(!h.r.acknowledgedWaiting)
+        #expect(h.r.inFlightTools.isEmpty)
+        #expect(h.r.phase == .idle)
+        #expect(h.r.escapedDialogAt == nil)
+        // Free again: a delivery may start.
+        let delivery = PendingDelivery(itemID: "card-2", prefix: "x", startedAt: h.now, hookSeqAtStart: h.r.hookSeq)
+        h.send(.deliveryStarted(delivery))
+        #expect(h.r.pendingDelivery == delivery)
+
+        var g = Harness.thinking()
+        let q = AskedQuestion(header: "Couleur", question: "Choisissez votre couleur préférée",
+                              options: ["Rouge", "Bleu"], multiSelect: false)
+        g.hook(.preToolUse, .askUserQuestion(toolUseID: "q1", questions: [q]))
+        g.permission("AskUserQuestion", nil, "Choisissez votre couleur préférée")
+        g.send(.screen(try Self.realScreen("S7-03-question")))
+        g.advance(8)
+        g.send(.userKeystroke(.escape))
+        g.advance(0.3)
+        let fx = g.send(.screen(try Self.realScreen("S7-04-apres-echap")))
+        #expect(fx.compactMap(\.cardSignal).isEmpty && !fx.contains(where: \.isPump))
+        #expect(fx.isEmpty)
+        #expect(g.r.pendingWaits.isEmpty)
+        #expect(g.r.phase == .idle)
+    }
+
+    /// Without a prior Esc, a screen without dialog closes nothing: the dialog may simply not be drawn yet.
+    /// Any key after the Esc (an answer, a move in the dialog) cancels the Esc reading.
+    @Test func screenWithoutDialogClosesNothingWithoutEscape() throws {
+        let noDialog = try Self.realScreen("S5-04-apres-echap")
+        var h = Harness.thinking()
+        h.pre("Bash", "t1", "touch x")
+        h.permission("Bash", "t1", "touch x")
+        h.advance(10)
+        #expect(h.send(.screen(noDialog)).isEmpty)
+        #expect(h.r.pendingWaits.count == 1)
+        #expect(h.r.phase == .working(.bash))
+        h.send(.userKeystroke(.printable))
+        h.send(.screen(noDialog))
+        #expect(h.r.pendingWaits.count == 1)
+        #expect(h.r.escapedDialogAt == nil)
+
+        for key in [KeyClass.navigation, .enter, .printable, .control] {
+            var g = Harness.thinking()
+            g.permission("Bash", "t1", "touch x")
+            g.send(.userKeystroke(.escape))
+            g.send(.userKeystroke(key))
+            #expect(g.r.escapedDialogAt == nil, "\(key)")
+            g.advance(0.3)
+            g.send(.screen(noDialog))
+            #expect(g.r.pendingWaits.count == 1, "\(key)")
+        }
+
+        // Esc with no dialog wait open is an ordinary keystroke (T23).
+        var idle = Harness.running()
+        #expect(idle.send(.userKeystroke(.escape)) == [.resampleScreen(afterSeconds: 0.3)])
+        #expect(idle.r.escapedDialogAt == nil)
+        var catchUp = Harness.thinking()
+        catchUp.notification("permission_prompt")
+        #expect(catchUp.send(.userKeystroke(.escape)).isEmpty)
+        #expect(catchUp.r.escapedDialogAt == nil)
+    }
+
+    /// The refusal does not end the turn when the spinner is still there or a hook came after the Esc: the phase
+    /// is then the turn's, as after a tool result. A dialog opened after the Esc is not closed by it.
+    @Test func escapeRefusalKeepsATurnThatGoesOn() {
+        let prompt = ScreenFacts(inputBox: .empty, recognized: true)
+        var h = Harness.thinking()
+        h.hook(.preToolUse, .askUserQuestion(toolUseID: "q1", questions: []))
+        h.send(.userKeystroke(.escape))
+        h.advance(0.3)
+        h.send(.screen(ScreenFacts(inputBox: .empty, spinnerVisible: true, recognized: true)))
+        #expect(h.r.pendingWaits.isEmpty)
+        #expect(h.r.phase == .thinking)
+
+        var g = Harness.thinking()
+        g.pre("Bash", "t1", "touch x")
+        g.permission("Bash", "t1", "touch x")
+        g.send(.userKeystroke(.escape))
+        g.advance(0.2)
+        g.pre("Read", "t2", "a.txt")
+        g.permission("Read", "t2", "a.txt")
+        g.advance(0.1)
+        g.send(.screen(prompt))
+        #expect(g.r.pendingWaits.keys.map { $0 } == [.tool(toolUseID: "t2")])
+        #expect(g.r.inFlightKinds == ["t2": .read])
+        #expect(g.r.phase == .working(.read))
+
+        // A subagent's dialog closes too, but says nothing about the main turn.
+        var s = Harness.thinking()
+        s.pre("Agent", "a1", "explore")
+        s.permission("Bash", "s1", "ls", sub: "sub-1")
+        s.send(.userKeystroke(.escape))
+        s.advance(0.3)
+        s.send(.screen(prompt))
+        #expect(s.r.pendingWaits.isEmpty)
+        #expect(s.r.phase == .working(.subagent))
+    }
+
+    /// Claude Code may not have redrawn yet: the screen is read again while the dialog is still shown, for a few
+    /// seconds at most; after that the Esc no longer counts.
+    @Test func escapeRefusalRereadsTheScreenForAFewSeconds() {
+        let dialog = ScreenFacts(inputBox: .unknown, dialogVisible: true, recognized: true)
+        var h = Harness.thinking()
+        h.permission("Bash", "t1", "touch x")
+        h.send(.userKeystroke(.escape))
+        h.advance(0.3)
+        #expect(h.send(.screen(dialog)) == [.resampleScreen(afterSeconds: 0.3)])
+        h.advance(0.3)
+        #expect(h.send(.screen(ScreenFacts())) == [.resampleScreen(afterSeconds: 0.3)])
+        h.advance(0.3)
+        h.send(.screen(ScreenFacts(inputBox: .empty, recognized: true)))
+        #expect(h.r.pendingWaits.isEmpty)
+
+        var g = Harness.thinking()
+        g.permission("Bash", "t1", "touch x")
+        g.send(.userKeystroke(.escape))
+        g.advance(3)
+        #expect(g.send(.screen(dialog)).isEmpty)
+        #expect(g.r.escapedDialogAt == nil)
+        g.advance(1)
+        g.send(.screen(ScreenFacts(inputBox: .empty, recognized: true)))
+        #expect(g.r.pendingWaits.count == 1)
+
+        // Waits already resolved by hooks: nothing left to close, the Esc reading ends.
+        var r = Harness.thinking()
+        r.pre("Bash", "t1", "touch x")
+        r.permission("Bash", "t1", "touch x")
+        r.send(.userKeystroke(.escape))
+        r.post("Bash", "t1")
+        #expect(r.send(.screen(ScreenFacts(inputBox: .empty, recognized: true))).isEmpty)
+        #expect(r.r.escapedDialogAt == nil)
+        #expect(r.r.phase == .thinking)
+    }
+
     // MARK: - T29–T31
 
     @Test func t29_cwdChangeUpdatesTheSession() {
@@ -1711,7 +1870,7 @@ extension AgentEffect {
                                                 dialogVisible: rng.next() % 2 == 0, spinnerVisible: rng.next() % 2 == 0,
                                                 recognized: rng.next() % 3 != 0))
             case 3: input = .userInterrupt
-            case 4: input = .userKeystroke(.printable)
+            case 4: input = .userKeystroke(pick([.printable, .escape]))
             case 5: input = .outputActivity
             case 6: input = .bell
             case 7, 8, 9: input = .tick
@@ -1748,6 +1907,7 @@ extension AgentEffect {
             if r.pid == nil {
                 #expect(r.pendingWaits.isEmpty && r.inFlightTools.isEmpty && r.pendingStop == nil)
                 #expect(r.pendingDelivery == nil && r.interruptRequestedAt == nil)
+                #expect(r.escapedDialogAt == nil)
             }
             if r.pendingStop != nil {
                 #expect(r.phase == .done || r.phase == .idle)
