@@ -1,0 +1,5 @@
+// Machine-specific settings. Copy this file to Config/Local.xcconfig (ignored by git) and put your Apple team ID
+// (10 characters: Xcode › Settings › Accounts, or `security find-identity -v -p codesigning`).
+// Tools/bootstrap.sh creates it for you. Included by Config/Base.xcconfig.
+
+DEVELOPMENT_TEAM = ABCDE12345

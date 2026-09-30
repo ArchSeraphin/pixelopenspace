@@ -1,0 +1,106 @@
+# XcodeGen spec (https://github.com/yonaskolb/XcodeGen/blob/master/Docs/ProjectSpec.md).
+# `xcodegen generate` writes PixelOpenSpace.xcodeproj and App/Info.plist (both generated, never edited by hand).
+name: PixelOpenSpace
+
+options:
+  bundleIdPrefix: fr.vv2
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  developmentLanguage: fr
+
+packages:
+  PixelCore:
+    path: Core
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    revision: a2706d2ea56726e0ed2e9ecb22b8e36613a516bd
+
+targets:
+  # Hook helper run by Claude Code for every subscribed event (proposal 3.2, 5.4). Embedded in the app bundle
+  # at Contents/Helpers/pixel-hook by the app target's dependency below.
+  pixel-hook:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Core/Sources/pixel-hook
+    dependencies:
+      - package: PixelCore
+        product: PixelIPC
+    configFiles:
+      Debug: Config/Base.xcconfig
+      Release: Config/Base.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: pixel-hook
+        PRODUCT_BUNDLE_IDENTIFIER: fr.vv2.pixelopenspace.pixel-hook
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        SKIP_INSTALL: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+
+  PixelOpenSpace:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Sources
+    dependencies:
+      - package: PixelCore
+        product: PixelCore
+      - package: PixelCore
+        product: PixelIPC
+      - package: SwiftTerm
+      - target: pixel-hook
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
+    configFiles:
+      Debug: Config/Base.xcconfig
+      Release: Config/Base.xcconfig
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Pixel Open Space
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSPrincipalClass: NSApplication
+        NSHumanReadableCopyright: "Copyright © 2026 ArchSeraphin. Licence MIT."
+        NSLocalNetworkUsageDescription: >-
+          Les sessions Claude Code tournent à l'intérieur de Pixel Open Space. Quand Claude contacte une machine
+          de ton réseau local (serveur de développement, base de données…), macOS attribue cette demande à
+          l'app : autorise-la pour que ces commandes fonctionnent comme dans ton terminal.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fr.vv2.pixelopenspace
+        PRODUCT_NAME: PixelOpenSpace
+        MARKETING_VERSION: 0.2.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: App/PixelOpenSpace.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        COMBINE_HIDPI_IMAGES: YES
+
+schemes:
+  PixelOpenSpace:
+    build:
+      targets:
+        # pixel-hook is built as a dependency of the app (embedded copy).
+        PixelOpenSpace: all
+    run:
+      config: Debug
+      executable: PixelOpenSpace
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

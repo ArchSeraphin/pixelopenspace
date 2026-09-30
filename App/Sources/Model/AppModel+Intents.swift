@@ -1,0 +1,220 @@
+import AppKit
+import Foundation
+import PixelCore
+
+/// What the UI (menus, buttons, sheets, `CommandCenter`) may ask about projects, agents, selection and settings.
+/// Session intents are in `AppModel+Sessions.swift`. French toasts explain every refusal.
+extension AppModel {
+    // MARK: - Projects
+
+    /// Adds the folder as a project, or selects the live project already open on it (proposal 6(m)).
+    /// `defaults`: agent defaults of the project; `nil` → the app's default model and permission mode.
+    @discardableResult
+    func addProject(url: URL, name: String? = nil, hueIndex: Int? = nil, defaults: AgentDefaults? = nil) -> ProjectID? {
+        let home = NSHomeDirectory()
+        let path = PathNormalizer.normalize(url.path(percentEncoded: false), home: home)
+        guard Self.isDirectory(path) else {
+            showToast("Ce n'est pas un dossier : \(path)", style: .error)
+            return nil
+        }
+        var updated = workspace
+        let knownIDs = Set(updated.projects.map(\.id))
+        let projectDefaults = defaults ?? AgentDefaults(model: settings.defaultModel,
+                                                        permissionMode: settings.defaultPermissionMode)
+        let id = updated.addProject(path: path, name: name, hueIndex: hueIndex, defaults: projectDefaults, now: Date())
+        if knownIDs.contains(id) {
+            let existing = workspace.project(id)?.name ?? path
+            showToast("Ce dossier est déjà suivi : projet « \(existing) ».")
+        } else {
+            commit(updated)
+        }
+        select(project: id)
+        return id
+    }
+
+    func renameProject(_ id: ProjectID, to name: String) {
+        var updated = workspace
+        if updated.renameProject(id, to: name) { commit(updated) }
+    }
+
+    func setProjectHue(_ id: ProjectID, to hueIndex: Int) {
+        var updated = workspace
+        if updated.setProjectHue(id, to: hueIndex) { commit(updated) }
+    }
+
+    /// Sidebar order (⌘1…⌘9); the island never moves.
+    func moveProject(_ id: ProjectID, toOrder order: Int) {
+        var updated = workspace
+        if updated.moveProject(id, toOrder: order) { commit(updated) }
+    }
+
+    /// Moves a project up (-1) or down (+1) in the sidebar.
+    func moveProject(_ id: ProjectID, by offset: Int) {
+        guard let index = projects.firstIndex(where: { $0.id == id }) else { return }
+        moveProject(id, toOrder: index + offset)
+    }
+
+    /// Archives a project (its slot becomes free). Its agents must all be offline.
+    @discardableResult
+    func archiveProject(_ id: ProjectID) -> Bool {
+        let running = workspace.agents(in: id).filter { runtimes[$0.id]?.pid != nil }
+        guard running.isEmpty else {
+            let names = running.map(\.name).joined(separator: ", ")
+            showToast("Ferme d'abord les sessions de ce projet (\(names)).", style: .warning)
+            return false
+        }
+        var updated = workspace
+        guard updated.archiveProject(id) else { return false }
+        commit(updated)
+        if selectedProjectID == id {
+            selectedProjectID = nil
+            selectedAgentID = nil
+        }
+        return true
+    }
+
+    // MARK: - Agents
+
+    /// Adds an agent at the first free desk and, with `launch`, starts a new session (proposal 6(n)). `nil`
+    /// arguments take the project's defaults. `initialPrompt` is passed as the positional prompt.
+    @discardableResult
+    func addAgent(projectID: ProjectID, name: String? = nil, model: String? = nil,
+                  permissionMode: PermissionMode? = nil, worktree: String? = nil, launch: Bool = true,
+                  initialPrompt: String? = nil) -> AgentID? {
+        var updated = workspace
+        guard let id = updated.addAgent(to: projectID, name: name, permissionMode: permissionMode, model: model,
+                                        worktree: worktree, now: Date()) else {
+            showToast("Impossible d'ajouter un agent à ce projet.", style: .error)
+            return nil
+        }
+        commit(updated)
+        storeRuntime(AgentRuntime(phase: .offline(.notStarted), phaseSince: Date()), for: id)
+        select(agent: id)
+        if launch {
+            self.launch(id, mode: .new(initialPrompt: initialPrompt))
+        }
+        return id
+    }
+
+    func renameAgent(_ id: AgentID, to name: String) {
+        var updated = workspace
+        if updated.renameAgent(id, to: name) { commit(updated) }
+    }
+
+    /// Removes an offline agent (its session history goes with it; the conversations stay in Claude Code).
+    @discardableResult
+    func removeAgent(_ id: AgentID) -> Bool {
+        guard runtimes[id]?.pid == nil, !sessions.isRunning(id) else {
+            showToast("Ferme d'abord la session de \(names(of: id).agent).", style: .warning, agentID: id)
+            return false
+        }
+        var updated = workspace
+        guard updated.removeAgent(id) else { return false }
+        commit(updated)
+        forgetRuntime(id)
+        sessions.discard(id)
+        notifications.withdraw(agentID: id)
+        if selectedAgentID == id { selectedAgentID = nil }
+        updateDockBadge()
+        return true
+    }
+
+    // MARK: - Selection and navigation
+
+    func select(agent id: AgentID?) {
+        selectedAgentID = id
+        if let id, let agent = workspace.agent(id) { selectedProjectID = agent.projectID }
+    }
+
+    func select(project id: ProjectID?) {
+        selectedProjectID = id
+        if let agentID = selectedAgentID, workspace.agent(agentID)?.projectID != id { selectedAgentID = nil }
+    }
+
+    /// Selects the agent and asks the UI to bring it into view (notification click, waiting tray).
+    func requestFocus(_ agentID: AgentID) {
+        guard workspace.agent(agentID) != nil else { return }
+        select(agent: agentID)
+        focusRequest = FocusRequest(id: UUID(), agentID: agentID)
+    }
+
+    /// ⌘': the next waiting agent in tray order (oldest wait first), cycling.
+    func nextWaitingAgent() {
+        guard let next = StatusSummary.nextWaiting(after: selectedAgentID, in: statusSummary) else {
+            showToast("Aucun agent n'attend.")
+            return
+        }
+        requestFocus(next)
+    }
+
+    /// ⇧⌘': the previous waiting agent, cycling.
+    func previousWaitingAgent() {
+        let ids = statusSummary.waiting.map(\.agentID)
+        guard !ids.isEmpty else {
+            showToast("Aucun agent n'attend.")
+            return
+        }
+        guard let current = selectedAgentID, let index = ids.firstIndex(of: current) else {
+            requestFocus(ids[ids.count - 1])
+            return
+        }
+        requestFocus(ids[(index - 1 + ids.count) % ids.count])
+    }
+
+    /// ⌥⌘→ / ⌥⌘←: next or previous agent in sidebar order, any state.
+    func selectAdjacentAgent(offset: Int) {
+        let ids = agentsInOrder.map(\.id)
+        guard !ids.isEmpty else { return }
+        guard let current = selectedAgentID, let index = ids.firstIndex(of: current) else {
+            requestFocus(offset >= 0 ? ids[0] : ids[ids.count - 1])
+            return
+        }
+        let count = ids.count
+        requestFocus(ids[((index + offset) % count + count) % count])
+    }
+
+    /// ⌘1…⌘9.
+    func selectProject(number: Int) {
+        let list = projects
+        guard number >= 1, number <= list.count else { return }
+        select(project: list[number - 1].id)
+    }
+
+    // MARK: - Settings and Claude Code
+
+    func updateSettings(_ newSettings: AppSettings) {
+        let old = settings
+        guard newSettings != old else { return }
+        commitSettings(newSettings)
+        reducerConfig = ReducerConfig(settings: newSettings)
+        notifications.prefs = newSettings.notifications
+        sessions.terminalPrefs = newSettings.terminal
+        if newSettings.claudePathOverride != old.claudePathOverride { redetectClaude() }
+    }
+
+    /// Searches for `claude` again (settings changed, "Réessayer" on the welcome sheet).
+    func redetectClaude() {
+        detectionTask?.cancel()
+        claude = .detecting
+        let override = settings.claudePathOverride
+        detectionTask = Task { [weak self] in
+            guard let self else { return }
+            let status = await self.locator.locate(override: override)
+            guard !Task.isCancelled else { return }
+            self.claude = status
+            self.environmentSource = self.locator.environmentSource
+        }
+    }
+
+    /// Brings the other running copy of the app to the front, then quits this one (proposal 3.2).
+    func activateOtherInstanceAndQuit() {
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        if let bundleID = Bundle.main.bundleIdentifier,
+           let other = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+               .first(where: { $0.processIdentifier != ownPID }) {
+            _ = other.activate(from: NSRunningApplication.current, options: [])
+        }
+        quitApproved = true
+        requestTermination()
+    }
+}

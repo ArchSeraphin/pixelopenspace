@@ -1,0 +1,11 @@
+// Settings shared by the PixelOpenSpace and pixel-hook targets (project.yml › configFiles).
+//
+// Signing: automatic, with a stable identity ("Apple Development") as soon as DEVELOPMENT_TEAM is set. macOS ties
+// permissions (notifications, local network, folders) to the signature, so an identity that changes on every build
+// would make them ask again. The team is machine-specific: it lives in Local.xcconfig, which is not versioned
+// (created by Tools/bootstrap.sh, or copied from Local.xcconfig.example).
+
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"
