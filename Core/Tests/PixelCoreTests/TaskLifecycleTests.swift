@@ -12,10 +12,11 @@ enum TaskWorld {
     static let oslo = TaskBoardSamples.agent(3)
     static let agentProjects: [AgentID: ProjectID] = [nova: api, pixou: api, oslo: site]
     static let liveAgents: Set<AgentID> = [nova, pixou]
+    static let projectNames: [ProjectID: String] = [api: "API", site: "Site"]
 
     static func context(at offset: Double, sessionIDs: [AgentID: String] = [:]) -> TaskContext {
         TaskContext(now: TaskBoardSamples.at(offset), agentProjects: agentProjects, liveAgents: liveAgents,
-                    sessionIDs: sessionIDs)
+                    sessionIDs: sessionIDs, projectNames: projectNames)
     }
 
     /// An agent's queue, computed apart from the reducer: its instructions, then its queued cards, each by key.
@@ -176,6 +177,14 @@ struct LifecycleRun {
             #expect(card.assignee == W.nova && card.queueRank != nil)
             #expect(card.history.map(\.kind) == [.created, .assigned, .projectChanged])
         }
+        // The history says where the card came from.
+        #expect(run.card(1)?.history.last?.note == "projet précédent : Site")
+        #expect(run.card(2)?.history.last?.note == "projet précédent : aucun")
+        // A project the caller did not name is written as its id.
+        run.create(3, "Ailleurs", project: S.project(7))
+        let unnamed = TaskContext(now: S.at(500), agentProjects: W.agentProjects, liveAgents: W.liveAgents)
+        let (board, _) = TaskLifecycle.reduce(run.board, .assign(S.card(3), to: W.nova), context: unnamed)
+        #expect(board.card(S.card(3))?.history.last?.note == "projet précédent : \(S.project(7))")
         let unknown = run.refused(.assign(S.card(1), to: S.agent(9)))
         #expect(unknown == [.rejected(.unknownAgent, message: M.unknownAgent)])
     }
@@ -408,6 +417,52 @@ struct LifecycleRun {
         #expect(run.board.instructions.first?.delivery == nil)
     }
 
+    @Test func c08_theNotificationCutsALongTitle() {
+        // One line of notification: a title of more than 40 characters is cut, with "…".
+        var run = LifecycleRun()
+        run.create(1, "Refondre la pagination de toutes les routes /users et /teams")
+        run.apply(.assign(S.card(1), to: W.nova))
+        run.apply(.deliveryStarted(.card(S.card(1)), agent: W.nova, sessionID: "s-1"))
+        #expect(run.apply(.agentSignal(W.nova, .deliveryFailed(.noPromptSubmit)))
+            == [.notify("Échec d'envoi de « Refondre la pagination de toutes les rou… » à l'agent. La file est en pause.")])
+    }
+
+    @Test func c08_aFailedInstructionFlagsItsCardForARetry() throws {
+        // "Continue la tâche" is not delivered: the card must not look like it runs while the agent is idle.
+        var run = LifecycleRun()
+        run.start(1, "Pagination", promptID: "p-1")
+        run.apply(.agentSignal(W.nova, .interrupted))
+        run.apply(.continueTask(S.card(1), instructionID: S.instruction(1)))
+        run.apply(.deliveryStarted(.instruction(S.instruction(1)), agent: W.nova, sessionID: "session-1"))
+        let effects = run.apply(.agentSignal(W.nova, .deliveryFailed(.noPromptSubmit)))
+        #expect(effects == [.notify("Échec d'envoi de « Continue la tâche : Pagination » à l'agent. La file est en pause.")])
+        let card = try #require(run.card(1))
+        #expect(card.column == .inProgress && card.flags == [.deliveryFailed])
+        #expect(card.history.last == CardEvent(at: run.now, kind: .deliveryFailed, agentID: W.nova,
+                                               note: "aucune confirmation de Claude Code"))
+        // The instruction stays at the head of the queue (C8).
+        #expect(W.queue(of: W.nova, in: run.board) == [.instruction(S.instruction(1))])
+        // "Réessayer" (C9): the flag goes and the queue goes on; delivered, the card runs the new turn.
+        #expect(run.apply(.retry(S.card(1))) == [.pump(W.nova)])
+        #expect(run.card(1)?.flags.isEmpty == true)
+        run.apply(.deliveryStarted(.instruction(S.instruction(1)), agent: W.nova, sessionID: "session-1"))
+        run.apply(.agentSignal(W.nova, .deliveryConfirmed(promptID: "p-2")))
+        #expect(run.card(1)?.column == .inProgress && run.card(1)?.delivery?.promptID == "p-2")
+        // A precision (C17) that fails flags its card of "À valider" the same way.
+        run.review(2, "Header", agent: W.pixou, promptID: "p-3")
+        run.apply(.resend(S.card(2), precision: "Et les tests", instructionID: S.instruction(2)))
+        run.apply(.deliveryStarted(.instruction(S.instruction(2)), agent: W.pixou, sessionID: "session-1"))
+        run.apply(.agentSignal(W.pixou, .deliveryFailed(.processGone)))
+        #expect(run.card(2)?.column == .review && run.card(2)?.flags == [.deliveryFailed])
+        // An instruction whose card left the agent flags nothing.
+        run.apply(.giveInstruction(agent: W.pixou, text: "Autre", instructionID: S.instruction(3), atHead: true))
+        run.apply(.putBack(S.card(2)))
+        run.apply(.deliveryStarted(.instruction(S.instruction(3)), agent: W.pixou, sessionID: "session-1"))
+        let before = run.board.cards
+        run.apply(.agentSignal(W.pixou, .deliveryFailed(.processGone)))
+        #expect(run.board.cards == before)
+    }
+
     // MARK: - C9 retry
 
     @Test func c09_retryClearsTheFailureAndPumpsTheQueue() throws {
@@ -462,13 +517,46 @@ struct LifecycleRun {
         run.start(2, "Avec identifiant", agent: W.pixou, promptID: "p-2")
         run.apply(.agentSignal(W.pixou, .turnCommitted(promptID: nil)))
         #expect(run.card(2)?.column == .review)
-        // Two open cards: nothing can tell them apart.
+        // Two open cards, one of them interrupted: the agent no longer works on that one, the Stop ends the turn
+        // of the other.
         run.start(3, "Premier", promptID: nil)
         run.apply(.agentSignal(W.nova, .interrupted))
         run.start(4, "Second", promptID: nil)
-        let before = run.board
         #expect(run.apply(.agentSignal(W.nova, .turnCommitted(promptID: nil))) == [.pump(W.nova)])
+        #expect(run.card(3)?.column == .inProgress && run.card(3)?.flags == [.interrupted])
+        #expect(run.card(4)?.column == .review)
+    }
+
+    @Test func c10_aStoppedCardIsNotTheTurnThatEnds() {
+        var run = LifecycleRun()
+        // Card 1 confirmed without a prompt id, then card 2 with one: card 1 is interrupted.
+        run.start(1, "Sans identifiant", promptID: nil)
+        run.start(2, "Avec identifiant", promptID: "p-2")
+        #expect(run.card(1)?.flags == [.interrupted])
+        // The Stop of a turn typed by hand: it is neither card 2's turn nor card 1's, which was cut.
+        var before = run.board
+        #expect(run.apply(.agentSignal(W.nova, .turnCommitted(promptID: "p-9"))) == [.pump(W.nova)])
         #expect(run.board == before)
+        // Both stopped: a Stop without a prompt id is a turn typed by hand after the interruption.
+        run.apply(.agentSignal(W.nova, .interrupted))
+        before = run.board
+        run.apply(.agentSignal(W.nova, .turnCommitted(promptID: nil)))
+        #expect(run.board == before)
+        // Its own Stop still moves a stopped card (the prompt id says so).
+        run.apply(.agentSignal(W.nova, .turnCommitted(promptID: "p-2")))
+        #expect(run.card(2)?.column == .review)
+    }
+
+    @Test func c10_aStopMatchedWithoutPromptIDGivesTheCardItsID() throws {
+        // The card was confirmed without a prompt id: it takes the Stop's, so that C12 can find it.
+        var run = LifecycleRun()
+        run.start(1, "Sans identifiant", promptID: nil)
+        run.apply(.agentSignal(W.nova, .turnCommitted(promptID: "p-7")))
+        let card = try #require(run.card(1))
+        #expect(card.column == .review && card.delivery?.promptID == "p-7")
+        #expect(card.history.last?.note == "tour p-7")
+        run.apply(.agentSignal(W.nova, .turnReopened(promptID: "p-7")))
+        #expect(run.card(1)?.column == .inProgress)
     }
 
     @Test func stopWithoutMatchingPromptIDMovesNothing() {
@@ -641,13 +729,14 @@ struct LifecycleRun {
         run.apply(.continueTask(S.card(1), instructionID: S.instruction(1)))
         run.apply(.agentSignal(W.nova, .interrupted))
         let effects = run.apply(.move(S.card(1), to: .todo, after: nil))
-        #expect(effects.isEmpty)
         let card = try #require(run.card(1))
         #expect(card.column == .todo && card.assignee == nil && card.flags.isEmpty && card.delivery == nil)
         #expect(card.history.last?.kind == .putBack && card.history.last?.from == .inProgress)
         #expect(run.board.cards(in: .todo).map(\.id) == [S.card(1), S.card(9)])
-        // "Continue la tâche" was waiting in Nova's queue for this card: it no longer makes sense.
+        // "Continue la tâche" was waiting in Nova's queue for this card: it no longer makes sense, and the user
+        // is told.
         #expect(run.board.instructions.isEmpty)
+        #expect(effects == [.warn("La consigne en attente pour ce post-it a été retirée de la file de l'agent.")])
         #expect(run.refused(.putBack(S.card(9))) == [.rejected(.notAllowed("alreadyTodo"), message: M.alreadyTodo)])
     }
 
@@ -670,6 +759,33 @@ struct LifecycleRun {
         let refusal = TaskEffect.rejected(.notAllowed("notInProgress"), message: M.reviewNeedsInProgress)
         #expect(run.refused(.markForReview(S.card(3))) == [refusal])
         #expect(run.refused(.move(S.card(3), to: .review, after: nil)) == [refusal])
+    }
+
+    @Test func c16_markForReviewDropsAWaitingContinue() throws {
+        // The user asked to continue, then marks the card for review: the agent must not be sent back to it.
+        var run = LifecycleRun()
+        run.start(1, "Pagination", promptID: "p-1")
+        run.apply(.agentSignal(W.nova, .interrupted))
+        run.apply(.continueTask(S.card(1), instructionID: S.instruction(1)))
+        run.apply(.giveInstruction(agent: W.nova, text: "Autre", instructionID: S.instruction(2), atHead: false))
+        let effects = run.apply(.markForReview(S.card(1)))
+        #expect(effects == [.warn(M.instructionsDropped(1))])
+        #expect(run.board.instructions.map(\.id) == [S.instruction(2)])
+        #expect(run.card(1)?.column == .review)
+        // A later delivery confirmation belongs to the other instruction: the card stays.
+        run.apply(.deliveryStarted(.instruction(S.instruction(2)), agent: W.nova, sessionID: "session-1"))
+        run.apply(.agentSignal(W.nova, .deliveryConfirmed(promptID: "p-2")))
+        #expect(run.card(1)?.column == .review)
+        // A continue that failed goes with its flag.
+        run.start(2, "Header", agent: W.pixou, promptID: "p-3")
+        run.apply(.agentSignal(W.pixou, .interrupted))
+        run.apply(.continueTask(S.card(2), instructionID: S.instruction(3)))
+        run.apply(.deliveryStarted(.instruction(S.instruction(3)), agent: W.pixou, sessionID: "session-1"))
+        run.apply(.agentSignal(W.pixou, .deliveryFailed(.noPromptSubmit)))
+        run.apply(.move(S.card(2), to: .review, after: nil))
+        let card = try #require(run.card(2))
+        #expect(card.column == .review && card.flags.isEmpty)
+        #expect(run.board.instructions.isEmpty)
     }
 
     // MARK: - C17 resend with a precision
@@ -768,6 +884,38 @@ struct LifecycleRun {
         let running = try #require(run.card(2))
         #expect(running.column == .done && running.assignee == W.pixou && running.validatedOnce)
         #expect(run.board.cards(in: .done).map(\.id) == [S.card(1), S.card(2)])
+    }
+
+    @Test func c18_aCardDeliveredThenPutBackStillCountsOnce() throws {
+        // Delivered once (3.11), even though "Remettre à faire" cleared its delivery (C15).
+        var run = LifecycleRun()
+        run.start(1, "Pagination", promptID: "p-1")
+        run.apply(.putBack(S.card(1)))
+        #expect(run.card(1)?.delivery == nil)
+        #expect(run.apply(.validate(S.card(1))) == [.validated(S.card(1), firstTime: true)])
+        #expect(run.card(1)?.validatedOnce == true)
+        run.apply(.reopen(S.card(1)))
+        #expect(run.apply(.validate(S.card(1))) == [.validated(S.card(1), firstTime: false)])
+    }
+
+    @Test func c18_validateDropsAPrecisionNotSentYet() {
+        var run = LifecycleRun()
+        run.review(1, "Pagination", promptID: "p-1")
+        run.apply(.resend(S.card(1), precision: "Ajoute un test", instructionID: S.instruction(1)))
+        let effects = run.apply(.validate(S.card(1)))
+        #expect(effects == [.validated(S.card(1), firstTime: true), .warn(M.instructionsDropped(1))])
+        #expect(run.board.instructions.isEmpty)
+        // One being typed stays: its confirmation no longer moves the card.
+        run.review(2, "Header", promptID: "p-2")
+        run.apply(.resend(S.card(2), precision: "Et la doc", instructionID: S.instruction(2)))
+        run.apply(.resend(S.card(2), precision: "Et les logs", instructionID: S.instruction(3)))
+        run.apply(.deliveryStarted(.instruction(S.instruction(3)), agent: W.nova, sessionID: "session-1"))
+        #expect(run.apply(.validate(S.card(2))) == [.validated(S.card(2), firstTime: true), .warn(M.instructionsDropped(1))])
+        #expect(run.board.instructions.map(\.id) == [S.instruction(3)])
+        run.apply(.agentSignal(W.nova, .deliveryConfirmed(promptID: "p-3")))
+        #expect(run.card(2)?.column == .done && run.board.instructions.isEmpty)
+        #expect(M.instructionsDropped(2)
+            == "Les 2 consignes en attente pour ce post-it ont été retirées de la file de l'agent.")
     }
 
     // MARK: - C19 reopen
@@ -884,6 +1032,7 @@ struct LifecycleRun {
         #expect(card.title == "Pagination /users" && card.details == "20 par page" && card.priority == .high)
         #expect(card.tags == ["API", "back"] && card.templateID == S.template(1) && card.projectID == W.site)
         #expect(card.history.map(\.kind) == [.created, .edited, .edited, .edited, .edited, .edited, .projectChanged])
+        #expect(card.history.last?.note == "projet précédent : API")
         #expect(card.updatedAt == run.now)
         // The same values again: nothing recorded.
         let before = run.board
@@ -909,6 +1058,17 @@ struct LifecycleRun {
         run.apply(.unassign(S.card(1)))
         run.apply(.edit(S.card(1), .project(W.site)))
         #expect(run.card(1)?.projectID == W.site)
+        // Out of any queue, the refusal says what to do instead.
+        run.start(2, "En cours", promptID: "p-2")
+        let putBackFirst = TaskEffect.rejected(.notAllowed("projectLocked"),
+                                               message: "Remets d'abord ce post-it à faire pour changer de projet.")
+        #expect(run.refused(.edit(S.card(2), .project(W.site))) == [putBackFirst])
+        run.apply(.agentSignal(W.nova, .turnCommitted(promptID: "p-2")))
+        #expect(run.refused(.edit(S.card(2), .project(nil))) == [putBackFirst])
+        run.apply(.validate(S.card(2)))
+        #expect(run.card(2)?.assignee == W.nova)
+        #expect(run.refused(.edit(S.card(2), .project(W.site)))
+            == [.rejected(.notAllowed("projectLocked"), message: "Rouvre d'abord ce post-it pour changer de projet.")])
     }
 
     @Test func templatesAreUpsertedAndDeletedCardsFallBackToNone() throws {

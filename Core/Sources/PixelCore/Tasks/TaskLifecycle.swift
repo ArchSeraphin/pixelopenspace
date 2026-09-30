@@ -10,13 +10,17 @@ public struct TaskContext: Sendable {
     /// Current Claude Code session of the live agents (`AgentRuntime.currentSessionID`), when known: C17 warns when
     /// it differs from the session the card was delivered to. An agent missing here never triggers the warning.
     public var sessionIDs: [AgentID: String]
+    /// Names of the projects, for the history: C3 notes the project a card came from. A project missing here is
+    /// written as its id.
+    public var projectNames: [ProjectID: String]
 
     public init(now: Date, agentProjects: [AgentID: ProjectID], liveAgents: Set<AgentID>,
-                sessionIDs: [AgentID: String] = [:]) {
+                sessionIDs: [AgentID: String] = [:], projectNames: [ProjectID: String] = [:]) {
         self.now = now
         self.agentProjects = agentProjects
         self.liveAgents = liveAgents
         self.sessionIDs = sessionIDs
+        self.projectNames = projectNames
     }
 }
 
@@ -77,7 +81,8 @@ public enum TaskRejection: Equatable, Sendable {
 public enum TaskEffect: Equatable, Sendable {
     /// The dispatcher (step 2b-2) may deliver the head of this queue.
     case pump(AgentID)
-    /// French text, e.g. "Échec d'envoi de « Titre » à l'agent. La file est en pause."
+    /// French text, e.g. "Échec d'envoi de « Titre » à l'agent. La file est en pause." A title (or instruction)
+    /// longer than 40 characters is cut, ending with "…": the text is one line of a notification.
     case notify(String)
     /// XP later (step 6): `firstTime` at most once per card, and only for a card delivered at least once.
     case validated(TaskCardID, firstTime: Bool)
@@ -202,7 +207,11 @@ extension TaskLifecycle {
         /// C5, a card of another column assigned or dropped on "En cours".
         static let putBackFirst = "Remets-la d'abord à faire."
         static let relaunchFirst = "Relance d'abord la session de l'agent."
+        /// The project of an assigned card is its agent's (C3): a queued card leaves the queue first, a card of
+        /// "En cours" or "À valider" goes back to "À faire" (C15), a done card is reopened (C19).
         static let projectLocked = "Retire d'abord ce post-it de la file de son agent pour changer de projet."
+        static let projectLockedPutBackFirst = "Remets d'abord ce post-it à faire pour changer de projet."
+        static let projectLockedReopenFirst = "Rouvre d'abord ce post-it pour changer de projet."
         static let notInQueue = "Seul un post-it à faire peut entrer dans une file ou en sortir."
         static let notQueued = "Ce post-it n'est dans la file d'aucun agent."
         static let notSameQueue = "Ce post-it n'est pas dans la même file."
@@ -221,7 +230,7 @@ extension TaskLifecycle {
         static let reopenInstead = "Ce post-it est fait : rouvre-le plutôt."
         static let sessionChanged = "La session de l'agent a changé depuis l'envoi : la précision part dans une autre conversation."
 
-        /// C8.
+        /// C8, the title cut at 40 characters (`quoted`).
         static func deliveryFailed(_ title: String) -> String {
             "Échec d'envoi de \(quoted(title)) à l'agent. La file est en pause."
         }
@@ -229,6 +238,13 @@ extension TaskLifecycle {
         /// C14.
         static func continueTask(_ title: String) -> String {
             "Continue la tâche : \(title)"
+        }
+
+        /// C15, C16, C18: instructions tied to the card, not sent yet, left the agent's queue.
+        static func instructionsDropped(_ count: Int) -> String {
+            count == 1
+                ? "La consigne en attente pour ce post-it a été retirée de la file de l'agent."
+                : "Les \(count) consignes en attente pour ce post-it ont été retirées de la file de l'agent."
         }
 
         /// « text », cut at 40 characters.
@@ -252,6 +268,11 @@ extension TaskLifecycle {
         static func turn(_ promptID: String?, after prefix: String? = nil) -> String? {
             let parts = [prefix, promptID.map { "tour \($0)" }].compactMap { $0 }
             return parts.isEmpty ? nil : parts.joined(separator: ", ")
+        }
+
+        /// C3: the project the card came from, by name when the caller gave it, else by id.
+        static func previousProject(_ project: ProjectID?, names: [ProjectID: String]) -> String {
+            "projet précédent : " + (project.map { names[$0] ?? $0.description } ?? "aucun")
         }
 
         static func precision(_ text: String) -> String {
@@ -455,15 +476,22 @@ private struct Step {
         board.cards[i].flags.remove(.deliveryFailed)
     }
 
-    /// Instructions tied to a card and not being delivered: they lose their purpose once the card leaves its
-    /// agent (C15, C18). One being typed stays: its confirmation no longer moves the card (C7 guard).
-    mutating func dropWaitingInstructions(of card: TaskCardID) {
+    /// Instructions tied to a card and not being delivered ("Continue la tâche", a precision): the user settled
+    /// the card (C15, C16, C18), they would send the agent back to it; they leave the queue and, with `warn`, the
+    /// user is told. One being typed stays: its confirmation no longer moves a card of "À faire" or "Fait" (C7
+    /// guard), and brings a card of "À valider" back to "En cours" as the agent does work on it.
+    mutating func dropWaitingInstructions(of card: TaskCardID, warn: Bool) {
+        let before = board.instructions.count
         board.instructions.removeAll { $0.cardID == card && $0.delivery == nil }
+        let dropped = before - board.instructions.count
+        if warn && dropped > 0 { emit(.warn(M.instructionsDropped(dropped))) }
     }
 
     /// C15: back to "À faire", unassigned, flags cleared, the delivery kept only in the history. The agent is not
-    /// interrupted; its Stop no longer affects the card.
-    mutating func sendBackToTodo(_ i: Int, rank: String, kind: CardEventKind, note prefix: String? = nil) {
+    /// interrupted; its Stop no longer affects the card. `warn`: tell the user about the instructions dropped
+    /// (not when the agent itself goes, with all its instructions).
+    mutating func sendBackToTodo(_ i: Int, rank: String, kind: CardEventKind, note prefix: String? = nil,
+                                 warn: Bool = true) {
         let card = board.cards[i]
         board.cards[i].column = .todo
         board.cards[i].rank = rank
@@ -473,31 +501,35 @@ private struct Step {
         board.cards[i].delivery = nil
         record(i, kind, from: card.column, to: .todo, agent: card.assignee,
                note: N.turn(card.delivery?.promptID, after: prefix))
-        dropWaitingInstructions(of: card.id)
+        dropWaitingInstructions(of: card.id, warn: warn)
     }
 
-    /// C16.
+    /// C16. A "Continue la tâche" still waiting would bring the card back to "En cours": it leaves the queue, and
+    /// the flag of its failed delivery with it.
     mutating func sendToReview(_ i: Int, rank: String) {
         let card = board.cards[i]
         board.cards[i].column = .review
         board.cards[i].rank = rank
+        board.cards[i].flags.remove(.deliveryFailed)
         record(i, .markedForReview, from: .inProgress, to: .review, agent: card.assignee)
+        dropWaitingInstructions(of: card.id, warn: true)
     }
 
-    /// C18, from any other column.
+    /// C18, from any other column. XP counts once per card, and only for a card delivered at least once
+    /// (proposal 3.11): a confirmed delivery, now or in the history (C15 and agent removal clear it).
     mutating func sendToDone(_ i: Int, rank: String) {
         let card = board.cards[i]
         if card.column == .todo { leaveQueue(i) }
         // Only a confirmed delivery counts (4.3b: a done card never has a pending one).
         if board.cards[i].delivery?.isPending == true { board.cards[i].delivery = nil }
-        let delivered = board.cards[i].delivery != nil
+        let delivered = board.cards[i].delivery != nil || card.history.contains { $0.kind == .deliveryConfirmed }
         board.cards[i].column = .done
         board.cards[i].rank = rank
         board.cards[i].flags = []
         if delivered { board.cards[i].validatedOnce = true }
         record(i, .validated, from: card.column, to: .done, agent: card.assignee)
-        dropWaitingInstructions(of: card.id)
         emit(.validated(card.id, firstTime: !card.validatedOnce && delivered))
+        dropWaitingInstructions(of: card.id, warn: true)
     }
 
     /// C19: back to "À faire", unassigned; `validatedOnce` and the last delivery kept.
@@ -564,9 +596,15 @@ private struct Step {
         case .project(let project):
             guard project != card.projectID else { return }
             // The project of an assigned card is its agent's (C3).
-            guard card.assignee == nil else { return refuse("projectLocked", M.projectLocked) }
+            guard card.assignee == nil else {
+                switch card.column {
+                case .todo: return refuse("projectLocked", M.projectLocked)
+                case .inProgress, .review: return refuse("projectLocked", M.projectLockedPutBackFirst)
+                case .done: return refuse("projectLocked", M.projectLockedReopenFirst)
+                }
+            }
             board.cards[i].projectID = project
-            record(i, .projectChanged)
+            record(i, .projectChanged, note: N.previousProject(card.projectID, names: context.projectNames))
         }
     }
 
@@ -585,7 +623,8 @@ private struct Step {
         record(i, card.assignee == nil ? .assigned : .reassigned, agent: agent)
         if card.projectID != project {
             board.cards[i].projectID = project
-            record(i, .projectChanged, agent: agent)
+            record(i, .projectChanged, agent: agent,
+                   note: N.previousProject(card.projectID, names: context.projectNames))
         }
         emit(.pump(agent))
     }
@@ -769,11 +808,19 @@ private struct Step {
     }
 
     /// C8 (and C13 `sessionLost` during a delivery): the item stays where it is in the queue, its delivery cleared;
-    /// a card is flagged. The agent's queue is already paused (T31).
+    /// a card is flagged. The agent's queue is already paused (T31). An instruction's card still with the agent
+    /// (C14, C17, same guard as C7) is flagged too: "Réessayer" (C9) resumes the queue, the instruction still at
+    /// its head, and a card of "En cours" no longer looks like it runs while the agent is idle.
     mutating func deliveryFailed(_ agent: AgentID, note: String) {
         if let j = pendingInstruction(of: agent) {
+            let instruction = board.instructions[j]
             board.instructions[j].delivery = nil
-            emit(.notify(M.deliveryFailed(board.instructions[j].text)))
+            if let cardID = instruction.cardID, let i = index(of: cardID), board.cards[i].assignee == agent,
+               board.cards[i].column == .inProgress || board.cards[i].column == .review {
+                board.cards[i].flags.insert(.deliveryFailed)
+                record(i, .deliveryFailed, agent: agent, note: note)
+            }
+            emit(.notify(M.deliveryFailed(instruction.text)))
             return
         }
         guard let i = pendingCard(of: agent) else { return }
@@ -783,9 +830,11 @@ private struct Step {
         emit(.notify(M.deliveryFailed(board.cards[i].title)))
     }
 
-    /// C10. The agent's card of "En cours" whose delivery has this prompt id; otherwise, when the Stop has no
-    /// prompt id or the card was confirmed without one, the only card of the agent whose turn is open. A Stop
-    /// that matches no card (a turn typed by hand) moves nothing.
+    /// C10. The agent's card of "En cours" whose delivery has this prompt id. Otherwise, when the Stop has no
+    /// prompt id or the card was confirmed without one, the only card of the agent whose turn is open: among the
+    /// cards the agent works on, since a stopped one (`TaskBoardValidator.stoppingFlags`) is no longer its current
+    /// turn. Such a card takes the Stop's prompt id, so that C12 finds it. A Stop that matches no card (a turn
+    /// typed by hand) moves nothing.
     mutating func turnCommitted(_ agent: AgentID, promptID: String?) {
         let cards = column(.inProgress).filter { board.cards[$0].assignee == agent }
         var target: Int?
@@ -794,10 +843,11 @@ private struct Step {
         }
         if target == nil {
             let open = cards.filter { i in
-                guard let delivery = board.cards[i].delivery, delivery.turnEndedAt == nil else { return false }
-                return promptID == nil || delivery.promptID == nil
+                isRunning(board.cards[i], for: agent) && board.cards[i].delivery.map { $0.turnEndedAt == nil } == true
             }
-            if open.count == 1 { target = open[0] }
+            if open.count == 1, promptID == nil || board.cards[open[0]].delivery?.promptID == nil {
+                target = open[0]
+            }
         }
         guard let i = target else { return }
         let card = board.cards[i]
@@ -805,6 +855,7 @@ private struct Step {
         board.cards[i].rank = rankAtEnd(of: .review, excluding: card.id)
         let endedAt = now
         board.cards[i].delivery?.turnEndedAt = endedAt
+        if card.delivery?.promptID == nil { board.cards[i].delivery?.promptID = promptID }
         board.cards[i].flags.remove(.backgroundRunning)
         record(i, .turnEnded, from: .inProgress, to: .review, agent: agent,
                note: N.turn(card.delivery?.promptID ?? promptID))
@@ -950,7 +1001,7 @@ private struct Step {
         for source in [Column.inProgress, .review] {
             for i in column(source) where board.cards[i].assignee == agent {
                 sendBackToTodo(i, rank: rankAtEnd(of: .todo, excluding: board.cards[i].id), kind: .unassigned,
-                               note: N.agentRemoved)
+                               note: N.agentRemoved, warn: false)
             }
         }
         for i in column(.done) where board.cards[i].assignee == agent {
