@@ -106,7 +106,7 @@ enum SceneFixtures {
 
     @Test func floorMaterialsFollowTheLayout() {
         let (scene, island) = SceneFixtures.twoDesks()
-        let plan = SceneCompositor.plan(scene, options: RenderOptions())
+        let plan = SceneCompositor.frame(scene, options: RenderOptions())
         let bounds = scene.layout.bounds
         #expect(plan.floor.count == bounds.size.w * bounds.size.d)
         func floorKey(_ tile: GridPoint) -> SpriteKey? { plan.floor.first { $0.tile == tile }?.key }
@@ -183,7 +183,7 @@ enum SceneFixtures {
             #expect(!image.pixels.contains(yellow), "nobody waits, night \(night)")
         }
         // In the plan, only the waiting agents' placements carry the yellow.
-        let plan = SceneCompositor.plan(Showcase.islandCasts()[1], options: RenderOptions(crop: crop))
+        let plan = SceneCompositor.frame(Showcase.islandCasts()[1], options: RenderOptions(crop: crop))
         let sol = SceneFixtures.desk(of: "Sol", in: Showcase.islandCasts()[1])!
         for placement in plan.floor + plan.walls + plan.world + plan.overlays where placement.image.pixels.contains(yellow) {
             #expect(placement.tile == sol.seatTile || placement.tile == sol.deskTile, "\(placement.name)")
@@ -195,7 +195,7 @@ enum SceneFixtures {
         let crop = Showcase.islandCrop()
         let day = SceneCompositor.render(scene, options: RenderOptions(crop: crop))
         let night = SceneCompositor.render(scene, options: RenderOptions(night: true, crop: crop))
-        let plan = SceneCompositor.plan(scene, options: RenderOptions(night: true, crop: crop))
+        let plan = SceneCompositor.frame(scene, options: RenderOptions(night: true, crop: crop))
         // Nova's "!": exactly the sprite, by day and by night.
         let seat = SceneFixtures.desk(of: "Nova", in: scene)!.seatTile
         let bang = plan.overlays.first { $0.key == SpriteKey("ov.bang") && $0.tile == seat }!
@@ -231,7 +231,7 @@ enum SceneFixtures {
         let crop = Showcase.islandCrop()
         let day = SceneCompositor.render(scene, options: RenderOptions(crop: crop))
         let night = SceneCompositor.render(scene, options: RenderOptions(night: true, crop: crop))
-        let plan = SceneCompositor.plan(scene, options: RenderOptions(night: true, crop: crop))
+        let plan = SceneCompositor.frame(scene, options: RenderOptions(night: true, crop: crop))
         let lit = plan.lights
         let covering = plan.world + plan.overlays
         func covered(_ list: [ScenePlacement], _ x: Int, _ y: Int) -> Bool { list.contains { $0.pixel(atCanvasX: x, y) != nil } }
@@ -246,14 +246,14 @@ enum SceneFixtures {
         #expect(night[cx, cy].luma < day[cx, cy].luma)
 
         // Under a lamp's light (on the desk top): lighter than the same pixel at night with every lamp off.
-        let cones = lit.filter { $0.key == SpriteKey("light.cone") }
+        let cones = lit.filter { $0.name == "light.cone#0" }
         #expect(!cones.isEmpty)
         var dark = scene
         for id in dark.agents.keys { dark.agents[id]!.presentation.deskLit = false }
         let unlit = SceneCompositor.render(dark, options: RenderOptions(night: true, crop: crop))
         // Left out: the lamps themselves (on / off), the overlays, and the screen glows (later in the light layer).
         let lamps = plan.world.filter { $0.key?.id == "lamp.desk" } + plan.overlays
-            + lit.filter { $0.key != SpriteKey("light.cone") }
+            + lit.filter { $0.name != "light.cone#0" }
         var pixels = 0
         for cone in cones {
             for y in 0..<cone.image.height {
@@ -274,25 +274,25 @@ enum SceneFixtures {
     @Test func nightLightsFollowLitDesks() {
         let scene = Showcase.islandCasts()[0]
         let crop = Showcase.islandCrop()
-        let dayPlan = SceneCompositor.plan(scene, options: RenderOptions(crop: crop))
+        let dayPlan = SceneCompositor.frame(scene, options: RenderOptions(crop: crop))
         #expect(dayPlan.lights.isEmpty && dayPlan.veilAlpha == nil)
         #expect(dayPlan.world.filter { $0.key?.id == "lamp.desk" }.allSatisfy { $0.key?.variant == "off" })
-        let night = SceneCompositor.plan(scene, options: RenderOptions(night: true, crop: crop))
+        let night = SceneCompositor.frame(scene, options: RenderOptions(night: true, crop: crop))
         #expect(night.veilAlpha == Palette.nightVeilAlpha)
         // Six agents at their desks: Kiwi is offline and desk 7 is free.
         #expect(night.world.filter { $0.key?.id == "lamp.desk" && $0.key?.variant == "on" }.count == 6)
         #expect(night.world.filter { $0.key?.id == "lamp.desk" && $0.key?.variant == "off" }.count == 2)
-        #expect(night.lights.filter { $0.key == SpriteKey("light.cone") }.count == 6)
-        #expect(night.lights.filter { $0.key == SpriteKey("light.screenGlow") }.count == 6)
+        #expect(night.lights.filter { $0.name == "light.cone#0" }.count == 6)
+        #expect(night.lights.filter { $0.name == "light.screenGlow#0" }.count == 6)
         // Lights are opaque sprites; their 35 % is applied once, additively.
         #expect(night.lights.allSatisfy { $0.image.pixels.allSatisfy { $0.a == 0 || $0.a == 255 } })
-        let reduced = SceneCompositor.plan(scene, options: RenderOptions(night: true, crop: crop, reduceTransparency: true))
+        let reduced = SceneCompositor.frame(scene, options: RenderOptions(night: true, crop: crop, reduceTransparency: true))
         #expect(reduced.veilAlpha == Palette.nightVeilAlphaReduced)
     }
 
     @Test func postsFollowTheirAgents() {
         let scene = Showcase.islandCasts()[0]
-        let plan = SceneCompositor.plan(scene, options: RenderOptions(crop: Showcase.islandCrop()))
+        let plan = SceneCompositor.frame(scene, options: RenderOptions(crop: Showcase.islandCrop()))
         func at(_ tile: GridPoint) -> [ScenePlacement] { plan.world.filter { $0.tile == tile } }
         func avatar(_ name: String) -> ScenePlacement? {
             at(SceneFixtures.desk(of: name, in: scene)!.seatTile).first(where: SceneFixtures.isAvatar)
@@ -341,7 +341,7 @@ enum SceneFixtures {
         #expect(plan.world.contains { $0.key?.id == "decor.plantSmall" && $0.tile == island.plant })
         // Cast 2: the post-it stuck on Pixou's screen, Galet's badges.
         let cast2 = Showcase.islandCasts()[1]
-        let plan2 = SceneCompositor.plan(cast2, options: RenderOptions(crop: Showcase.islandCrop()))
+        let plan2 = SceneCompositor.frame(cast2, options: RenderOptions(crop: Showcase.islandCrop()))
         let pixou = SceneFixtures.desk(of: "Pixou", in: cast2)!
         #expect(plan2.world.contains { $0.key?.id == "desk.postit" && $0.tile == pixou.deskTile })
         let galet = SceneFixtures.desk(of: "Galet", in: cast2)!
@@ -353,7 +353,7 @@ enum SceneFixtures {
         // The compositor composes only the frames it shows; they are the frames of the look's sheet.
         let scene = Showcase.islandCasts()[0]
         for tick in [0, 7] {
-            let plan = SceneCompositor.plan(scene, options: RenderOptions(tick: tick, crop: Showcase.islandCrop()))
+            let plan = SceneCompositor.frame(scene, options: RenderOptions(tick: tick, crop: Showcase.islandCrop()))
             for name in ["Bip", "Nova"] {
                 let agent = scene.agents[SceneFixtures.agentID(named: name, in: scene)!]!
                 let placement = plan.world.first { SceneFixtures.isAvatar($0) && $0.tile == SceneFixtures.desk(of: name, in: scene)!.seatTile }!
@@ -370,23 +370,23 @@ enum SceneFixtures {
     @Test func corkWallShowsFortyEightCardsThenACounter() {
         var scene = Showcase.overview()
         scene.boardCardHues = (0..<53).map { $0 % 11 }
-        let plan = SceneCompositor.plan(scene, options: RenderOptions())
+        let plan = SceneCompositor.frame(scene, options: RenderOptions())
         let cards = plan.walls.filter { $0.key?.id == "postit.mini" }
         #expect(cards.count == 48)
         #expect(cards[10].key == SpriteKey("postit.mini", variant: "paper", facing: .ne))
         #expect(cards[3].key == SpriteKey("postit.mini", variant: "hue3", facing: .ne))
         #expect(plan.overlays.filter { $0.name == "nameplate:+5" }.count == 1)
         scene.boardCardHues = Array(repeating: 2, count: 48)
-        #expect(!SceneCompositor.plan(scene, options: RenderOptions()).overlays.contains { $0.name.hasPrefix("nameplate:+") })
+        #expect(!SceneCompositor.frame(scene, options: RenderOptions()).overlays.contains { $0.name.hasPrefix("nameplate:+") })
     }
 
     @Test func overviewUsesXLBang() {
         let scene = Showcase.overview()
-        let overview = SceneCompositor.plan(scene, options: RenderOptions(zoom: .overview))
+        let overview = SceneCompositor.frame(scene, options: RenderOptions(zoom: .overview))
         let bangs = overview.overlays.filter { $0.key?.id == "ov.bang" }
         #expect(bangs.count == 3)
         #expect(bangs.allSatisfy { $0.key?.variant == "xl" })
-        let x1 = SceneCompositor.plan(scene, options: RenderOptions(zoom: .x1))
+        let x1 = SceneCompositor.frame(scene, options: RenderOptions(zoom: .x1))
         let plain = x1.overlays.filter { $0.key?.id == "ov.bang" }
         #expect(plain.count == 3 && plain.allSatisfy { $0.key?.variant == nil })
         #expect(!x1.overlays.contains { $0.key?.id.rawValue.hasPrefix("hud.state.") == true })
@@ -401,7 +401,7 @@ enum SceneFixtures {
             scene.agents[id]!.presentation.badges = SceneBadge.allCases
             scene.agents[id]!.extras.queued = 2
         }
-        let overview = SceneCompositor.plan(scene, options: RenderOptions(zoom: .overview))
+        let overview = SceneCompositor.frame(scene, options: RenderOptions(zoom: .overview))
         let agentOverlays = overview.overlays.filter { !$0.name.hasPrefix("nameplate:+") }
         let keys = Set(agentOverlays.compactMap(\.key))
         #expect(keys == [SpriteKey("ov.bang", variant: "xl"), SpriteKey("ov.bang.halo"), SpriteKey("ov.storm")])
@@ -416,7 +416,7 @@ enum SceneFixtures {
             #expect(signs.count == 1, "\(agent.name)")
         }
         // ×1: the bubbles, badges, queue badges and the plate of the offline agents are back.
-        let x1 = SceneCompositor.plan(scene, options: RenderOptions(zoom: .x1))
+        let x1 = SceneCompositor.frame(scene, options: RenderOptions(zoom: .x1))
         #expect(x1.overlays.contains { $0.key?.id == "ov.tool.question" })
         #expect(x1.overlays.contains { $0.key?.id == "ov.unsafe" })
         #expect(x1.overlays.contains { $0.key?.id == "desk.queueBadge" })
@@ -425,8 +425,8 @@ enum SceneFixtures {
 
     @Test func overviewSignsAreDoubled() {
         let scene = Showcase.overview()
-        let overview = SceneCompositor.plan(scene, options: RenderOptions(zoom: .overview))
-        let x1 = SceneCompositor.plan(scene, options: RenderOptions(zoom: .x1))
+        let overview = SceneCompositor.frame(scene, options: RenderOptions(zoom: .overview))
+        let x1 = SceneCompositor.frame(scene, options: RenderOptions(zoom: .x1))
         for island in scene.layout.islands {
             let visual = scene.projects[island.projectID]!
             let plain = HUDSprites.sign(name: visual.name, hue: visual.hueIndex)
@@ -473,7 +473,7 @@ enum SceneFixtures {
         for (name, input) in [("asking", asking), ("failing", failing), ("cast 1", Showcase.islandCasts()[0]),
                               ("cast 2", Showcase.islandCasts()[1]), ("overview", Showcase.overview())] {
             for zoom in [SceneZoom.x1, .overview] {
-                let plan = SceneCompositor.plan(input, options: RenderOptions(zoom: zoom))
+                let plan = SceneCompositor.frame(input, options: RenderOptions(zoom: zoom))
                 for sign in plan.world where sign.name.hasPrefix("sign:") {
                     var touching: Set<String> = []
                     for overlay in plan.overlays {
@@ -495,7 +495,7 @@ enum SceneFixtures {
     /// centred on the agent, not up over the desk of the post before; row B keeps 9 px over a seated head.
     @Test func overlaysSitOnTheirOwnAgent() {
         for cast in Showcase.islandCasts() {
-            let plan = SceneCompositor.plan(cast, options: RenderOptions(crop: Showcase.islandCrop()))
+            let plan = SceneCompositor.frame(cast, options: RenderOptions(crop: Showcase.islandCrop()))
             for desk in cast.layout.islands[0].desks {
                 guard let id = desk.agentID, let agent = cast.agents[id], let overlay = agent.presentation.overlay,
                       let avatar = plan.world.first(where: { $0.tile == desk.seatTile && SceneFixtures.isAvatar($0) }),
@@ -540,7 +540,7 @@ enum SceneFixtures {
             AgentRuntime(phase: .idle, phaseSince: Showcase.now - 3_600), now: Showcase.now, agentName: "Lune",
             projectName: "API")
         let crop = Showcase.islandCrop()
-        let plan = SceneCompositor.plan(cast, options: RenderOptions(crop: crop))
+        let plan = SceneCompositor.frame(cast, options: RenderOptions(crop: crop))
         for (name, row, gaps) in [("Tao", IslandRow.b, 1...9), ("Lune", .a, 1...3)] {
             let desk = SceneFixtures.desk(of: name, in: cast)!
             #expect(desk.row == row && cast.agents[desk.agentID!]!.presentation.animation == .sleep, "\(name)")
@@ -565,8 +565,8 @@ enum SceneFixtures {
     /// stuck on it): from behind, a lit monitor back read as a pane of glass.
     @Test func screenGlowNeverLightsItsMonitor() {
         for cast in Showcase.islandCasts() {
-            let plan = SceneCompositor.plan(cast, options: RenderOptions(night: true, crop: Showcase.islandCrop()))
-            let glows = plan.lights.filter { $0.key == SpriteKey("light.screenGlow") }
+            let plan = SceneCompositor.frame(cast, options: RenderOptions(night: true, crop: Showcase.islandCrop()))
+            let glows = plan.lights.filter { $0.name == "light.screenGlow#0" }
             #expect(glows.count >= 5)
             let def = SpriteCatalog.sprite(SpriteKey("light.screenGlow"))!
             for glow in glows {
@@ -598,7 +598,7 @@ enum SceneFixtures {
     /// Row B: the name plate beside the head (same rows, left of it, never on the avatar), not on the desk top.
     @Test func rowBNameplateBesideTheHead() {
         let cast = Showcase.islandCasts()[1]
-        let plan = SceneCompositor.plan(cast, options: RenderOptions(crop: Showcase.islandCrop()))
+        let plan = SceneCompositor.frame(cast, options: RenderOptions(crop: Showcase.islandCrop()))
         let sol = SceneFixtures.desk(of: "Sol", in: cast)!
         #expect(sol.row == .b)
         let plate = plan.overlays.first { $0.name == "nameplate:Sol" }!
@@ -622,7 +622,7 @@ enum SceneFixtures {
         offline.agents[osloID]!.presentation = AgentPresenter.scene(
             AgentRuntime(phase: .offline(.exited), phaseSince: Showcase.now), now: Showcase.now, agentName: "Oslo",
             projectName: "API")
-        let offlinePlan = SceneCompositor.plan(offline, options: RenderOptions(crop: Showcase.islandCrop()))
+        let offlinePlan = SceneCompositor.frame(offline, options: RenderOptions(crop: Showcase.islandCrop()))
         let oslo = SceneFixtures.desk(of: "Oslo", in: offline)!
         let offPlate = offlinePlan.overlays.first { $0.name == "nameplate:Oslo" }!
         let osloSeat = SceneCompositor.imagePoint(of: oslo.seatTile, in: Showcase.islandCrop())
@@ -638,7 +638,7 @@ enum SceneFixtures {
         // Row A keeps its plate under the post, in front of the chair.
         let cast1 = Showcase.islandCasts()[0]
         let nova = SceneFixtures.desk(of: "Nova", in: cast1)!
-        let plan1 = SceneCompositor.plan(cast1, options: RenderOptions(crop: Showcase.islandCrop()))
+        let plan1 = SceneCompositor.frame(cast1, options: RenderOptions(crop: Showcase.islandCrop()))
         let novaPlate = plan1.overlays.first { $0.name == "nameplate:Nova" }!
         let seat = SceneCompositor.imagePoint(of: nova.seatTile, in: Showcase.islandCrop())
         #expect(novaPlate.origin.y + novaPlate.image.height == seat.y + 16 + SceneCompositor.nameplateDrop)
@@ -648,14 +648,14 @@ enum SceneFixtures {
         let cast = Showcase.islandCasts()[1]
         let lou = SceneFixtures.desk(of: "Lou", in: cast)!
         for zoom in [SceneZoom.x1, .x2, .x3] {
-            let plan = SceneCompositor.plan(cast, options: RenderOptions(zoom: zoom, crop: Showcase.islandCrop()))
+            let plan = SceneCompositor.frame(cast, options: RenderOptions(zoom: zoom, crop: Showcase.islandCrop()))
             let signs = plan.overlays.filter { $0.tile == lou.seatTile }
             #expect(signs.map(\.key) == [HUDSprites.stateKey(.launching)], "\(zoom)")
         }
-        let overview = SceneCompositor.plan(cast, options: RenderOptions(zoom: .overview, crop: Showcase.islandCrop()))
+        let overview = SceneCompositor.frame(cast, options: RenderOptions(zoom: .overview, crop: Showcase.islandCrop()))
         #expect(!overview.overlays.contains { $0.tile == lou.seatTile })
         // Nobody else shows it.
-        let x1 = SceneCompositor.plan(cast, options: RenderOptions(crop: Showcase.islandCrop()))
+        let x1 = SceneCompositor.frame(cast, options: RenderOptions(crop: Showcase.islandCrop()))
         #expect(x1.overlays.filter { $0.key == HUDSprites.stateKey(.launching) }.count == 1)
     }
 
@@ -664,9 +664,9 @@ enum SceneFixtures {
     @Test func lampPoolStaysOnTheDeskTop() {
         let scene = Showcase.islandCasts()[0]
         let crop = Showcase.islandCrop()
-        let plan = SceneCompositor.plan(scene, options: RenderOptions(night: true, crop: crop))
+        let plan = SceneCompositor.frame(scene, options: RenderOptions(night: true, crop: crop))
         let def = SpriteCatalog.sprite(SpriteKey("light.cone"))!
-        let cones = plan.lights.filter { $0.key == SpriteKey("light.cone") }
+        let cones = plan.lights.filter { $0.name == "light.cone#0" }
         #expect(cones.count == 6)
         for cone in cones {
             let tile = cone.tile!
@@ -695,34 +695,32 @@ enum SceneFixtures {
     }
 
     /// The stars of the night windows and the elevator's LED stay behind what stands in front of the wall (the
-    /// overview's big signs cover windows): only the lights of the desks shine over the world.
+    /// overview's big signs cover windows): they come clipped by the world, and only the lights of the desks shine
+    /// over it.
     @Test func wallLightsHideBehindTheWorld() {
-        let plan = SceneCompositor.plan(Showcase.overview(), options: RenderOptions(zoom: .overview, night: true))
+        let options = RenderOptions(zoom: .overview, night: true)
+        let plan = SceneCompositor.frame(Showcase.overview(), options: options)
         let wallLights = plan.lights.filter(\.behindWorld)
-        #expect(Set(wallLights.compactMap(\.key?.id)) == ["fx.star", "elevator.led"])
-        #expect(plan.lights.filter { !$0.behindWorld }.allSatisfy { ["light.cone", "light.screenGlow"].contains($0.key?.id) })
+        #expect(Set(wallLights.map { String($0.name.prefix { $0 != "~" && $0 != "#" }) }) == ["fx.star", "elevator.led"])
+        #expect(plan.lights.filter { !$0.behindWorld }.allSatisfy { ["light.cone#0", "light.screenGlow#0"].contains($0.name) })
         var withoutWallLights = plan
         withoutWallLights.lights.removeAll(where: \.behindWorld)
         let image = SceneCompositor.rasterize(plan)
         let reference = SceneCompositor.rasterize(withoutWallLights)
-        var hidden = 0, shown = 0
+        var shown = 0
         for light in wallLights {
             for y in 0..<light.image.height {
                 for x in 0..<light.image.width where light.image[x, y].a != 0 {
                     let (cx, cy) = (light.origin.x + x, light.origin.y + y)
-                    let overlaid = plan.overlays.contains { $0.pixel(atCanvasX: cx, cy) != nil }
-                    guard !overlaid else { continue }
-                    if plan.world.contains(where: { $0.pixel(atCanvasX: cx, cy) != nil }) {
-                        #expect(image[cx, cy] == reference[cx, cy], "\(light.name) over the world at (\(cx), \(cy))")
-                        hidden += 1
-                    } else if image[cx, cy] != reference[cx, cy] {
-                        shown += 1
-                    }
+                    #expect(!plan.world.contains { $0.pixel(atCanvasX: cx, cy) != nil }, "\(light.name) over the world")
+                    if image[cx, cy] != reference[cx, cy] { shown += 1 }
                 }
             }
         }
-        #expect(hidden > 0, "a sign covers a night window in the overview")
         #expect(shown > 20, "the stars still shine in the windows")
+        // A sign covers a night window in the overview: some of its stars are clipped (composed images) or gone.
+        let windows = plan.walls.filter { $0.key?.id == "wall.window" }.count
+        #expect(wallLights.contains { $0.key == nil } || wallLights.count < 3 * windows + 1)
     }
 
     /// Décision of the first render: the cork wall's cards spread over the board in a few loose rows.
@@ -746,7 +744,7 @@ enum SceneFixtures {
             }
         }
         // The overview's 12 cards: on all 4 rows of the board, each pinned a little off its slot at most.
-        let plan = SceneCompositor.plan(Showcase.overview(), options: RenderOptions(zoom: .overview))
+        let plan = SceneCompositor.frame(Showcase.overview(), options: RenderOptions(zoom: .overview))
         let cards = plan.walls.filter { $0.key?.id == "postit.mini" }
         #expect(cards.count == 12)
         #expect(Set(cards.map(\.origin.y)).count >= 8, "not one line")
@@ -759,9 +757,9 @@ enum SceneFixtures {
     @Test func drawOrderBackToFront() {
         let (scene, island) = SceneFixtures.twoDesks()
         let options = RenderOptions(crop: island.rect)
-        let plan = SceneCompositor.plan(scene, options: options)
-        let depths = plan.world.map(\.depth)
-        #expect(depths == depths.sorted(), "farther tiles first")
+        let plan = SceneCompositor.frame(scene, options: options)
+        let orders = plan.world.map(\.order)
+        #expect(orders == orders.sorted(), "farther tiles first")
         let image = SceneCompositor.render(scene, options: options)
         let drawn = plan.walls + plan.world + plan.overlays
 
@@ -791,13 +789,13 @@ enum SceneFixtures {
 
     @Test func cropHasNoWalls() {
         let scene = Showcase.overview()
-        let whole = SceneCompositor.plan(scene, options: RenderOptions(zoom: .overview))
+        let whole = SceneCompositor.frame(scene, options: RenderOptions(zoom: .overview))
         for id: SpriteID in ["wall.corner", "wall.segment", "wall.window", "board.cork", "elevator", "elevator.led", "postit.mini"] {
             #expect(whole.walls.contains { $0.key?.id == id }, "\(id)")
         }
         #expect(whole.walls.filter { $0.key?.id == "postit.mini" }.count == 12)
         let slot = GridRect(origin: GridPoint(12, 6), size: GridSize(w: 12, d: 9))
-        let cropped = SceneCompositor.plan(scene, options: RenderOptions(zoom: .overview, crop: slot))
+        let cropped = SceneCompositor.frame(scene, options: RenderOptions(zoom: .overview, crop: slot))
         #expect(cropped.walls.isEmpty)
         #expect(cropped.floor.count == 12 * 9)
         for placement in cropped.floor + cropped.shadows + cropped.world + cropped.lights + cropped.overlays {
@@ -820,7 +818,7 @@ enum SceneFixtures {
 
     @Test func wallsStandOnTheBackEdges() {
         let (scene, _) = SceneFixtures.twoDesks()
-        let plan = SceneCompositor.plan(scene, options: RenderOptions(night: true))
+        let plan = SceneCompositor.frame(scene, options: RenderOptions(night: true))
         let rect = scene.layout.bounds
         // A segment of the ne wall on tile (i, 0): its floor anchor is the middle of the tile's back edge.
         for piece in plan.walls where piece.key?.id == "wall.segment" || piece.key?.id == "wall.window" {
@@ -837,7 +835,7 @@ enum SceneFixtures {
         let corner = plan.walls.firstIndex { $0.key?.id == "wall.corner" }!
         #expect(plan.walls.lastIndex { $0.key?.id == "wall.segment" || $0.key?.id == "wall.window" }! < corner)
         #expect(plan.walls.contains { $0.key == SpriteKey("elevator", facing: .nw) && $0.image == SpriteCatalog.sprite($0.key!)!.frames[0] })
-        let day = SceneCompositor.plan(scene, options: RenderOptions())
+        let day = SceneCompositor.frame(scene, options: RenderOptions())
         #expect(day.walls.contains { $0.key?.id == "wall.window" && $0.key?.variant == "day" })
     }
 
