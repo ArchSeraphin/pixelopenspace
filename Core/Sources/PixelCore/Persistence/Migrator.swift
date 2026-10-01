@@ -14,8 +14,21 @@ public struct MigrationStep: Sendable {
 /// Step-by-step migrations of the persisted files (proposal 3.14, 4.5). Each future step comes with a fixture
 /// test (JSON of version n → expected n + 1).
 public enum Migrator {
-    /// `workspace.json`: v1 is the first version, nothing to migrate yet.
-    public static let workspaceSteps: [MigrationStep] = []
+    /// `workspace.json`. v1 → v2 (step 3): every project gets `annexSlots: []`. The typed half of this step (generated
+    /// looks, annex slots kept where the v1 layout showed them) runs in `PersistenceCodec.decodeWorkspace`.
+    public static let workspaceSteps: [MigrationStep] = [
+        MigrationStep(from: 1) { object in
+            var object = object
+            if let projects = object["projects"] as? [[String: Any]] {
+                object["projects"] = projects.map { project in
+                    var project = project
+                    if project["annexSlots"] == nil { project["annexSlots"] = [Int]() }
+                    return project
+                }
+            }
+            return object
+        },
+    ]
     /// `settings.json`: v1 is the first version, nothing to migrate yet.
     public static let settingsSteps: [MigrationStep] = []
     /// `tasks.json`: v1 is the first version, nothing to migrate yet.

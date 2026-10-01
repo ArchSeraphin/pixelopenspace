@@ -211,6 +211,57 @@ import Testing
         #expect(crowded.islands.map(\.slot) == [0, 1, 2, 3, 4, 5])
     }
 
+    /// `Project.annexSlots` (workspace v2): part p sits in `annexSlots[p − 1]`, kept for life; a part without a
+    /// persisted slot (an older or repaired file) takes the lowest slot no live project and no annex holds.
+    @Test func annexUsesItsPersistedSlot() {
+        var api = Self.project(0, slot: 0)
+        api.annexSlots = [3, 5]
+        let site = Self.project(1, slot: 1)
+        let agents = Self.agents(project: 0, desks: Array(0..<9))
+        let result = Self.layout([api, site], agents)
+        #expect(result.islands.map { "\($0.part)@\($0.slot)" } == ["0@0", "0@1", "1@3"])
+        // Part 2 has no agent and part 1 is not full: its slot stays reserved but shows nothing.
+        #expect(result.bounds == Self.rect(0, 0, 24, 24))
+
+        // Full annex: part 2 opens in its own slot.
+        let full = Self.layout([api, site], Self.agents(project: 0, desks: Array(0..<16)))
+        #expect(full.islands.map { "\($0.part)@\($0.slot)" } == ["0@0", "0@1", "1@3", "2@5"])
+        let annex = full.islands.first { $0.part == 1 }!
+        #expect(annex.origin == GridPoint(13, 16))
+        #expect(annex.desks.map(\.index) == Array(8..<16))
+
+        // No persisted slot for part 2: the lowest slot that no live project and no annex holds (2), not 3 or 5.
+        api.annexSlots = [3]
+        var other = Self.project(2, slot: 4)
+        other.annexSlots = [5]
+        let fallback = Self.layout([api, site, other], Self.agents(project: 0, desks: Array(0..<16))
+                                   + Self.agents(project: 2, desks: [8]))
+        #expect(fallback.islands.map { "\($0.slot):\($0.projectID == Self.projectID(0) ? 0 : $0.projectID == Self.projectID(1) ? 1 : 2).\($0.part)" }
+                == ["0:0.0", "1:1.0", "2:0.2", "3:0.1", "4:2.0", "5:2.1"])
+
+        // A persisted slot that a live project holds (never in a validated workspace) is ignored, as is a negative
+        // one or one an annex placed before it already took: those parts fall back.
+        api.annexSlots = [1, -2]
+        other.annexSlots = [3]
+        var third = Self.project(3, slot: 6)
+        third.annexSlots = [3]
+        let broken = Self.layout([api, site, other, third],
+                                 Self.agents(project: 0, desks: [0, 8, 16]) + Self.agents(project: 2, desks: [8])
+                                 + Self.agents(project: 3, desks: [8]))
+        let slots = broken.islands.map(\.slot)
+        #expect(Set(slots).count == slots.count)
+        #expect(broken.islands.filter { $0.projectID == Self.projectID(2) }.map(\.slot) == [3, 4])
+        #expect(broken.islands.filter { $0.projectID == Self.projectID(0) }.map(\.slot) == [0, 2, 5])
+        #expect(broken.islands.filter { $0.projectID == Self.projectID(3) }.map(\.slot) == [6, 7])
+        // An archived project's annex slots are free.
+        var archived = Self.project(4, slot: 8, archived: true)
+        archived.annexSlots = [2]
+        let withArchived = Self.layout([api, site, other, third, archived],
+                                       Self.agents(project: 0, desks: [0, 8, 16]) + Self.agents(project: 2, desks: [8])
+                                       + Self.agents(project: 3, desks: [8]))
+        #expect(withArchived == broken)
+    }
+
     @Test func archivedProjectHasNoIsland() {
         let projects = [Self.project(0, slot: 0, archived: true), Self.project(1, slot: 1)]
         let agents = Self.agents(project: 0, desks: [0, 1]) + Self.agents(project: 1, desks: [0])

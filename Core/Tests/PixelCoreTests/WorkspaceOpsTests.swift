@@ -275,6 +275,106 @@ import Testing
         #expect(replay.agents.map(\.name) == w.agents.map(\.name))
     }
 
+    /// A click on a free desk of the scene (3.9) creates the agent at that desk.
+    @Test func addAgentAtAGivenDesk() throws {
+        var w = Workspace()
+        let p = w.addProject(path: "/p/a", now: Self.t0)
+        let added = w.addAgent(to: p, id: Self.agentID(1), deskIndex: 3, now: Self.t0)
+        let a = try #require(added)
+        #expect(w.agent(a)!.deskIndex == 3)
+        // Taken: refused, nothing added.
+        let taken = w.addAgent(to: p, id: Self.agentID(2), deskIndex: 3, now: Self.t0)
+        #expect(taken == nil)
+        let negative = w.addAgent(to: p, id: Self.agentID(3), deskIndex: -1, now: Self.t0)
+        #expect(negative == nil)
+        #expect(w.agents.count == 1)
+        // Without a desk: the lowest free one, as before.
+        let lowest = w.addAgent(to: p, id: Self.agentID(4), now: Self.t0)
+        #expect(lowest.flatMap { w.agent($0)?.deskIndex } == 0)
+        // Desk 3 of another project is free.
+        let q = w.addProject(path: "/p/b", now: Self.t0)
+        let other = w.addAgent(to: q, id: Self.agentID(5), deskIndex: 3, now: Self.t0)
+        #expect(other.flatMap { w.agent($0)?.deskIndex } == 3)
+        // A desk of an annex: its slot is reserved at once.
+        let annex = w.addAgent(to: q, id: Self.agentID(6), deskIndex: 9, now: Self.t0)
+        #expect(annex.flatMap { w.agent($0)?.deskIndex } == 9)
+        #expect(w.project(q)!.annexSlots == [2])
+    }
+
+    @Test func newAgentGetsAGeneratedLook() throws {
+        var w = Workspace()
+        let p = w.addProject(path: "/p/a", now: Self.t0)
+        for n in 1...5 {
+            let added = w.addAgent(to: p, id: Self.agentID(UInt8(n)), now: Self.t0)
+            let id = try #require(added)
+            #expect(w.agent(id)!.look == AgentLook.generated(for: id))
+        }
+        #expect(Set(w.agents.map(\.look)).count > 1)
+        // A look chosen by the caller is kept.
+        let chosen = AgentLook(skin: 3, hairStyle: 5, hairColor: 7, outfitPaletteIndex: 12, accessory: 2)
+        let added = w.addAgent(to: p, id: Self.agentID(9), look: chosen, now: Self.t0)
+        #expect(added.flatMap { w.agent($0)?.look } == chosen)
+    }
+
+    @Test func annexSlotIsAllocatedOnceAndKept() throws {
+        var w = Workspace()
+        let p = w.addProject(path: "/p/a", now: Self.t0)
+        let q = w.addProject(path: "/p/b", now: Self.t0)
+        var ids: [AgentID] = []
+        func add(_ n: Int) throws {
+            let added = w.addAgent(to: p, id: Self.agentID(UInt8(n)), now: Self.t0)
+            ids.append(try #require(added))
+        }
+        for n in 0..<7 { try add(n) }
+        #expect(w.project(p)!.annexSlots.isEmpty)
+        #expect(w.usedSlots == [0, 1])
+        // The eighth agent fills the island: the annex (its free desk 8) gets the lowest free slot.
+        try add(7)
+        #expect(w.project(p)!.annexSlots == [2])
+        #expect(w.usedSlots == [0, 1, 2])
+        // Agents in the annex, then a full annex: the next part gets its slot too.
+        for n in 8..<16 { try add(n) }
+        #expect(w.agents(in: p).map(\.deskIndex) == Array(0..<16))
+        #expect(w.project(p)!.annexSlots == [2, 3])
+        // Removing agents frees nothing (append-only, 3.8); adding them back allocates nothing new.
+        for id in ids[4..<12] { w.removeAgent(id) }
+        #expect(w.project(p)!.annexSlots == [2, 3])
+        for n in 20..<28 { w.addAgent(to: p, id: Self.agentID(UInt8(n)), now: Self.t0) }
+        #expect(w.project(p)!.annexSlots == [2, 3])
+        #expect(w.project(q)!.annexSlots.isEmpty && w.project(q)!.slot == 1)
+        // The layout puts every part in its slot.
+        let layout = WorldLayout.compute(WorldInput(workspace: w))
+        #expect(layout.islands.filter { $0.projectID == p }.map(\.slot) == [0, 2, 3])
+    }
+
+    @Test func addProjectSkipsAnnexSlots() throws {
+        var w = Workspace()
+        let p = w.addProject(path: "/p/a", now: Self.t0)
+        for n in 0..<8 { w.addAgent(to: p, id: Self.agentID(UInt8(n)), now: Self.t0) }
+        #expect(w.project(p)!.annexSlots == [1])
+        let q = w.addProject(path: "/p/b", now: Self.t0)
+        #expect(w.project(q)!.slot == 2)
+        // The annex did not move.
+        let layout = WorldLayout.compute(WorldInput(workspace: w))
+        #expect(layout.islands.map { "\($0.projectID == p ? "p" : "q").\($0.part)@\($0.slot)" } == ["p.0@0", "p.1@1", "q.0@2"])
+    }
+
+    @Test func archiveFreesAnnexSlots() throws {
+        var w = Workspace()
+        let p = w.addProject(path: "/p/a", now: Self.t0)
+        for n in 0..<8 { w.addAgent(to: p, id: Self.agentID(UInt8(n)), now: Self.t0) }
+        let q = w.addProject(path: "/p/b", now: Self.t0)
+        #expect(w.usedSlots == [0, 1, 2])
+        w.archiveProject(p)
+        #expect(w.usedSlots == [2])
+        #expect(w.project(p)!.annexSlots.isEmpty)
+        // The main slot and the annex slot go to the next projects, lowest first.
+        let r = w.addProject(path: "/p/c", now: Self.t0)
+        let s = w.addProject(path: "/p/d", now: Self.t0)
+        #expect([w.project(r)!.slot, w.project(s)!.slot] == [0, 1] as [Int])
+        #expect(w.project(q)!.slot == 2)
+    }
+
     @Test func renameAgent() throws {
         var w = Workspace()
         let p = w.addProject(path: "/p/a", now: Self.t0)

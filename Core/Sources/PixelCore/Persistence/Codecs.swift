@@ -42,12 +42,27 @@ public enum PersistenceCodec {
 
     /// Migrates older files (`migratedFrom` = their version); throws `newerSchema` for a newer file unless
     /// `allowNewerSchema` (read-only opening: unknown fields are ignored), `corrupt` for anything unreadable.
+    /// A file older than version 2 also goes through `completeV2Migration` once decoded.
     /// Run `WorkspaceValidator.validate` on the result.
     public static func decodeWorkspace(_ data: Data, migrations: [MigrationStep] = Migrator.workspaceSteps,
                                        allowNewerSchema: Bool = false) throws -> (workspace: Workspace, migratedFrom: Int?) {
         let (workspace, from) = try decode(Workspace.self, from: data, current: Workspace.currentSchemaVersion,
                                            migrations: migrations, allowNewerSchema: allowNewerSchema)
-        return (workspace, from)
+        guard let from, from < 2 else { return (workspace, from) }
+        return (completeV2Migration(workspace), from)
+    }
+
+    /// The typed half of the v1 → v2 step (the JSON half is in `Migrator.workspaceSteps`): every agent that still has
+    /// the default look (nobody could choose one before step 6) gets `AgentLook.generated(for:)`, and every annex
+    /// the v1 layout showed (annex slots were not persisted then) keeps its slot, now persisted, so that nothing
+    /// moves when a project is added later.
+    static func completeV2Migration(_ input: Workspace) -> Workspace {
+        var workspace = input
+        for i in workspace.agents.indices where workspace.agents[i].look == AgentLook() {
+            workspace.agents[i].look = AgentLook.generated(for: workspace.agents[i].id)
+        }
+        workspace.persistShownAnnexSlots()
+        return workspace
     }
 
     // MARK: - Settings

@@ -6,10 +6,11 @@ import Testing
 @Suite struct WorldLayoutPropertyTests {
     static let t0 = Date(timeIntervalSince1970: 1_790_845_200)
     static let runs = 200
-    static let steps = 40
-    static let maxAgentsPerProject = 7
+    static let steps = 60
+    /// Past 8 agents a project opens annexes (parts 1 and 2), whose slots are persisted (workspace v2).
+    static let maxAgentsPerProject = 20
 
-    /// Each run: the workspace before the first operation, then after each of the 40 operations.
+    /// Each run: the workspace before the first operation, then after each of the 60 operations.
     static let histories: [[Workspace]] = (0..<UInt64(runs)).map { history(seed: 0x5EED_0000 + $0) }
 
     static func uuid(_ rng: inout SplitMix64) -> UUID {
@@ -33,14 +34,16 @@ import Testing
             counter += 1
             let live = w.projects.filter { !$0.archived }.sorted { $0.slot < $1.slot }
             switch rng.next() % 100 {
-            case 0..<20:
+            case 0..<15:
                 w.addProject(path: "/p/\(counter)", id: ProjectID(uuid(&rng)), now: t0)
-            case 20..<65:
+            case 15..<70:
+                // Half the time the first open island, so that some projects fill their annexes.
                 let open = live.filter { w.agents(in: $0.id).count < maxAgentsPerProject }
-                if let project = pick(open, &rng) {
+                let project = rng.next() % 2 == 0 ? open.first : pick(open, &rng)
+                if let project {
                     w.addAgent(to: project.id, name: "A\(counter)", id: AgentID(uuid(&rng)), now: t0)
                 }
-            case 65..<85:
+            case 70..<85:
                 if let agent = pick(w.agents.sorted { $0.id < $1.id }, &rng) { w.removeAgent(agent.id) }
             default:
                 if let project = pick(live, &rng) { w.archiveProject(project.id) }
@@ -75,14 +78,51 @@ import Testing
         #expect(finals.contains { $0.projects.contains(where: \.archived) })
         #expect(finals.contains { w in w.projects.contains { p in !p.archived && w.agents(in: p.id).count >= 4 } })
         #expect(finals.map { $0.projects.count }.max()! >= 6)
+        // Annexes open, fill and open the next part; some go with an archived project.
+        let all = Self.histories.flatMap { $0 }
+        #expect(all.contains { w in w.projects.contains { !$0.archived && $0.annexSlots.count >= 2 } })
+        #expect(finals.filter { w in w.projects.contains { !$0.archived && !$0.annexSlots.isEmpty } }.count >= Self.runs / 10)
+        #expect(all.contains { w in w.agents.contains { $0.deskIndex >= 16 } })
+        #expect(Self.histories.contains { history in
+            zip(history, history.dropFirst()).contains { before, after in
+                before.projects.contains { p in !p.archived && !p.annexSlots.isEmpty
+                    && after.project(p.id)?.archived == true }
+            }
+        })
     }
 
+    /// Every annex of a history sits in its persisted slot (no fallback), and the slots of the live projects, main
+    /// and annexes, are all different.
+    @Test func annexesSitInTheirPersistedSlots() {
+        for (run, history) in Self.histories.enumerated() {
+            for (step, workspace) in history.enumerated() {
+                let layout = WorldLayout.compute(WorldInput(workspace: workspace))
+                var problems: [String] = []
+                for island in layout.islands where island.part > 0 {
+                    let slots = workspace.project(island.projectID)?.annexSlots ?? []
+                    if island.part > slots.count || slots[island.part - 1] != island.slot {
+                        problems.append("annex \(island.part) at \(island.slot), persisted \(slots)")
+                    }
+                }
+                let live = workspace.projects.filter { !$0.archived }
+                let held = live.flatMap { [$0.slot] + $0.annexSlots }
+                if Set(held).count != held.count { problems.append("slot held twice: \(held.sorted())") }
+                if Set(held) != workspace.usedSlots { problems.append("usedSlots") }
+                #expect(problems.isEmpty, "run \(run), step \(step): \(problems)")
+            }
+        }
+    }
+
+    /// Main islands and annexes alike (keyed by project and part): adding a project or an agent, removing an agent
+    /// or archiving a project never moves one that stays.
     @Test func noIslandEverMoves() {
+        var annexesCompared = 0
         for (run, history) in Self.histories.enumerated() {
             let layouts = Self.layouts(history)
             for step in 1..<layouts.count {
                 let before = Self.islands(layouts[step - 1])
                 let after = Self.islands(layouts[step])
+                annexesCompared += before.filter { $0.value.part > 0 && after[$0.key] != nil }.count
                 let moved = before.keys.sorted().filter { key in
                     guard let island = after[key] else { return false }
                     return island.origin != before[key]!.origin || island.slot != before[key]!.slot
@@ -91,6 +131,7 @@ import Testing
                 #expect(moved.isEmpty, "run \(run), step \(step): \(moved)")
             }
         }
+        #expect(annexesCompared > 500, "annexes really stay through the histories: \(annexesCompared)")
     }
 
     /// The slot of an island, computed here from the 12×9 pitch below the 6-tile hall (not from the layout).

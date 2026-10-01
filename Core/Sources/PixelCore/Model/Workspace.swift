@@ -31,21 +31,40 @@ public struct Project: Codable, Identifiable, Hashable, Sendable {
     public var order: Int
     /// World slot assigned at creation and kept for life (append-only layout).
     public var slot: Int
+    /// Slots of parts 1, 2… (annexes), allocated once and kept for life like `slot` (workspace v2): `annexSlots[p − 1]`
+    /// holds part p. Emptied when the project is archived. Decoded as `[]` when absent (files of version 1).
+    public var annexSlots: [Int]
     public var defaults: AgentDefaults
     public var createdAt: Date
     public var archived: Bool
 
     public init(id: ProjectID = ProjectID(), name: String, path: String, hueIndex: Int, order: Int, slot: Int,
-                defaults: AgentDefaults = AgentDefaults(), createdAt: Date, archived: Bool = false) {
+                defaults: AgentDefaults = AgentDefaults(), createdAt: Date, archived: Bool = false,
+                annexSlots: [Int] = []) {
         self.id = id
         self.name = name
         self.path = path
         self.hueIndex = hueIndex
         self.order = order
         self.slot = slot
+        self.annexSlots = annexSlots
         self.defaults = defaults
         self.createdAt = createdAt
         self.archived = archived
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(ProjectID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        path = try c.decode(String.self, forKey: .path)
+        hueIndex = try c.decode(Int.self, forKey: .hueIndex)
+        order = try c.decode(Int.self, forKey: .order)
+        slot = try c.decode(Int.self, forKey: .slot)
+        annexSlots = try c.decodeIfPresent([Int].self, forKey: .annexSlots) ?? []
+        defaults = try c.decode(AgentDefaults.self, forKey: .defaults)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        archived = try c.decode(Bool.self, forKey: .archived)
     }
 }
 
@@ -152,9 +171,10 @@ public struct Agent: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Persisted as `state/workspace.json`.
+/// Persisted as `state/workspace.json`. Version 2 (step 3): `Project.annexSlots` and generated looks
+/// (`Migrator.workspaceSteps`, then `PersistenceCodec.decodeWorkspace`); an older app opens it read-only.
 public struct Workspace: Codable, Hashable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
     public var projects: [Project]

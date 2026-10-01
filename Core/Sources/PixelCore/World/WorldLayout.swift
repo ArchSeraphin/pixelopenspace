@@ -1,10 +1,11 @@
 import Foundation
 
 /// Pure, deterministic placement of islands, desks, walls and hall on the grid (3.8). Append-only: a live project
-/// keeps `Project.slot` and an agent keeps `Agent.deskIndex`, and every tile below derives from those two numbers
-/// alone, so adding, removing or archiving a project or an agent never moves an existing island or desk, even when
-/// an island grows from 4 to 8 desks (it grows toward +i, inside its slot). The rug follows the agents more closely
-/// (one post at a time, `rugDesks`) but also grows toward +i from a fixed corner, inside the island's reserved rect.
+/// keeps `Project.slot` and `Project.annexSlots`, an agent keeps `Agent.deskIndex`, and every tile below derives from
+/// those numbers alone, so adding, removing or archiving a project or an agent never moves an existing island, annex
+/// or desk, even when an island grows from 4 to 8 desks (it grows toward +i, inside its slot). The rug follows the
+/// agents more closely (one post at a time, `rugDesks`) but also grows toward +i from a fixed corner, inside the
+/// island's reserved rect.
 public enum WorldLayout {
     /// Depth of an island along j, sign and border included.
     static let islandDepth = 7
@@ -22,11 +23,15 @@ public enum WorldLayout {
 
     /// Live (non-archived) projects get an island in `Project.slot` (a negative slot, which the validator never
     /// leaves, gets none); their agents sit at `deskIndex`. Part p of a project holds the desks p·8 ..< (p + 1)·8;
-    /// part p ≥ 1 (an annex) exists when it has an agent or when part p − 1 is full, and takes the lowest slot used
-    /// by no live project and no annex placed before it (projects by slot, then part). Annex slots are not
-    /// persisted: a new project can move an annex (décision 7). Two agents on one desk (never in a valid
-    /// workspace): the lowest id sits. Input decor keeps its world tile; an item outside the bounds, or anchored to
-    /// an island that is not live, is left out. The result does not depend on the order of the input arrays.
+    /// part p ≥ 1 (an annex) exists when it has an agent or when part p − 1 is full. It sits in its persisted slot,
+    /// `Project.annexSlots[p − 1]` (workspace v2, kept for life like `slot`), when there is one; otherwise (a file of
+    /// version 1, or repaired) in the lowest slot that no live project holds, as its island or a persisted annex, and
+    /// no annex placed before it (projects by slot, then part). A persisted annex slot that is negative, a live
+    /// project's slot or already claimed by an annex before it (never in a validated workspace) is ignored. A
+    /// persisted slot whose part is not shown stays reserved but draws nothing. Two agents on one desk (never in a
+    /// valid workspace): the lowest id sits. Input decor keeps its world tile; an item outside the bounds, or
+    /// anchored to an island that is not live, is left out. The result does not depend on the order of the input
+    /// arrays.
     public static func compute(_ input: WorldInput) -> WorldLayoutResult {
         let config = input.config
         let perIsland = max(1, config.desksPerIsland)
@@ -41,7 +46,16 @@ public enum WorldLayout {
             seats[agent.projectID, default: [:]][agent.deskIndex] = agent.id
         }
 
+        // Persisted annex slots, claimed projects by slot, then part.
         var usedSlots = Set(live.map(\.slot))
+        var annexSlots: [ProjectID: [Int: Int]] = [:]
+        for project in live {
+            for (k, slot) in project.annexSlots.enumerated() where slot >= 0 && !usedSlots.contains(slot) {
+                usedSlots.insert(slot)
+                annexSlots[project.id, default: [:]][k + 1] = slot
+            }
+        }
+
         var nextFree = 0
         var islands: [IslandPlacement] = []
         for project in live {
@@ -59,6 +73,8 @@ public enum WorldLayout {
                 let slot: Int
                 if part == 0 {
                     slot = project.slot
+                } else if let persisted = annexSlots[project.id]?[part] {
+                    slot = persisted
                 } else {
                     while usedSlots.contains(nextFree) { nextFree += 1 }
                     slot = nextFree

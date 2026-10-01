@@ -97,9 +97,9 @@ import Testing
 
     @Test func newerSchemaIsRejectedUnlessReadOnly() throws {
         var json = String(decoding: try PersistenceCodec.encodeWorkspace(Self.sampleWorkspace()), as: UTF8.self)
-        json = json.replacingOccurrences(of: "\"schemaVersion\" : 1", with: "\"schemaVersion\" : 7, \"decor\" : []")
+        json = json.replacingOccurrences(of: "\"schemaVersion\" : 2", with: "\"schemaVersion\" : 7, \"decor\" : []")
         let data = Data(json.utf8)
-        #expect(throws: PersistenceError.newerSchema(found: 7, supported: 1)) { try PersistenceCodec.decodeWorkspace(data) }
+        #expect(throws: PersistenceError.newerSchema(found: 7, supported: 2)) { try PersistenceCodec.decodeWorkspace(data) }
         let readOnly = try PersistenceCodec.decodeWorkspace(data, allowNewerSchema: true)
         #expect(readOnly.workspace.schemaVersion == 7)
         #expect(readOnly.workspace.projects.count == 2)
@@ -127,7 +127,7 @@ import Testing
     }
 
     @Test func missingSchemaVersionReadsAsCurrent() throws {
-        let (w, from) = try PersistenceCodec.decodeWorkspace(Data("{\"schemaVersion\": 1, \"projects\": [], \"agents\": []}".utf8))
+        let (w, from) = try PersistenceCodec.decodeWorkspace(Data("{\"schemaVersion\": 2, \"projects\": [], \"agents\": []}".utf8))
         #expect(w == Workspace())
         #expect(from == nil)
         #expect(try PersistenceCodec.decodeWorkspace(Data("{\"projects\": [], \"agents\": []}".utf8)).migratedFrom == nil)
@@ -181,14 +181,121 @@ import Testing
                     "permissionMode": "plan", "sessions": [], "queuePaused": false,
                     "createdAt": "2026-09-21T14:13:20.5Z"}]}
         """
-        let (w, from) = try PersistenceCodec.decodeWorkspace(Data(v0.utf8), migrations: [Self.fakeStep])
+        let (w, from) = try PersistenceCodec.decodeWorkspace(Data(v0.utf8), migrations: [Self.fakeStep] + Migrator.workspaceSteps)
         #expect(from == 0)
-        #expect(w.schemaVersion == 1)
+        #expect(w.schemaVersion == 2)
         #expect(w.agents.map(\.name) == ["Nova"])
         #expect(w.agents[0].permissionMode == .plan)
         #expect(w.agents[0].createdAt == Date(timeIntervalSince1970: 1_790_000_000.5))
+        // Through v1 → v2 as well: the default look became a generated one.
+        #expect(w.agents[0].look == AgentLook.generated(for: w.agents[0].id))
+        #expect(w.projects[0].annexSlots.isEmpty)
+        // Without the v1 → v2 step, the file cannot reach the current version.
+        #expect(throws: PersistenceError.self) {
+            try PersistenceCodec.decodeWorkspace(Data(v0.utf8), migrations: [Self.fakeStep])
+        }
         // Without the step, a v0 file cannot be read.
         #expect(throws: PersistenceError.self) { try PersistenceCodec.decodeWorkspace(Data(v0.utf8)) }
+    }
+
+    static let apiID = "6E0B1C38-8C5A-4B1B-9E0C-1A2B3C4D5E6F"
+    static let siteID = "7F1C2D49-9D6B-4C2C-8F1D-2B3C4D5E6F70"
+    static let novaID = "0B7F4C1E-2D3A-4E5F-8A9B-0C1D2E3F4A5B"
+    static let bipID = "1C8A5D2F-3E4B-4F6A-9B0C-1D2E3F4A5B6C"
+    static let luneID = "2D9B6E3A-4F5C-4A7B-8C1D-2E3F4A5B6C7D"
+
+    /// A `workspace.json` written by the app of step 2 (version 1): no annex slots, default looks but one.
+    static let v1 = """
+    {"schemaVersion": 1,
+     "projects": [{"id": "\(apiID)", "name": "API", "path": "/p/api", "hueIndex": 4, "order": 0, "slot": 0,
+                   "defaults": {"permissionMode": "default"}, "createdAt": "2026-09-21T14:13:20Z", "archived": false},
+                  {"id": "\(siteID)", "name": "SITE", "path": "/p/site", "hueIndex": 0, "order": 1, "slot": 1,
+                   "defaults": {"model": "sonnet", "permissionMode": "plan"}, "createdAt": "2026-09-21T14:13:21Z",
+                   "archived": false}],
+     "agents": [{"id": "\(novaID)", "projectID": "\(apiID)", "name": "Nova", "deskIndex": 0,
+                 "look": {"skin": 0, "hairStyle": 0, "hairColor": 0}, "permissionMode": "default",
+                 "sessions": [{"sessionID": "s-1", "cwd": "/p/api", "startedAt": "2026-09-21T14:20:00Z",
+                               "source": "startup"}],
+                 "queuePaused": false, "createdAt": "2026-09-21T14:13:22.5Z"},
+                {"id": "\(bipID)", "projectID": "\(apiID)", "name": "Bip", "deskIndex": 1,
+                 "look": {"skin": 2, "hairStyle": 3, "hairColor": 0, "outfitPaletteIndex": 12, "accessory": 2},
+                 "permissionMode": "acceptEdits", "sessions": [], "queuePaused": true,
+                 "createdAt": "2026-09-21T14:13:23Z"},
+                {"id": "\(luneID)", "projectID": "\(siteID)", "name": "Lune", "deskIndex": 0,
+                 "look": {"skin": 0, "hairStyle": 0, "hairColor": 0, "outfitPaletteIndex": null, "accessory": null},
+                 "permissionMode": "plan", "sessions": [], "queuePaused": false, "createdAt": "2026-09-21T14:13:24Z"}]}
+    """
+
+    @Test func workspaceV1MigratesToV2() throws {
+        // The JSON step adds the empty annex slots.
+        let object = try #require(try JSONSerialization.jsonObject(with: Data(Self.v1.utf8)) as? [String: Any])
+        let migrated = try Migrator.migrate(object, from: 1, to: 2, steps: Migrator.workspaceSteps)
+        #expect(migrated["schemaVersion"] as? Int == 2)
+        let projects = try #require(migrated["projects"] as? [[String: Any]])
+        #expect(projects.count == 2 && projects.allSatisfy { ($0["annexSlots"] as? [Int]) == [] })
+
+        // Through the codec: the default looks become generated looks, the chosen one is kept.
+        let (w, from) = try PersistenceCodec.decodeWorkspace(Data(Self.v1.utf8))
+        #expect(from == 1)
+        #expect(w.schemaVersion == 2)
+        #expect(w.projects.map(\.annexSlots) == [[], []])
+        #expect(w.projects.map(\.slot) == [0, 1])
+        let nova = try #require(w.agent(AgentID(string: Self.novaID)!))
+        let bip = try #require(w.agent(AgentID(string: Self.bipID)!))
+        let lune = try #require(w.agent(AgentID(string: Self.luneID)!))
+        #expect(nova.look == AgentLook.generated(for: nova.id) && nova.look != AgentLook())
+        #expect(lune.look == AgentLook.generated(for: lune.id) && lune.look != AgentLook())
+        #expect(bip.look == AgentLook(skin: 2, hairStyle: 3, hairColor: 0, outfitPaletteIndex: 12, accessory: 2))
+        // Nothing else changed.
+        #expect(nova.sessions.map(\.sessionID) == ["s-1"] && bip.queuePaused && bip.permissionMode == .acceptEdits)
+        #expect(w.projects[1].defaults == AgentDefaults(model: "sonnet", permissionMode: .plan))
+        #expect(WorkspaceValidator.validate(w).issues.isEmpty)
+
+        // Written back as version 2, with the annex slots; read again, nothing to migrate.
+        let data = try PersistenceCodec.encodeWorkspace(w)
+        let text = String(decoding: data, as: UTF8.self)
+        #expect(text.contains("\"schemaVersion\" : 2") && text.contains("\"annexSlots\" : ["))
+        let (again, againFrom) = try PersistenceCodec.decodeWorkspace(data)
+        #expect(again == w && againFrom == nil)
+        // A version 2 file whose projects have no annex slots (hand-written) reads them as empty, and keeps its
+        // looks, even the default one.
+        let bare = Self.v1.replacingOccurrences(of: "\"schemaVersion\": 1", with: "\"schemaVersion\": 2")
+        let (v2, v2From) = try PersistenceCodec.decodeWorkspace(Data(bare.utf8))
+        #expect(v2From == nil && v2.projects.map(\.annexSlots) == [[], []])
+        #expect(v2.agent(nova.id)?.look == AgentLook())
+    }
+
+    /// A version 1 file whose project already had an annex (8 agents or more): the annex keeps the slot the old
+    /// layout gave it, now persisted, so that a new project does not take it (nothing moves, 3.8).
+    @Test func workspaceV1KeepsItsAnnexWhereItWas() throws {
+        let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+        let api = Project(name: "API", path: "/p/api", hueIndex: 4, order: 0, slot: 0, createdAt: t0)
+        let site = Project(name: "SITE", path: "/p/site", hueIndex: 0, order: 1, slot: 1, createdAt: t0)
+        let agents = (0..<9).map { Agent(projectID: api.id, name: "A\($0)", deskIndex: $0, createdAt: t0) }
+        let old = Workspace(schemaVersion: 1, projects: [api, site], agents: agents)
+        let before = WorldLayout.compute(WorldInput(workspace: old))
+        #expect(before.islands.map(\.slot) == [0, 1, 2])
+
+        // The file as step 2 wrote it: version 1, no annexSlots.
+        let encoded = try PersistenceCodec.encodeWorkspace(old)
+        var object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object["schemaVersion"] = 1
+        object["projects"] = (object["projects"] as? [[String: Any]])?.map { project in
+            var project = project
+            project.removeValue(forKey: "annexSlots")
+            return project
+        }
+        let v1 = try JSONSerialization.data(withJSONObject: object)
+        #expect(!String(decoding: v1, as: UTF8.self).contains("annexSlots"))
+
+        var (w, from) = try PersistenceCodec.decodeWorkspace(v1)
+        #expect(from == 1)
+        #expect(w.project(api.id)!.annexSlots == [2] && w.project(site.id)!.annexSlots.isEmpty)
+        #expect(WorldLayout.compute(WorldInput(workspace: w)).islands == before.islands)
+        #expect(WorkspaceValidator.validate(w).issues.isEmpty)
+        let next = w.addProject(path: "/p/next", now: t0)
+        #expect(w.project(next)!.slot == 3)
+        #expect(WorldLayout.compute(WorldInput(workspace: w)).islands.filter { $0.projectID == api.id }.map(\.slot) == [0, 2])
     }
 
     @Test func registeredStepsCoverEveryOlderVersion() {
@@ -237,6 +344,56 @@ import Testing
         #expect(issues.allSatisfy { !$0.isEmpty })
 
         // Idempotent.
+        let (again, noIssues) = WorkspaceValidator.validate(fixed)
+        #expect(again == fixed)
+        #expect(noIssues.isEmpty)
+    }
+
+    /// An annex slot held twice (by a live project's island or by an earlier annex), or negative: the first holder
+    /// keeps it, the others move to the lowest free slot, in file order, part by part. Archived projects are left
+    /// alone.
+    @Test func annexSlotDuplicateIsRepaired() {
+        var a = Project(name: "A", path: "/a", hueIndex: 0, order: 0, slot: 0, createdAt: Self.t0)
+        a.annexSlots = [1, 3]
+        var b = Project(name: "B", path: "/b", hueIndex: 1, order: 1, slot: 1, createdAt: Self.t0)
+        b.annexSlots = [3]
+        var c = Project(name: "C", path: "/c", hueIndex: 2, order: 2, slot: 2, createdAt: Self.t0)
+        c.annexSlots = [-1]
+        var old = Project(name: "Old", path: "/old", hueIndex: 3, order: 3, slot: 0, createdAt: Self.t0, archived: true)
+        old.annexSlots = [0, 1]
+        let w = Workspace(projects: [a, b, c, old])
+
+        let (fixed, issues) = WorkspaceValidator.validate(w)
+        #expect(fixed.projects.map(\.slot) == [0, 1, 2, 0])
+        #expect(fixed.projects.map(\.annexSlots) == [[4, 3], [5], [6], [0, 1]])
+        #expect(issues.count == 3)
+        #expect(issues.allSatisfy { $0.contains("annexe") })
+        #expect(issues.first == "Projet « A » : emplacement 1 de l'annexe 1 déjà pris ou invalide, déplacé en 4.")
+        let held = fixed.projects.filter { !$0.archived }.flatMap { [$0.slot] + $0.annexSlots }
+        #expect(Set(held).count == held.count)
+
+        let (again, noIssues) = WorkspaceValidator.validate(fixed)
+        #expect(again == fixed)
+        #expect(noIssues.isEmpty)
+    }
+
+    /// An annex the layout shows without a persisted slot (a hand-edited file, or a desk repair that opened a part):
+    /// its slot is persisted where it is shown, so that it never moves afterwards.
+    @Test func shownAnnexWithoutSlotIsKeptWhereItIs() {
+        let a = Project(name: "A", path: "/a", hueIndex: 0, order: 0, slot: 0, createdAt: Self.t0)
+        let b = Project(name: "B", path: "/b", hueIndex: 1, order: 1, slot: 1, createdAt: Self.t0)
+        // Two agents on desk 7: the repair sends the second one to desk 8, in part 1.
+        var agents = (0..<8).map { Agent(projectID: a.id, name: "A\($0)", deskIndex: $0, createdAt: Self.t0) }
+        agents.append(Agent(projectID: a.id, name: "Bis", deskIndex: 7, createdAt: Self.t0))
+        let w = Workspace(projects: [a, b], agents: agents)
+
+        let (fixed, issues) = WorkspaceValidator.validate(w)
+        #expect(fixed.agents.last!.deskIndex == 8)
+        #expect(fixed.project(a.id)!.annexSlots == [2])
+        #expect(issues.count == 2)
+        #expect(issues.last == "Projet « A » : annexe 1 gardée dans l'emplacement 2.")
+        #expect(WorldLayout.compute(WorldInput(workspace: fixed)).islands.map(\.slot) == [0, 1, 2])
+
         let (again, noIssues) = WorkspaceValidator.validate(fixed)
         #expect(again == fixed)
         #expect(noIssues.isEmpty)

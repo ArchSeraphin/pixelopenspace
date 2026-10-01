@@ -41,6 +41,26 @@ public enum WorkspaceValidator {
             issues.append("Projet « \(w.projects[i].name) » : emplacement \(old) déjà pris ou invalide, déplacé en \(slot).")
         }
 
+        // Annex slots of live projects (workspace v2): non-negative, unique among all the slots of live projects.
+        // Main slots win; between annexes, the first in file order (then part order) keeps the slot. A contested one
+        // moves to the lowest free slot rather than being dropped, so that the next parts keep theirs.
+        var needsAnnexSlot: [(project: Int, index: Int)] = []
+        for i in w.projects.indices where !w.projects[i].archived {
+            for k in w.projects[i].annexSlots.indices {
+                let slot = w.projects[i].annexSlots[k]
+                if slot >= 0, usedSlots.insert(slot).inserted { continue }
+                needsAnnexSlot.append((i, k))
+            }
+        }
+        for (i, k) in needsAnnexSlot {
+            let old = w.projects[i].annexSlots[k]
+            var slot = 0
+            while usedSlots.contains(slot) { slot += 1 }
+            usedSlots.insert(slot)
+            w.projects[i].annexSlots[k] = slot
+            issues.append("Projet « \(w.projects[i].name) » : emplacement \(old) de l'annexe \(k + 1) déjà pris ou invalide, déplacé en \(slot).")
+        }
+
         // Agents: unique IDs, known projects.
         let knownProjects = Set(w.projects.map(\.id))
         var agentIDs: Set<AgentID> = []
@@ -72,6 +92,12 @@ public enum WorkspaceValidator {
             usedDesks[projectID, default: []].insert(desk)
             w.agents[i].deskIndex = desk
             issues.append("Agent « \(w.agents[i].name) » : poste \(old) déjà pris ou invalide, déplacé au poste \(desk).")
+        }
+
+        // An annex the layout shows without a slot (hand-edited file, desk moved above): kept where it is shown.
+        for kept in w.persistShownAnnexSlots() {
+            let name = w.project(kept.projectID)?.name ?? kept.projectID.description
+            issues.append("Projet « \(name) » : annexe \(kept.part) gardée dans l'emplacement \(kept.slot).")
         }
 
         return (w, issues)
