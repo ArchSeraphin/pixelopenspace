@@ -1,0 +1,287 @@
+{
+  "id": "S7",
+  "title": "Dialogue AskUserQuestion",
+  "status": "ok",
+  "timeout_s": 120,
+  "launches": [
+    {
+      "label": "lancement-1",
+      "argv": [
+        "--settings",
+        "<tmp>/spike-settings.json",
+        "--model",
+        "haiku",
+        "--permission-mode",
+        "default",
+        "--name",
+        "pos-spike-s7"
+      ],
+      "cwd": "<tmp>/S7/projet",
+      "trust_dialog": true,
+      "t_start_ms": 72.7,
+      "trust_seen_ms": 388.2,
+      "trust_focus": [
+        "No, exit",
+        "Yes, I trust this folder"
+      ],
+      "trust_moves": 1,
+      "trust_accepted_ms": 1001.6,
+      "trust_dialog_closed": true,
+      "hooks_before_trust_dialog": [],
+      "hooks_before_trust_accept": [],
+      "session_start": {
+        "source": "startup",
+        "session_id": "97e26098-88da-42a1-9944-535607f4364a",
+        "cwd": "<tmp>/S7/projet",
+        "model": "claude-haiku-4-5-20251001",
+        "session_title": "pos-spike-s7",
+        "t_ms": 1546.1,
+        "keys": [
+          "cwd",
+          "hook_event_name",
+          "model",
+          "scratchpad_dir",
+          "session_id",
+          "session_title",
+          "source",
+          "transcript_path"
+        ]
+      },
+      "startup_dialogs": [],
+      "ready_ms": 2625.6,
+      "input_left": false,
+      "exit": {
+        "method": "/exit",
+        "exit_status": 0,
+        "session_end": "prompt_input_exit"
+      },
+      "terminal": {
+        "bracketed_paste_enabled": true,
+        "alternate_screen_used": true,
+        "private_modes_seen": [
+          "?1000h",
+          "?1000l",
+          "?1002h",
+          "?1002l",
+          "?1003h",
+          "?1003l",
+          "?1004h",
+          "?1004l",
+          "?1006h",
+          "?1006l",
+          "?1016l",
+          "?1049h",
+          "?1049l",
+          "?2004h",
+          "?2004l",
+          "?2026h",
+          "?2026l",
+          "?2031h",
+          "?2031l",
+          "?25h",
+          "?25l"
+        ],
+        "queries": [
+          "CSI 16 t",
+          "DA1",
+          "DECRQM ?1016",
+          "DECRQM ?2026",
+          "OSC 11 ?",
+          "XTVERSION",
+          "kitty keyboard ?"
+        ],
+        "osc_codes": [
+          "0",
+          "11"
+        ],
+        "titles": [
+          "◐ pos-spike-s7",
+          "◑ pos-spike-s7",
+          "✳ pos-spike-s7",
+          "◑ pos-spike-s7",
+          ""
+        ],
+        "kitty_keyboard_flags_history": [
+          0,
+          0,
+          5,
+          0,
+          5,
+          0,
+          5,
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "timeline": [
+    {
+      "t_ms": 72.8,
+      "msg": "lancement-1 : claude --settings <tmp>/spike-settings.json --model haiku --permission-mode default --name pos-spike-s7"
+    },
+    {
+      "t_ms": 1029.5,
+      "msg": "lancement-1 : dialogue de confiance accepté"
+    },
+    {
+      "t_ms": 3020.0,
+      "msg": "question : UserPromptSubmit après 69 ms"
+    },
+    {
+      "t_ms": 16651.8,
+      "msg": "lancement-1 : fin (/exit, SessionEnd=prompt_input_exit)"
+    }
+  ],
+  "answer": {
+    "ask_user_question": true,
+    "tool_input": {
+      "questions": [
+        {
+          "question": "Préférez-vous le rouge ou le bleu ?",
+          "header": "Choix couleur",
+          "options": [
+            {
+              "label": "Rouge",
+              "description": "La couleur rouge, chaude et dynamique"
+            },
+            {
+              "label": "Bleu",
+              "description": "La couleur bleu, calme et sereine"
+            }
+          ],
+          "multiSelect": false
+        }
+      ]
+    },
+    "first_event": "PreToolUse",
+    "options": [
+      [
+        "1",
+        "Rouge"
+      ],
+      [
+        "2",
+        "Bleu"
+      ],
+      [
+        "3",
+        "Type something."
+      ],
+      [
+        "4",
+        "Chat about this"
+      ]
+    ],
+    "screen_lines": [
+      "",
+      " ▐▛███▛█   Claude Code v2.1.286",
+      "▝▜██████▀  Haiku 4.5 · Claude Max",
+      " ▝▝   ▝▝   <tmp>/S7/projet",
+      "",
+      "",
+      "❯ Utilise l'outil AskUserQuestion pour me demander de choisir entre rouge et bleu, puis attends ma réponse.",
+      "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+      " ☐ Choix couleur",
+      "",
+      "Préférez-vous le rouge ou le bleu ?",
+      "",
+      "❯ 1. Rouge",
+      "     La couleur rouge, chaude et dynamique",
+      "  2. Bleu",
+      "     La couleur bleu, calme et sereine",
+      "  3. Type something.",
+      "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+      "  4. Chat about this",
+      "",
+      "Enter to select · ↑/↓ to navigate · Esc to cancel",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "───────────────────────────────────────────────────────────────────────────────────────────────────────── pos-spike-s7 ─"
+    ],
+    "events_until_dialog": [
+      {
+        "event": "UserPromptSubmit",
+        "t_ms": 2946.8,
+        "session_id": "97e26098-88da-42a1-9944-535607f4364a",
+        "prompt": "Utilise l'outil AskUserQuestion pour me demander de choisir entre rouge et bleu, puis attends ma réponse."
+      },
+      {
+        "event": "PreToolUse",
+        "t_ms": 5915.1,
+        "tool_name": "AskUserQuestion",
+        "session_id": "97e26098-88da-42a1-9944-535607f4364a",
+        "tool_input": "{\"questions\": [{\"question\": \"Préférez-vous le rouge ou le bleu ?\", \"header\": \"Choix couleur\", \"options\": [{\"label\": \"Rouge\", \"description\": \"La couleur rouge, …"
+      },
+      {
+        "event": "PermissionRequest",
+        "t_ms": 6002.6,
+        "tool_name": "AskUserQuestion",
+        "session_id": "97e26098-88da-42a1-9944-535607f4364a",
+        "tool_input": "{\"questions\": [{\"question\": \"Préférez-vous le rouge ou le bleu ?\", \"header\": \"Choix couleur\", \"options\": [{\"label\": \"Rouge\", \"description\": \"La couleur rouge, …"
+      }
+    ],
+    "kitty_flags_at_escape": 5,
+    "events_after_escape": []
+  },
+  "duration_s": 16.7,
+  "screens": [
+    {
+      "label": "lancement-1-confiance",
+      "session": "lancement-1",
+      "t_ms": 663.4,
+      "alt_screen": false,
+      "cursor": [
+        14,
+        2
+      ],
+      "file": "screens/01-lancement-1-confiance.txt"
+    },
+    {
+      "label": "lancement-1-pret",
+      "session": "lancement-1",
+      "t_ms": 2625.7,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/02-lancement-1-pret.txt"
+    },
+    {
+      "label": "dialogue-question",
+      "session": "lancement-1",
+      "t_ms": 6416.4,
+      "alt_screen": true,
+      "cursor": [
+        13,
+        1
+      ],
+      "file": "screens/03-dialogue-question.txt"
+    },
+    {
+      "label": "apres-echap",
+      "session": "lancement-1",
+      "t_ms": 15426.7,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/04-apres-echap.txt"
+    }
+  ]
+}

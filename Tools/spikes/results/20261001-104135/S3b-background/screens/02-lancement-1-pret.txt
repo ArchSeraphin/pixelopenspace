@@ -1,0 +1,37 @@
+# lancement-1-pret · session lancement-1 · t=2.8 s · curseur ligne 33 col 3 · écran alternatif
+
+ ▐▛███▛█   Claude Code v2.1.286
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   <tmp>/S3b-background/projet
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+───────────────────────────────────────────────────────────────────────────────────────────── pos-spike-s3b-background ─
+❯ Try "edit <filepath> to..."
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 4.5 | projet
+  ⏸ manual mode on

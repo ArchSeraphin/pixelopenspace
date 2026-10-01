@@ -1,0 +1,31 @@
+{
+  "harness_version": 2,
+  "date": "2026-10-01T10:41:35+02:00",
+  "claude_path": "~/.local/bin/claude",
+  "model": "haiku",
+  "pty": {
+    "rows": 36,
+    "cols": 120,
+    "TERM": "xterm-256color",
+    "COLORTERM": "truecolor"
+  },
+  "shell": "/bin/zsh",
+  "term_program": "HeraStudio",
+  "lang": "fr_FR.UTF-8",
+  "machine": "arm64",
+  "cpu_count": 8,
+  "python": {
+    "version": "3.13.0",
+    "executable": "/Library/Frameworks/Python.framework/Versions/3.13/bin/python3"
+  },
+  "claude_version": "2.1.286 (Claude Code)",
+  "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "27.0",
+    "BuildVersion": "26A428"
+  },
+  "os_version": "macOS 27.0 (26A428)",
+  "xcode": "Xcode 26.5 Build version 17F42",
+  "run_inside_claude_session": true,
+  "permission_request_missing": []
+}

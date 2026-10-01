@@ -1,0 +1,216 @@
+{
+  "id": "S3b-background",
+  "title": "Tâche de fond (optionnel, --with-perturbation)",
+  "status": "ok",
+  "timeout_s": 150,
+  "launches": [
+    {
+      "label": "lancement-1",
+      "argv": [
+        "--settings",
+        "<tmp>/spike-settings.json",
+        "--model",
+        "haiku",
+        "--permission-mode",
+        "default",
+        "--name",
+        "pos-spike-s3b-background"
+      ],
+      "cwd": "<tmp>/S3b-background/projet",
+      "trust_dialog": true,
+      "t_start_ms": 82.6,
+      "trust_seen_ms": 492.1,
+      "trust_focus": [
+        "No, exit",
+        "Yes, I trust this folder"
+      ],
+      "trust_moves": 1,
+      "trust_accepted_ms": 1049.3,
+      "trust_dialog_closed": true,
+      "hooks_before_trust_dialog": [],
+      "hooks_before_trust_accept": [],
+      "session_start": {
+        "source": "startup",
+        "session_id": "8f0977b0-5048-40ae-b851-b084a1be6bc0",
+        "cwd": "<tmp>/S3b-background/projet",
+        "model": "claude-haiku-4-5-20251001",
+        "session_title": "pos-spike-s3b-background",
+        "t_ms": 1669.1,
+        "keys": [
+          "cwd",
+          "hook_event_name",
+          "model",
+          "scratchpad_dir",
+          "session_id",
+          "session_title",
+          "source",
+          "transcript_path"
+        ]
+      },
+      "startup_dialogs": [],
+      "ready_ms": 2759.6,
+      "input_left": false,
+      "exit": {
+        "method": "/exit",
+        "exit_status": 0,
+        "session_end": "prompt_input_exit"
+      },
+      "terminal": {
+        "bracketed_paste_enabled": true,
+        "alternate_screen_used": true,
+        "private_modes_seen": [
+          "?1000h",
+          "?1000l",
+          "?1002h",
+          "?1002l",
+          "?1003h",
+          "?1003l",
+          "?1004h",
+          "?1004l",
+          "?1006h",
+          "?1006l",
+          "?1016l",
+          "?1049h",
+          "?1049l",
+          "?2004h",
+          "?2004l",
+          "?2026h",
+          "?2026l",
+          "?2031h",
+          "?2031l",
+          "?25h",
+          "?25l"
+        ],
+        "queries": [
+          "CSI 16 t",
+          "DA1",
+          "DECRQM ?1016",
+          "DECRQM ?2026",
+          "OSC 11 ?",
+          "XTVERSION",
+          "kitty keyboard ?"
+        ],
+        "osc_codes": [
+          "0",
+          "11"
+        ],
+        "titles": [
+          "◐ pos-spike-s3b-background",
+          "◑ pos-spike-s3b-background",
+          "✳ pos-spike-s3b-background",
+          "◑ pos-spike-s3b-background",
+          ""
+        ],
+        "kitty_keyboard_flags_history": [
+          0,
+          0,
+          5,
+          0,
+          5,
+          0,
+          5,
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "timeline": [
+    {
+      "t_ms": 82.7,
+      "msg": "lancement-1 : claude --settings <tmp>/spike-settings.json --model haiku --permission-mode default --name pos-spike-s3b-background"
+    },
+    {
+      "t_ms": 1072.5,
+      "msg": "lancement-1 : dialogue de confiance accepté"
+    },
+    {
+      "t_ms": 3149.1,
+      "msg": "tache-de-fond : UserPromptSubmit après 55 ms"
+    },
+    {
+      "t_ms": 19628.9,
+      "msg": "lancement-1 : fin (/exit, SessionEnd=prompt_input_exit)"
+    }
+  ],
+  "answer": {
+    "permissions_answered": 0,
+    "stop_background_tasks": [
+      {
+        "id": "buy41950f",
+        "type": "shell",
+        "status": "running",
+        "description": "Launch sleep command in background",
+        "command": "sleep 8"
+      }
+    ],
+    "stop_session_crons": [],
+    "stop_keys": [
+      "background_tasks",
+      "cwd",
+      "hook_event_name",
+      "last_assistant_message",
+      "permission_mode",
+      "prompt_id",
+      "scratchpad_dir",
+      "session_crons",
+      "session_id",
+      "stop_hook_active",
+      "transcript_path"
+    ],
+    "events_after_first_stop": [
+      {
+        "event": "UserPromptSubmit",
+        "t_ms": 6569.1,
+        "session_id": "8f0977b0-5048-40ae-b851-b084a1be6bc0",
+        "prompt": "<task-notification>\n<task-id>buy41950f</task-id>\n<tool-use-id>toolu_01TRCmUXRrG22MuV1BNcdBbL</tool-use-id>\n<output-file…"
+      },
+      {
+        "event": "Stop",
+        "t_ms": 8375.0,
+        "session_id": "8f0977b0-5048-40ae-b851-b084a1be6bc0",
+        "last_assistant_message": "Tâche complétée : `sleep 8` a terminé son exécution.",
+        "background_tasks": []
+      }
+    ],
+    "second_turn_user_prompt_submit": true,
+    "second_stop": true
+  },
+  "duration_s": 19.6,
+  "screens": [
+    {
+      "label": "lancement-1-confiance",
+      "session": "lancement-1",
+      "t_ms": 712.7,
+      "alt_screen": false,
+      "cursor": [
+        14,
+        2
+      ],
+      "file": "screens/01-lancement-1-confiance.txt"
+    },
+    {
+      "label": "lancement-1-pret",
+      "session": "lancement-1",
+      "t_ms": 2759.7,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/02-lancement-1-pret.txt"
+    },
+    {
+      "label": "fin-observation",
+      "session": "lancement-1",
+      "t_ms": 18375.7,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/03-fin-observation.txt"
+    }
+  ]
+}

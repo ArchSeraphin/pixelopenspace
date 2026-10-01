@@ -1,0 +1,37 @@
+# apres-echap · session lancement-1 · t=16.3 s · curseur ligne 33 col 3 · écran alternatif
+
+ ▐▛███▛█   Claude Code v2.1.286
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   <tmp>/S5/projet
+
+
+❯ Exécute la commande touch spike-refus.txt avec l'outil Bash, puis réponds juste OK.
+
+  Ran 1 shell command
+  ⎿  Interrupted · What should Claude do instead?
+
+✻ Baked for 2s · done 10:42
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────── pos-spike-s5 ─
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 4.5 | Contexte: 23% | 5h: ░░░░░░░░░░ 3%  7j: 7% | projet
+  ⏸ manual mode on

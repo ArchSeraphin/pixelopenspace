@@ -1,0 +1,37 @@
+# lancement-1-pret · session lancement-1 · t=2.8 s · curseur ligne 33 col 3 · écran alternatif
+
+ ▐▛███▛█   Claude Code v2.1.286
+▝▜██████▀  Haiku 4.5 · Claude Max
+ ▝▝   ▝▝   /…<tmp>/S3.e-permission/projet
+
+▎ Your voice can help guide AI
+▎ Take 15 min to share your experiences with Anthropic Interviewer. Start now (https://clau.de/yourthoughts)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+──────────────────────────────────────────────────────────────────────────────────────────── pos-spike-s3.e-permission ─
+❯ Try "edit <filepath> to..."
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 4.5 | projet
+  ⏸ manual mode on

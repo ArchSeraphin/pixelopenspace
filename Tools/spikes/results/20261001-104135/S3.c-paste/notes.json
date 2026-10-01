@@ -1,0 +1,197 @@
+{
+  "id": "S3.c-paste",
+  "title": "Amorce + collage entre crochets de 1200 caractères",
+  "status": "ok",
+  "timeout_s": 90.0,
+  "launches": [
+    {
+      "label": "lancement-1",
+      "argv": [
+        "--settings",
+        "<tmp>/spike-settings.json",
+        "--model",
+        "haiku",
+        "--permission-mode",
+        "default",
+        "--name",
+        "pos-spike-s3.c-paste"
+      ],
+      "cwd": "<tmp>/S3.c-paste/projet",
+      "trust_dialog": true,
+      "t_start_ms": 76.3,
+      "trust_seen_ms": 492.3,
+      "trust_focus": [
+        "No, exit",
+        "Yes, I trust this folder"
+      ],
+      "trust_moves": 1,
+      "trust_accepted_ms": 1042.8,
+      "trust_dialog_closed": true,
+      "hooks_before_trust_dialog": [],
+      "hooks_before_trust_accept": [],
+      "session_start": {
+        "source": "startup",
+        "session_id": "f6e2a75f-dd8c-400a-873e-6c40c7dcb911",
+        "cwd": "<tmp>/S3.c-paste/projet",
+        "model": "claude-haiku-4-5-20251001",
+        "session_title": "pos-spike-s3.c-paste",
+        "t_ms": 1590.0,
+        "keys": [
+          "cwd",
+          "hook_event_name",
+          "model",
+          "scratchpad_dir",
+          "session_id",
+          "session_title",
+          "source",
+          "transcript_path"
+        ]
+      },
+      "startup_dialogs": [],
+      "ready_ms": 2712.9,
+      "input_left": false,
+      "exit": {
+        "method": "/exit",
+        "exit_status": 0,
+        "session_end": "prompt_input_exit"
+      },
+      "terminal": {
+        "bracketed_paste_enabled": true,
+        "alternate_screen_used": true,
+        "private_modes_seen": [
+          "?1000h",
+          "?1000l",
+          "?1002h",
+          "?1002l",
+          "?1003h",
+          "?1003l",
+          "?1004h",
+          "?1004l",
+          "?1006h",
+          "?1006l",
+          "?1016l",
+          "?1049h",
+          "?1049l",
+          "?2004h",
+          "?2004l",
+          "?2026h",
+          "?2026l",
+          "?2031h",
+          "?2031l",
+          "?25h",
+          "?25l"
+        ],
+        "queries": [
+          "CSI 16 t",
+          "DA1",
+          "DECRQM ?1016",
+          "DECRQM ?2026",
+          "OSC 11 ?",
+          "XTVERSION",
+          "kitty keyboard ?"
+        ],
+        "osc_codes": [
+          "0",
+          "11"
+        ],
+        "titles": [
+          "◐ pos-spike-s3.c-paste",
+          "◑ pos-spike-s3.c-paste",
+          "◐ pos-spike-s3.c-paste",
+          "◑ pos-spike-s3.c-paste",
+          ""
+        ],
+        "kitty_keyboard_flags_history": [
+          0,
+          5,
+          0,
+          0,
+          5,
+          0,
+          5,
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "timeline": [
+    {
+      "t_ms": 76.3,
+      "msg": "lancement-1 : claude --settings <tmp>/spike-settings.json --model haiku --permission-mode default --name pos-spike-s3.c-paste"
+    },
+    {
+      "t_ms": 1055.7,
+      "msg": "lancement-1 : dialogue de confiance accepté"
+    },
+    {
+      "t_ms": 6969.9,
+      "msg": "lancement-1 : fin (/exit, SessionEnd=prompt_input_exit)"
+    }
+  ],
+  "answer": {
+    "body_len": 1200,
+    "bracketed_paste_on_before_paste": true,
+    "esc_2004h_seen": true,
+    "paste_sent": true,
+    "pasted_placeholder_on_screen": true,
+    "user_prompt_submit": true,
+    "enter_to_hook_ms": 79.1,
+    "prompt_len": 1314,
+    "prompt_head": "Réalise la tâche décrite dans le texte collé ci-dessous.\n\n<pasted_content id=\"795b\">\nLigne 01 du texte collé : contenu de test sans consigne, pour mesurer le c…",
+    "prompt_tail": "sans consigne, pour mesurer le collage entre crochets\nFin du texte collé. Réponds juste OK.\n</pasted_content id=\"795b\">\n",
+    "prompt_lines": 18,
+    "starts_with_lead": true,
+    "contains_body_exactly": true,
+    "contains_body_whitespace_insensitive": true,
+    "contains_placeholder": false
+  },
+  "duration_s": 7.0,
+  "screens": [
+    {
+      "label": "lancement-1-confiance",
+      "session": "lancement-1",
+      "t_ms": 706.3,
+      "alt_screen": false,
+      "cursor": [
+        14,
+        2
+      ],
+      "file": "screens/01-lancement-1-confiance.txt"
+    },
+    {
+      "label": "lancement-1-pret",
+      "session": "lancement-1",
+      "t_ms": 2713.0,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/02-lancement-1-pret.txt"
+    },
+    {
+      "label": "avant-saisie",
+      "session": "lancement-1",
+      "t_ms": 2713.2,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        3
+      ],
+      "file": "screens/03-avant-saisie.txt"
+    },
+    {
+      "label": "apres-collage",
+      "session": "lancement-1",
+      "t_ms": 3119.6,
+      "alt_screen": true,
+      "cursor": [
+        33,
+        85
+      ],
+      "file": "screens/04-apres-collage.txt"
+    }
+  ]
+}
