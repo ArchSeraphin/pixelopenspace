@@ -3,8 +3,8 @@ import SwiftUI
 
 /// One agent (mockup 6(b)): name, state symbol and title (never color alone), detail, since, badges, its queue
 /// and current post-it, and the actions that apply now (6(d)). Click selects (its terminal shows in the panel);
-/// double-click opens the terminal. A post-it dropped on it is given to the agent (`.assign`, confirmed when it
-/// comes from another project).
+/// double-click opens the terminal; the context menu also opens the agent's window. A post-it dropped on it is given
+/// to the agent (`.assign`, confirmed when it comes from another project).
 struct AgentCardView: View {
     let agent: Agent
     let project: Project
@@ -26,6 +26,7 @@ struct AgentCardView: View {
                 .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
                 .accessibilityAction { model.select(agent: agent.id) }
                 .accessibilityAction(named: "Ouvrir le terminal") { openTerminal(actions) }
+                .accessibilityAction(named: "Ouvrir la fenêtre de l'agent") { openAgentWindow() }
             AgentQueueLine(agentID: agent.id)
             AgentCardButtons(agent: agent, actions: actions)
         }
@@ -70,9 +71,20 @@ struct AgentCardView: View {
         .onTapGesture(count: 2) { openTerminal(actions) }
         .onTapGesture { model.select(agent: agent.id) }
         .contextMenu {
+            Button("Ouvrir la fenêtre de l'agent") { openAgentWindow() }
+            Divider()
             AgentMenuItems(agent: agent, actions: actions, model: model, workbench: workbench)
         }
         .accessibilityElement(children: .contain)
+        .onAppear {
+            AgentWindowController.shared.prepare(model: model, workbench: workbench)
+        }
+    }
+
+    /// Selects the agent and opens its window (mockup 6(d)).
+    private func openAgentWindow() {
+        model.select(agent: agent.id)
+        AgentWindowController.shared.show(agent.id, model: model, workbench: workbench)
     }
 
     private func openTerminal(_ actions: AgentActions) {

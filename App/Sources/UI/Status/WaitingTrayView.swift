@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Waiting tray (proposal 3.9, "qui attend quoi en moins de 3 s"): one row per waiting agent, oldest wait first,
 /// `agent · projet · raison · depuis`. Shown as long as at least one agent waits. Clicking a row selects the
-/// agent, opens its terminal with the keyboard focus and acknowledges the wait.
+/// agent and opens its window (`AgentWindowController`), which acknowledges the wait; the answer is given from
+/// there, by its "Ouvrir le terminal ⌘T".
 struct WaitingTrayView: View {
     static let visibleRows = 4
 
@@ -11,6 +12,17 @@ struct WaitingTrayView: View {
     @Environment(WorkbenchState.self) private var workbench
 
     var body: some View {
+        // Always present, even empty: the agent windows' controller is prepared when the tray appears.
+        VStack(spacing: 0) {
+            tray
+        }
+        .onAppear {
+            AgentWindowController.shared.prepare(model: model, workbench: workbench)
+        }
+    }
+
+    @ViewBuilder
+    private var tray: some View {
         let entries = model.liveStatusSummary.waiting
         let title = entries.count > 1 ? "EN ATTENTE · \(entries.count) agents" : "EN ATTENTE"
         if !entries.isEmpty {
@@ -45,10 +57,16 @@ struct WaitingTrayView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(entries) { entry in
                 WaitingTrayRow(entry: entry) {
-                    workbench.openWaitingAgent(entry.agentID)
+                    openWindow(of: entry.agentID)
                 }
             }
         }
+    }
+
+    /// Selects the agent (and shows it in the list) and opens its window.
+    private func openWindow(of agentID: AgentID) {
+        workbench.reveal(agentID)
+        AgentWindowController.shared.show(agentID, model: model, workbench: workbench)
     }
 }
 
@@ -82,8 +100,8 @@ private struct WaitingTrayRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Ouvrir le terminal de \(names.agent) pour répondre")
+        .help("Ouvrir la fenêtre de \(names.agent) : ce qu'il attend, et son terminal pour répondre")
         .accessibilityLabel(model.accessibilityLabel(for: entry.agentID) ?? "\(names.agent), \(reason)")
-        .accessibilityHint("Ouvre son terminal")
+        .accessibilityHint("Ouvre la fenêtre de l'agent")
     }
 }
