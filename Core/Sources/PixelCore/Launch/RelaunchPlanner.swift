@@ -99,6 +99,22 @@ public enum RelaunchPlanner {
         }
     }
 
+    /// At launch (proposal 2.5, 4.3b C13): the agents whose turn of the previous run is lost, that is every agent
+    /// offline (whatever the reason: no process runs yet) with a card "En cours" (`BoardQuery.currentCard`), stopped
+    /// or not, in workspace order. The app flags that card `sessionLost` (`.agentSignal(a, .sessionLost)`, which
+    /// changes nothing the second time) and pauses the agent's queue (`AgentEffect.setQueuePaused(true)`): once the
+    /// agent is relaunched, its next post-it must not start beside the lost one. "Remettre à faire" from the
+    /// relaunch, or "Continuer la tâche" (C14), resume the queue; a card decided from its own menu leaves
+    /// "Reprendre la file" to the user (`BoardQuery.cardToDecide` is then nil).
+    public static func lostTurns(workspace: Workspace, runtimes: [AgentID: AgentRuntime],
+                                 board: TaskBoardState) -> [AgentID] {
+        workspace.agents.compactMap { agent in
+            guard let phase = runtimes[agent.id]?.phase, case .offline = phase,
+                  BoardQuery.currentCard(of: agent.id, in: board) != nil else { return nil }
+            return agent.id
+        }
+    }
+
     /// The paths `candidates` looks up in `FileFacts`: the folder of each agent's project (as recorded), and the
     /// folder (when absolute) and the transcript (when recorded) of each agent's last session, trimmed. The app
     /// checks these and passes the ones that exist.

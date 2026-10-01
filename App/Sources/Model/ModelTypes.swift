@@ -100,6 +100,14 @@ struct RelaunchSelection: Equatable, Sendable {
     let cardChoice: RelaunchCardChoice
 }
 
+/// What `AppModel.relaunchCandidates` reads outside the model, cached (`AppModel.relaunchProbe`) because the banner
+/// and the sheet render often (the sheet every second, for "il y a 2 h"): the paths of `RelaunchPlanner.pathsToCheck`
+/// that exist, and the orphans whose previous `claude` was verified alive.
+struct RelaunchProbe: Equatable, Sendable {
+    var existingPaths: Set<String>
+    var liveProcesses: [AgentID: ProcessStamp]
+}
+
 /// The banner "n sessions peuvent être relancées" (proposal 2.5): the candidates that can be relaunched (resume,
 /// fork, new session), in sidebar order. Live orphans and projects whose folder is gone are not counted.
 struct RelaunchOffer: Equatable, Sendable {

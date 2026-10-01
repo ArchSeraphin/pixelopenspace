@@ -418,6 +418,52 @@ import Testing
         #expect(BoardQuery.currentCard(of: S.agent(1), in: board)?.id == S.card(11))
     }
 
+    /// "Reprendre la file" waits for the card the agent stopped on (4.3b: the next post-it never starts beside it):
+    /// its current card while that card is stopped (interrupted, failed turn, lost session). Nil once the user
+    /// decided it (continued, put back, marked for review, validated, deleted), and nil when the agent runs a card
+    /// or has none in progress.
+    @Test func cardToDecideIsTheStoppedCurrentCardUntilTheUserDecidesIt() throws {
+        let agent = S.agent(1)
+        let board = Self.board()
+        // Card 8 runs: nothing to decide. Agent 3 has nothing in progress.
+        #expect(BoardQuery.cardToDecide(of: agent, in: board) == nil)
+        #expect(BoardQuery.cardToDecide(of: S.agent(3), in: board) == nil)
+        let running = try #require(board.cards.firstIndex { $0.id == S.card(8) })
+        for flag in TaskBoardValidator.stoppingFlags {
+            var stopped = board
+            stopped.cards[running].flags = [flag, .backgroundRunning]
+            #expect(BoardQuery.cardToDecide(of: agent, in: stopped)?.id == S.card(8))
+            // Another agent's stopped card is not this agent's to decide.
+            #expect(BoardQuery.cardToDecide(of: S.agent(2), in: stopped) == nil)
+        }
+        // Still running in the background, or only a failed delivery of its instruction: not stopped.
+        var background = board
+        background.cards[running].flags = [.backgroundRunning, .deliveryFailed]
+        #expect(BoardQuery.cardToDecide(of: agent, in: background) == nil)
+
+        // Each decision of the user settles the lost card.
+        var lost = board
+        lost.cards[running].flags = [.sessionLost]
+        let context = TaskContext(now: S.at(60), agentProjects: [S.agent(1): S.project(1), S.agent(2): S.project(2)],
+                                  liveAgents: [S.agent(1)])
+        let decisions: [TaskInput] = [
+            .continueTask(S.card(8), instructionID: S.instruction(9)), .putBack(S.card(8)),
+            .markForReview(S.card(8)), .validate(S.card(8)), .delete(S.card(8)),
+        ]
+        for decision in decisions {
+            let (decided, effects) = TaskLifecycle.reduce(lost, decision, context: context)
+            #expect(!effects.contains { if case .rejected = $0 { true } else { false } }, "\(decision)")
+            #expect(BoardQuery.cardToDecide(of: agent, in: decided) == nil, "\(decision)")
+        }
+
+        // Two stopped cards: deciding one leaves the other to decide.
+        lost.cards.append(TaskCard(id: S.card(9), title: "Interrompue", projectID: S.project(1), column: .inProgress,
+                                   rank: "a", assignee: agent, flags: [.interrupted], createdAt: S.at(9),
+                                   updatedAt: S.at(30)))
+        let (one, _) = TaskLifecycle.reduce(lost, .putBack(S.card(8)), context: context)
+        #expect(BoardQuery.cardToDecide(of: agent, in: one)?.id == S.card(9))
+    }
+
     @Test func currentCardAmongRunningCardsIsTheOneTheValidatorKeepsRunning() throws {
         // A board not validated yet with two running cards for one agent: the validator keeps one running and
         // marks the other interrupted. The current card is that one, before the reload and after it.

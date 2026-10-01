@@ -143,15 +143,15 @@ extension AppModel {
 
     // MARK: - Queues (step 2b-2)
 
-    /// "Reprendre la file" (and C9, C14): the queue paused by an interruption or a failed delivery goes on. Not while
-    /// the agent's card of "En cours" is stopped (interrupted, failed turn, lost session): the user settles it first
-    /// (4.3b), or the next post-it would start beside it.
+    /// "Reprendre la file" (and C9, C14, "Remettre à faire" from the relaunch): the queue paused by an interruption, a
+    /// failed delivery or a session lost at launch goes on. Not while the agent's card of "En cours" is stopped
+    /// (interrupted, failed turn, lost session, `cardToDecide`): the user settles it first (4.3b), or the next
+    /// post-it would start beside it.
     func resumeQueue(_ agentID: AgentID) {
         guard let agent = workspace.agent(agentID) else { return }
-        if agent.queuePaused, let card = currentCard(of: agentID),
-           !card.flags.isDisjoint(with: TaskBoardValidator.stoppingFlags) {
-            showToast("\(agent.name) : décide d'abord de « \(card.title) » (continuer la tâche, la remettre à faire "
-                          + "ou la marquer à valider), puis reprends la file.", style: .warning, agentID: agentID)
+        if agent.queuePaused, let card = cardToDecide(of: agentID) {
+            showToast("\(agent.name) : \(Self.decideFirstText(card)), puis reprends la file.", style: .warning,
+                      agentID: agentID)
             return
         }
         setQueuePaused(false, for: agentID)

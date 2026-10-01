@@ -148,6 +148,17 @@ extension AppModel {
         BoardQuery.currentCard(of: agent, in: board)
     }
 
+    /// The stopped card "En cours" (interrupted, failed turn, lost session) to decide before "Reprendre la file"
+    /// (4.3b), if any.
+    func cardToDecide(of agent: AgentID) -> TaskCard? {
+        BoardQuery.cardToDecide(of: agent, in: board)
+    }
+
+    /// "décide d'abord de « Refonte du header » (continuer la tâche, la remettre à faire ou la marquer à valider)".
+    static func decideFirstText(_ card: TaskCard) -> String {
+        "décide d'abord de « \(card.title) » (continuer la tâche, la remettre à faire ou la marquer à valider)"
+    }
+
     /// Why the head of the agent's queue is not being delivered (`DispatchPolicy`, on the last screen reading and the
     /// model's clock); nil when the queue is empty or a delivery can start.
     func deliveryWaitCause(of agentID: AgentID) -> WaitCause? {

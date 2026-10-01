@@ -179,6 +179,10 @@ enum BannerCatalog {
                       actions: [.terminateOrphan(first.id)])
     }
 
+    /// The id of the relaunch banner: when it appears, the disk and the processes are read again
+    /// (`AppModel.refreshRelaunchProbe`).
+    static let relaunchBannerID = "relaunch"
+
     /// After a restart or a crash (proposal 2.5): the sessions of the previous run that can be relaunched. Nothing
     /// starts until the user answers; "Tout relancer" only takes the lines checked by default (resume, fork) and
     /// puts their post-its in progress back to do, "Choisir…" opens the sheet for the rest.
@@ -202,7 +206,7 @@ enum BannerCatalog {
         }
         var actions: [BannerAction] = byDefault.isEmpty ? [] : [.relaunchAll]
         actions += [.chooseRelaunch, .dismissRelaunch]
-        return Banner(id: "relaunch", severity: .info, symbol: "arrow.clockwise.circle", title: title,
+        return Banner(id: relaunchBannerID, severity: .info, symbol: "arrow.clockwise.circle", title: title,
                       message: message, actions: actions)
     }
 

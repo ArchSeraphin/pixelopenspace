@@ -185,6 +185,17 @@ public enum BoardQuery {
             }
     }
 
+    /// The card the user must decide before "Reprendre la file" (4.3b: the next post-it never starts beside a
+    /// stopped one): the agent's current card when it is stopped (interrupted, failed turn, lost session), then the
+    /// next stopped one once that one is decided. Nil when the agent runs a card (its queue waits for that turn
+    /// anyway) or has none in progress: continued, put back, marked for review, validated or deleted, a stopped
+    /// card leaves nothing to decide.
+    public static func cardToDecide(of agent: AgentID, in board: TaskBoardState) -> TaskCard? {
+        guard let card = currentCard(of: agent, in: board),
+              !card.flags.isDisjoint(with: TaskBoardValidator.stoppingFlags) else { return nil }
+        return card
+    }
+
     /// All tags used on the board, sorted, case-insensitively unique. Normalized as the validator stores them;
     /// of two spellings of one tag ("API", "api"), the first met in the board's card order is kept. Sorted
     /// ignoring case and accents ("élan" before "zeta"), then by their exact text.

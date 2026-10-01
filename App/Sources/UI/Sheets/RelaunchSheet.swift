@@ -2,12 +2,15 @@ import PixelCore
 import SwiftUI
 
 /// "Relancer les sessions" (mockup 6(p), second part), opened by "Choisir…" on the relaunch banner: one line per
-/// agent left offline by the previous run, read live (`AppModel.relaunchCandidates`).
+/// agent left offline by the previous run (`AppModel.relaunchCandidates`). The disk and the processes are read when
+/// the sheet appears, on "Actualiser", and every 5 s at most while it stays open (`AppModel.relaunchProbe`), never
+/// on a render: the sheet renders every second for "il y a 2 h".
 ///
 /// A line is checked by default when its conversation can be resumed (in its folder, or forked in the project
 /// folder when that folder is gone); a new session (transcript purged, no session) is offered unchecked; a session
 /// still held by a live process, or a project whose folder is gone, cannot be checked. For a post-it "En cours":
-/// "Continuer la tâche" or "Remettre à faire" (default). "Plus tard" hides the banner until the next launch.
+/// "Continuer la tâche" or "Remettre à faire" (default). "Plus tard" hides the banner until the next launch;
+/// "Fermer" (Échap) only closes the sheet, the banner stays.
 struct RelaunchSheet: View {
     /// Beyond this many lines, the list scrolls.
     static let linesWithoutScrolling = 5
@@ -27,8 +30,18 @@ struct RelaunchSheet: View {
         let candidates = model.relaunchCandidates()
         let selected = candidates.filter(isChecked)
         VStack(alignment: .leading, spacing: 14) {
-            Text("Relancer les sessions")
-                .font(.title2.weight(.semibold))
+            HStack(alignment: .firstTextBaseline) {
+                Text("Relancer les sessions")
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                Button {
+                    model.refreshRelaunchProbe()
+                } label: {
+                    Label("Actualiser", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
+                .help("Relire les dossiers, les transcripts et les processus encore ouverts")
+            }
             Text("Coche les sessions à reprendre. Un tour interrompu ne repart jamais tout seul : pour chaque post-it "
                 + "en cours, choisis de le continuer (la consigne part une fois la session démarrée) ou de le remettre "
                 + "à faire.")
@@ -49,10 +62,14 @@ struct RelaunchSheet: View {
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05)))
             }
             HStack {
+                // No Escape here: "Plus tard" hides the banner for the whole run, Escape only closes the sheet.
                 Button("Plus tard") { later() }
-                    .keyboardShortcut(.cancelAction)
-                    .help("Ne rien relancer maintenant ; chaque agent reste relançable depuis sa carte")
+                    .help("Ne rien relancer maintenant et masquer la bannière jusqu'au prochain lancement ; chaque "
+                          + "agent reste relançable depuis sa carte")
                 Spacer()
+                Button("Fermer") { workbench.dismissSheet() }
+                    .keyboardShortcut(.cancelAction)
+                    .help("Fermer sans rien relancer (Échap) : la bannière reste affichée")
                 Button(relaunchTitle(selected.count)) { relaunch(selected) }
                     .keyboardShortcut(.defaultAction)
                     .disabled(selected.isEmpty)
@@ -60,6 +77,7 @@ struct RelaunchSheet: View {
         }
         .padding(20)
         .frame(width: 680)
+        .onAppear { model.refreshRelaunchProbe() }
     }
 
     private func lines(_ candidates: [RelaunchCandidate]) -> some View {

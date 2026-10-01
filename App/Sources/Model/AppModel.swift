@@ -52,6 +52,11 @@ final class AppModel {
     /// The banner "n sessions peuvent être relancées" was answered ("Tout relancer", the sheet) or put off
     /// ("Plus tard"): it stays hidden until the next launch of the app.
     var isRelaunchOfferDismissed = false
+    /// What the relaunch banner and sheet last read on disk and in the processes (`relaunchCandidates`). Read again
+    /// at launch, when the banner or the sheet appears, on "Actualiser", around a relaunch, when an orphan exits, and
+    /// at most every `relaunchProbeInterval` otherwise (`tick`); never on a render. Nil when nothing was read, or
+    /// no agent is left to relaunch.
+    var relaunchProbe: RelaunchProbe?
     /// macOS notifications were refused (the Dock badge still counts waiting agents).
     var notificationsDenied = false
     /// Clock of the time-dependent texts ("depuis 2 min", asleep after 10 min): advanced every second.
@@ -92,6 +97,8 @@ final class AppModel {
     /// "Continuer la tâche" chosen in the relaunch sheet: the agent's card, continued once its session has started
     /// (`settlePendingContinuation`), dropped if the process ends first.
     @ObservationIgnored var pendingContinuations: [AgentID: TaskCardID] = [:]
+    /// When `relaunchProbe` was last read.
+    @ObservationIgnored var relaunchProbedAt: Date?
 
     static let toastLifetime: TimeInterval = 6
     static let maxToasts = 4
@@ -140,6 +147,7 @@ final class AppModel {
         hookServerState = hookServer.start()
         // After the hook server: another copy of the app owning the state files makes this one read-only.
         markLostSessions()
+        refreshRelaunchProbe()
         startHookLoop()
         startClock()
         redetectClaude()
@@ -147,15 +155,17 @@ final class AppModel {
     }
 
     /// The turns of the previous run are lost (proposal 2.5, C13): the card "En cours" of each agent, all offline at
-    /// launch, gets `sessionLost`. It stays in "En cours", flagged; nothing is queued or sent until the user chooses
-    /// (relaunch sheet, or the card's menu). Flagging twice changes nothing. Not in a copy of the app that does not
-    /// own the state files (`isPersistenceSuspended`): the other copy's sessions may still run.
+    /// launch, gets `sessionLost` (`RelaunchPlanner.lostTurns`). It stays in "En cours", flagged, and the agent's
+    /// queue is paused: once the agent is relaunched, its next post-it must not start beside the lost card (4.3b).
+    /// Nothing is sent until the user chooses: "Remettre à faire" from the relaunch resumes the queue, "Continuer la
+    /// tâche" too (C14); a card decided from its menu leaves "Reprendre la file" to the user. Flagging twice changes
+    /// nothing. Not in a copy of the app that does not own the state files (`isPersistenceSuspended`): the other
+    /// copy's sessions may still run.
     private func markLostSessions() {
         guard !isPersistenceSuspended else { return }
-        for agent in workspace.agents {
-            guard let phase = runtimes[agent.id]?.phase, case .offline = phase,
-                  currentCard(of: agent.id) != nil else { continue }
-            applyTask(.agentSignal(agent.id, .sessionLost))
+        for agentID in RelaunchPlanner.lostTurns(workspace: workspace, runtimes: runtimes, board: board) {
+            applyTask(.agentSignal(agentID, .sessionLost))
+            setQueuePaused(true, for: agentID)
         }
     }
 

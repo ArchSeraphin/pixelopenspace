@@ -368,4 +368,71 @@ fileprivate enum RelaunchFixture {
         #expect(fx.isEmpty)
         #expect(again == board)
     }
+
+    /// At launch, the agents whose turn of the previous run is lost: every offline agent (whatever the reason) with
+    /// a card "En cours", stopped or not, in workspace order. An agent with a process, or with only queued, review
+    /// or done cards, or without a runtime, is not.
+    @Test func lostTurnsAreTheOfflineAgentsWithACardInProgress() {
+        let nova = F.agent(F.nova, sessions: [F.session("N")])
+        let bip = F.agent(F.bip, "Bip", desk: 1, sessions: [F.session("B")])
+        let tao = F.agent(F.tao, "Tao", desk: 2, sessions: [])
+        let rio = F.agent(F.rio, "Rio", desk: 3, sessions: [F.session("R")])
+        let lou = F.agent(AgentID(F.uuid(0x05)), "Lou", desk: 4, sessions: [F.session("L")])
+        let board = TaskBoardState(cards: [
+            F.card(1, "Corriger le login OAuth", column: .inProgress, assignee: F.nova),
+            F.card(2, "Écrire la doc", column: .todo, assignee: F.bip, queueRank: "a"),
+            F.card(3, "Relire la PR", column: .review, assignee: F.bip),
+            F.card(4, "Migrer la base", column: .inProgress, assignee: F.tao, flags: [.sessionLost]),
+            F.card(5, "Carte de Rio", column: .inProgress, assignee: F.rio),
+            F.card(6, "Carte de Lou", column: .inProgress, assignee: lou.id),
+        ])
+        var live = AgentRuntime(phase: .idle, phaseSince: F.at(120))
+        live.pid = 4242
+        let runtimes = [F.nova: F.offline(), F.bip: F.offline(), F.tao: F.offline(.notStarted), F.rio: live]
+        let workspace = Workspace(projects: [F.api, F.site], agents: [tao, nova, bip, rio, lou])
+        #expect(RelaunchPlanner.lostTurns(workspace: workspace, runtimes: runtimes, board: board) == [F.tao, F.nova])
+    }
+
+    /// The queue behind a lost turn (4.3b: "Reprendre la file" first requires deciding the interrupted card). At
+    /// launch the card gets `sessionLost` and the agent's queue is paused: once relaunched, the next post-it does
+    /// not start beside the lost one. "Remettre à faire" settles the card, and the queue resumed by the app (or by
+    /// "Reprendre la file") delivers the next post-it, the only one then in progress.
+    @Test func queueBehindALostTurnWaitsUntilTheCardIsDecided() throws {
+        let nova = F.agent(F.nova, sessions: [F.session("N")])
+        var workspace = Workspace(projects: [F.api, F.site], agents: [nova])
+        let lostID = TaskCardID(F.uuid(0x101))
+        let nextID = TaskCardID(F.uuid(0x102))
+        var board = TaskBoardState(cards: [
+            F.card(1, "Corriger le login OAuth", column: .inProgress, assignee: F.nova),
+            F.card(2, "Écrire la doc", column: .todo, assignee: F.nova, queueRank: "a"),
+        ])
+        let context = TaskContext(now: F.at(120), agentProjects: [F.nova: F.api.id], liveAgents: [])
+        for agent in RelaunchPlanner.lostTurns(workspace: workspace, runtimes: [F.nova: F.offline()], board: board) {
+            board = TaskLifecycle.reduce(board, .agentSignal(agent, .sessionLost), context: context).0
+            let paused = workspace.apply(.setQueuePaused(true), agent: agent)
+            #expect(paused)
+        }
+        #expect(BoardQuery.cardToDecide(of: F.nova, in: board)?.id == lostID)
+
+        // Relaunched: live, hooks healthy, idle, empty input box. The queue holds the next post-it.
+        var relaunched = AgentRuntime(phase: .idle, phaseSince: F.at(121))
+        relaunched.pid = 4242
+        relaunched.hookHealth = .healthy
+        relaunched.screen = ScreenFacts(inputBox: .empty, recognized: true)
+        func decision() throws -> DeliveryDecision {
+            DispatchPolicy.nextDelivery(agent: try #require(workspace.agent(F.nova)), runtime: relaunched,
+                                        queue: BoardQuery.queue(of: F.nova, in: board), now: F.at(130),
+                                        lastTurnEndedAt: nil, settings: DispatchSettings(), draftOverride: false)
+        }
+        #expect(try decision() == .wait(.paused))
+
+        // "Remettre à faire": nothing is left to decide, the queue goes on.
+        let live = TaskContext(now: F.at(125), agentProjects: [F.nova: F.api.id], liveAgents: [F.nova])
+        board = TaskLifecycle.reduce(board, .putBack(lostID), context: live).0
+        #expect(board.card(lostID)?.column == .todo)
+        #expect(BoardQuery.cardToDecide(of: F.nova, in: board) == nil)
+        let resumed = workspace.apply(.setQueuePaused(false), agent: F.nova)
+        #expect(resumed)
+        #expect(try decision() == .deliver(.card(nextID)))
+    }
 }

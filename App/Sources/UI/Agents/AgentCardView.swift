@@ -100,6 +100,7 @@ private struct AgentQueueLine: View {
         let instructions = queue.count - cards
         let current = model.currentCard(of: agentID)
         let paused = model.agent(agentID)?.queuePaused ?? false
+        let toDecide = paused ? model.cardToDecide(of: agentID) : nil
         let cause = model.deliveryWaitCause(of: agentID)
         let notice = model.dispatcher.notices[agentID]
         VStack(alignment: .leading, spacing: 3) {
@@ -127,8 +128,10 @@ private struct AgentQueueLine: View {
             if paused || cause == .draftInInputBox {
                 HStack(spacing: 6) {
                     if paused {
+                        // Greyed until the stopped post-it is decided (4.3b), with the reason in its help.
                         Button("Reprendre la file") { model.resumeQueue(agentID) }
-                            .help("La file s'est mise en pause (interruption ou échec d'envoi) : rien ne part sans toi")
+                            .disabled(toDecide != nil)
+                            .help(Self.resumeHelp(toDecide))
                     }
                     if cause == .draftInInputBox {
                         Button("Envoyer quand même…") { workbench.requestSendAnyway(agentID) }
@@ -168,6 +171,14 @@ private struct AgentQueueLine: View {
                     .help("Le texte, long, part par un collage dans le terminal")
             }
         }
+    }
+
+    /// Why the queue is paused, or what to decide before resuming it.
+    static func resumeHelp(_ toDecide: TaskCard?) -> String {
+        guard let toDecide else {
+            return "La file s'est mise en pause (interruption, échec d'envoi ou session perdue) : rien ne part sans toi"
+        }
+        return "Pour reprendre la file, " + AppModel.decideFirstText(toDecide) + " depuis le menu du post-it"
     }
 
     /// The title, with the flags that stopped it in words ("Refonte du header (interrompue)").

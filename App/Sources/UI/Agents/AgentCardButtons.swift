@@ -91,7 +91,8 @@ struct AgentMenuItems: View {
         Button("Reprendre la file") {
             model.resumeQueue(agent.id)
         }
-        .disabled(!agent.queuePaused)
+        // Greyed until a stopped post-it "En cours" is decided (4.3b); the agent card's button says why.
+        .disabled(!agent.queuePaused || model.cardToDecide(of: agent.id) != nil)
         Divider()
         Button("Renommer…") {
             workbench.present(.renameAgent(agent.id))

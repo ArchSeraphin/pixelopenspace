@@ -3,25 +3,52 @@ import PixelCore
 
 /// Relaunching after a restart or a crash of the app (proposal 2.5, mock-up 6(p)): the banner "n sessions peuvent
 /// être relancées", the "Relancer les sessions" sheet, and applying its choices. `RelaunchPlanner` decides which
-/// sessions can be resumed and how; this file reads the disk and the processes for it, then launches.
+/// sessions can be resumed and how; this file reads the disk and the processes for it (cached in `relaunchProbe`,
+/// never read on a render), then launches.
 ///
 /// Nothing starts by itself: only "Tout relancer" or the sheet launch, and the interrupted turn never restarts
 /// unless the user picks "Continuer la tâche", applied once the session has started.
 extension AppModel {
     // MARK: - Candidates
 
-    /// The lines of the sheet, now: every agent left offline by the previous run (relaunched or orphan), with its
-    /// status read from the disk (project folder, session folder, transcript) and from the processes still running.
+    /// How long the disk and the processes read for the relaunch stay fresh, outside the explicit refreshes.
+    static let relaunchProbeInterval: TimeInterval = 5
+
+    /// The lines of the sheet: every agent left offline by the previous run (relaunched or orphan), with its status
+    /// read from the disk (project folder, session folder, transcript) and from the processes still running, as
+    /// last read (`relaunchProbe`). Pure: no file or process is looked at here, the banner and the sheet call it on
+    /// every render.
     func relaunchCandidates() -> [RelaunchCandidate] {
-        guard hasAgentsToRelaunch else { return [] }
+        guard hasAgentsToRelaunch, let probe = relaunchProbe else { return [] }
+        return RelaunchPlanner.candidates(workspace: workspace, runtimes: runtimes, board: board,
+                                          files: FileFacts(existingPaths: probe.existingPaths),
+                                          liveProcesses: probe.liveProcesses)
+    }
+
+    /// Reads the disk and the processes again for `relaunchCandidates`: at launch, when the banner or the sheet
+    /// appears, on "Actualiser", around a relaunch, when an orphan exits, and from `tick`
+    /// (`refreshRelaunchProbeIfStale`). The banner and the sheet follow when the result changes.
+    func refreshRelaunchProbe() {
+        relaunchProbedAt = Date()
+        guard hasAgentsToRelaunch else {
+            if relaunchProbe != nil { relaunchProbe = nil }
+            return
+        }
         // Only the agents still offline since the previous run are looked up on disk.
         var offline = workspace
         offline.agents = workspace.agents.filter { runtimes[$0.id].map { Self.isLeftOffline($0.phase) } ?? false }
         let existing = RelaunchPlanner.pathsToCheck(workspace: offline)
             .filter { FileManager.default.fileExists(atPath: $0) }
-        return RelaunchPlanner.candidates(workspace: workspace, runtimes: runtimes, board: board,
-                                          files: FileFacts(existingPaths: existing),
-                                          liveProcesses: verifiedLiveProcesses())
+        let probe = RelaunchProbe(existingPaths: existing, liveProcesses: verifiedLiveProcesses())
+        if probe != relaunchProbe { relaunchProbe = probe }
+    }
+
+    /// From `tick` (1 Hz): reads again at most every `relaunchProbeInterval`, and only while the banner can show
+    /// (the sheet opens from it, and both go once answered).
+    func refreshRelaunchProbeIfStale(at date: Date) {
+        guard hasAgentsToRelaunch, !isRelaunchOfferDismissed, hookServerState != .anotherInstance else { return }
+        if let last = relaunchProbedAt, date.timeIntervalSince(last) < Self.relaunchProbeInterval { return }
+        refreshRelaunchProbe()
     }
 
     /// The banner, unless it was answered or put off, or another copy of the app owns the sessions. Nil when no
@@ -71,8 +98,9 @@ extension AppModel {
     }
 
     /// "Relancer n sessions": each checked line is launched as its status says, read again now (an orphan may still
-    /// hold the session, a folder may be gone). "Remettre à faire" is applied at once; "Continuer la
-    /// tâche" waits for the session to start (`settlePendingContinuation`). The banner goes away.
+    /// hold the session, a folder may be gone). "Remettre à faire" is applied at once and resumes the agent's queue,
+    /// paused at launch behind the lost card (`markLostSessions`): the card is decided. "Continuer la tâche" waits
+    /// for the session to start (`settlePendingContinuation`), and C14 resumes the queue then. The banner goes away.
     func relaunch(_ selections: [RelaunchSelection]) {
         guard !selections.isEmpty else { return }
         if claude.phase == .notFound {
@@ -81,6 +109,8 @@ extension AppModel {
             return
         }
         isRelaunchOfferDismissed = true
+        refreshRelaunchProbe()
+        defer { refreshRelaunchProbe() }
         let fresh = Dictionary(relaunchCandidates().map { ($0.agentID, $0) }) { first, _ in first }
         for selection in selections {
             let agentID = selection.agentID
@@ -92,7 +122,11 @@ extension AppModel {
                 continue
             }
             let cardID = candidate.cardInProgress
-            if let cardID, selection.cardChoice == .putBack { applyTask(.putBack(cardID)) }
+            if let cardID, selection.cardChoice == .putBack {
+                applyTask(.putBack(cardID))
+                // Decided: the next post-it may go once the session runs (4.3b).
+                if board.card(cardID)?.column == .todo { resumeQueue(agentID) }
+            }
             let continued = selection.cardChoice == .continueTask ? cardID : nil
             launch(agentID, mode: spec.mode, workingDirectory: spec.folder) { [weak self] started in
                 guard started, let continued, let self else { return }

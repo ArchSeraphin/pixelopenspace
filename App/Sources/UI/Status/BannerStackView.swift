@@ -16,12 +16,16 @@ struct BannerStackView: View {
         let banners = BannerCatalog.banners(model: model, showNotificationWarning: !hidesNotificationWarning)
         if let first = banners.first {
             VStack(spacing: 0) {
+                // Identified by the banner, so that a banner coming first "appears".
                 BannerRow(banner: first, perform: perform)
+                    .onAppear { appeared(first) }
+                    .id(first.id)
                 if banners.count > 1 {
                     if showsAll {
                         ForEach(banners.dropFirst()) { banner in
                             Divider()
                             BannerRow(banner: banner, perform: perform)
+                                .onAppear { appeared(banner) }
                         }
                     }
                     Button(showsAll ? "Masquer les autres alertes" : moreTitle(banners.count - 1)) {
@@ -48,6 +52,12 @@ struct BannerStackView: View {
         case .warning: return StateStyle.tint(for: .quotaPaused).opacity(0.14)
         case .info: return Color.accentColor.opacity(0.08)
         }
+    }
+
+    /// The relaunch banner shows: what it says is read again from the disk and the processes (it is otherwise read
+    /// every 5 s at most, never on a render).
+    private func appeared(_ banner: Banner) {
+        if banner.id == BannerCatalog.relaunchBannerID { model.refreshRelaunchProbe() }
     }
 
     private func perform(_ action: BannerAction) {

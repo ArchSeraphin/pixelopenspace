@@ -189,7 +189,8 @@ extension AppModel {
     }
 
     /// 1 Hz: advances `now`, expires toasts, and ticks the agents whose rules depend on time, after a fresh screen
-    /// reading for those whose rules also read the screen (T13b, T22b, T25, T28, degraded mode).
+    /// reading for those whose rules also read the screen (T13b, T22b, T25, T28, degraded mode). Then the orphans
+    /// that exited, and the relaunch's reading of the disk once it is `relaunchProbeInterval` old.
     func tick() {
         let date = Date()
         if !runtimes.isEmpty { now = date }
@@ -199,17 +200,22 @@ extension AppModel {
             dispatch(.tick, to: agentID)
         }
         releaseDeadOrphans(at: date)
+        refreshRelaunchProbeIfStale(at: date)
     }
 
     /// An orphan left by a crashed app run has exited: the agent becomes an ordinary offline agent again (a fresh
-    /// offline runtime, as at launch; no process is involved, so there is no reducer input for it).
+    /// offline runtime, as at launch; no process is involved, so there is no reducer input for it). The relaunch
+    /// banner and sheet read the processes again at once: that session can now be resumed.
     private func releaseDeadOrphans(at date: Date) {
+        var released = false
         for (agentID, runtime) in runtimes where runtime.phase == .offline(.orphanElsewhere) {
             guard let agent = workspace.agent(agentID) else { continue }
             if let stamp = agent.lastProcess, Self.isAlive(stamp) { continue }
             let reason: OfflineReason = agent.sessions.isEmpty ? .notStarted : .appRelaunched
             storeRuntime(AgentRuntime(phase: .offline(reason), phaseSince: date), for: agentID)
+            released = true
         }
+        if released { refreshRelaunchProbe() }
     }
 
     /// Rules driven by the clock concern a running process: launch timeouts, stale turns, provisional Stop,

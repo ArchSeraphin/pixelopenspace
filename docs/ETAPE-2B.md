@@ -100,12 +100,16 @@ gardée), 2b-3 (quitter, relancer, reprendre).
   toute nouvelle livraison : les files affichent « l'app va quitter », et une bannière « Pixel Open Space quittera
   à la fin des tours en cours » propose [Ne plus quitter]. « Quitter quand même » ferme les sessions.
 - **Au redémarrage**, le post-it « En cours » de chaque agent hors ligne reçoit le drapeau « session perdue ». Il
-  reste « En cours » ; rien n'est mis en file ni envoyé.
+  reste « En cours » ; rien n'est mis en file ni envoyé. La file de cet agent se met en pause (« file en pause ») :
+  une fois l'agent relancé, son post-it suivant ne part pas tant que le post-it perdu n'est pas tranché.
 - **Bannière « n sessions peuvent être relancées »** :
   - [Tout relancer] : les sessions cochées par défaut ; leurs post-its en cours sont remis à faire ;
   - [Choisir…] : la feuille « Relancer les sessions » ;
   - [Plus tard] : la bannière disparaît jusqu'au prochain lancement ; chaque agent reste relançable par son bouton
     « Relancer » ou ⇧⌘R.
+
+  Les dossiers, transcripts et processus encore ouverts sont relus quand la bannière ou la feuille s'affiche, sur
+  [Actualiser], après une relance, et toutes les 5 s au plus sinon.
 - **Feuille « Relancer les sessions »** (maquette 6(p)) : une ligne par agent (nom · projet, titre du post-it en
   cours ou « session 7d2f… », « il y a 2 h », dossier) :
   - conversation reprenable : cochée, `claude --resume <id>` dans son dossier ;
@@ -118,12 +122,18 @@ gardée), 2b-3 (quitter, relancer, reprendre).
   - dossier du projet introuvable : ligne désactivée.
 
   Pour un post-it en cours : « Continuer la tâche » ou « Remettre à faire » (choix par défaut). Puis
-  « Relancer n sessions ».
+  « Relancer n sessions ». [Fermer] (ou Échap) ferme seulement la feuille : la bannière reste. [Plus tard] fait
+  comme sur la bannière.
 - **« Continuer la tâche »** n'agit qu'**une fois la session démarrée** : la consigne « Continue la tâche :
   <titre> » passe en tête de file et part par la livraison gardée. Si le processus s'arrête avant, le post-it garde
-  « session perdue » et un message le dit. « Remettre à faire » s'applique tout de suite.
-- Une fois une session relancée, les post-its qui attendaient déjà dans sa file (donnés par toi avant de quitter)
-  repartent normalement quand l'agent est libre. Seul le tour interrompu ne repart jamais tout seul.
+  « session perdue » et un message le dit, et la file reste en pause. « Remettre à faire » s'applique tout de suite
+  et reprend la file.
+- Une fois une session relancée et son post-it perdu tranché (« Continuer la tâche » ou « Remettre à faire » dans
+  la feuille ou par [Tout relancer]), les post-its qui attendaient déjà dans sa file (donnés par toi avant de
+  quitter) repartent normalement quand l'agent est libre. Seul le tour interrompu ne repart jamais tout seul.
+- Un post-it perdu tranché plus tard par son menu (« Remettre à faire », « Marquer à valider », « Marquer comme
+  fait… », « Continuer la tâche ») : « Continuer la tâche » reprend la file ; sinon [Reprendre la file], grisé sur la
+  carte de l'agent tant qu'un post-it arrêté reste « En cours », devient cliquable.
 
 ### Raccourcis
 
@@ -194,8 +204,8 @@ toi-même le dialogue de confiance du dossier). Tableau visible (⌘B). Si Claud
    file #1 · l'app va quitter » au lieu de partir.
 4. Avant la fin du `sleep`, ⌘Q encore, puis « Quitter quand même » : l'app ferme les sessions et quitte.
 5. Relance l'app (⌘R dans Xcode). Projets, agents et post-its reviennent. Nova est « Hors ligne ». Le premier
-   post-it est toujours « En cours », avec « session perdue » ; le second est toujours en « file #1 ». Rien ne
-   part.
+   post-it est toujours « En cours », avec « session perdue » ; le second est toujours en « file #1 · file en
+   pause ». Rien ne part.
 6. Sur la bannière « 1 session peut être relancée », clique [Choisir…]. La feuille « Relancer les sessions »
    montre Nova, le titre du post-it en cours, « à l'instant » ou « il y a n min », et le dossier. Choisis
    « Continuer la tâche », puis « Relancer 1 session ».
