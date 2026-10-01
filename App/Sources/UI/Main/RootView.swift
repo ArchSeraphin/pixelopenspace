@@ -11,6 +11,8 @@ struct RootView: View {
     static let minimumBoardHeight: Double = 180
     /// The agents keep at least this width when the board panel widens.
     static let minimumAgentsWidth: Double = 300
+    /// Width of the projects sidebar.
+    static let sidebarWidth: CGFloat = 220
 
     @Environment(AppModel.self) private var model
     @Environment(WorkbenchState.self) private var workbench
@@ -19,36 +21,40 @@ struct RootView: View {
 
     @AppStorage("terminalPanelHeight") private var panelHeight: Double = 300
     @AppStorage("boardPanelVisible") private var isBoardVisible = true
+    @AppStorage("sidebarVisible") private var isSidebarVisible = true
     @AppStorage("boardPanelWidth") private var boardWidth: Double = 340
     @AppStorage("welcomeShown") private var welcomeShown = false
     @State private var isDropTargeted = false
 
     var body: some View {
         @Bindable var bindable = workbench
-        // The split view is the window's root: its detail column then sits right under the toolbar. Nested below
-        // other views, macOS 26 still reserved the toolbar's height at the top of the detail column and drew its
-        // scroll edge effect there, over the first project header and the board panel's header.
-        NavigationSplitView {
-            ProjectSidebar()
-                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
-        } detail: {
-            VStack(spacing: 0) {
-                StatusBarView()
-                WaitingTrayView()
-                BannerStackView()
-                Divider()
-                GeometryReader { geometry in
-                    let maxPanel = max(Self.minimumPanelHeight, Double(geometry.size.height) - Self.minimumBoardHeight)
-                    VStack(spacing: 0) {
-                        workArea
-                            .taskConfirmation($bindable.pendingTask) { pending in
-                                model.applyTask(pending.input)
-                            }
-                        if showsPanel {
-                            PanelDivider(height: $panelHeight, range: Self.minimumPanelHeight...maxPanel)
-                            TerminalPanelView()
-                                .frame(height: min(max(panelHeight, Self.minimumPanelHeight), maxPanel))
+        // No NavigationSplitView: on macOS 26 it ties its columns to the window toolbar (reserved top inset and
+        // scroll edge effect), which blurred the first project header and the board panel's header when the split
+        // sat below the status bar, and pushed the content under the toolbar when it was the root. A plain sidebar
+        // keeps the layout fully ours.
+        VStack(spacing: 0) {
+            StatusBarView()
+            WaitingTrayView()
+            BannerStackView()
+            Divider()
+            GeometryReader { geometry in
+                let maxPanel = max(Self.minimumPanelHeight, Double(geometry.size.height) - Self.minimumBoardHeight)
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        if isSidebarVisible {
+                            ProjectSidebar()
+                                .frame(width: Self.sidebarWidth)
+                            Divider()
                         }
+                        workArea
+                    }
+                    .taskConfirmation($bindable.pendingTask) { pending in
+                        model.applyTask(pending.input)
+                    }
+                    if showsPanel {
+                        PanelDivider(height: $panelHeight, range: Self.minimumPanelHeight...maxPanel)
+                        TerminalPanelView()
+                            .frame(height: min(max(panelHeight, Self.minimumPanelHeight), maxPanel))
                     }
                 }
             }
@@ -126,6 +132,14 @@ struct RootView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { isSidebarVisible.toggle() }
+            } label: {
+                Label(isSidebarVisible ? "Masquer les projets" : "Afficher les projets", systemImage: "sidebar.left")
+            }
+            .help(isSidebarVisible ? "Masquer la liste des projets" : "Afficher la liste des projets")
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
                 workbench.commands.perform(.newProject)
