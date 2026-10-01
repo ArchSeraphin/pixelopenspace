@@ -23,6 +23,10 @@ public enum OverlaySprites {
         defs.append(overlay("ov.quota", anchor: PixelPoint(7, 14), frames: [quota(0), quota(1)], fps: 1))
         defs.append(overlay("ov.draft", anchor: PixelPoint(5, 10), frames: [draft()]))
         defs.append(overlay("ov.edgeArrow", anchor: PixelPoint(8, 8), frames: [edgeArrow(lift: 0), edgeArrow(lift: 1)], fps: 4))
+        let diagonal = edgeArrowDiagonal()
+        var nudged = PixelImage(width: diagonal.width, height: diagonal.height)
+        nudged.blit(diagonal, x: 1, y: -1)
+        defs.append(overlay("ov.edgeArrow", variant: "diagonal", anchor: PixelPoint(8, 8), frames: [diagonal, nudged], fps: 4))
         defs.append(overlay("ov.degraded", anchor: PixelPoint(6, 12), frames: [degraded()]))
         defs.append(overlay("ov.unsafe", anchor: PixelPoint(6, 12), frames: [unsafe()]))
         defs.append(overlay("ov.external", anchor: PixelPoint(6, 12), frames: [external()]))
@@ -43,28 +47,30 @@ public enum OverlaySprites {
 
     // MARK: Waiting: "!", its halo
 
-    /// The "!": alertYellow, alertOrange outline, a chalk highlight down the left (light from the top left).
+    /// The "!": alertYellow, alertOrange outline, a chalk highlight down the left (light from the top left). A straight
+    /// bar 6 px wide with square top corners, narrowing to a point at the bottom, a gap of 2 rows, a square dot: the
+    /// rounded head and narrow neck of the first drawing, with its round halo, read as a light bulb.
     private static let bangGlyph = OverlayArt.map([
         "...YYYYYY...",
-        "..Y1yyyyyY..",
-        ".Y1yyyyyyyY.",
-        ".Y1yyyyyyyY.",
-        ".Y1yyyyyyyY.",
-        "..Y1yyyyyY..",
-        "..Y1yyyyyY..",
-        "..Y1yyyyyY..",
         "...Y1yyyY...",
         "...Y1yyyY...",
         "...Y1yyyY...",
-        "....YyyY....",
+        "...Y1yyyY...",
+        "...Y1yyyY...",
+        "...Y1yyyY...",
+        "...Y1yyyY...",
+        "...Y1yyyY...",
+        "...Y1yyyY...",
+        "...Y1yyyY...",
+        "...Y1yyyY...",
+        "....Y1yY....",
         ".....YY.....",
         "............",
         "............",
-        "....YYYY....",
-        "...Y1yyyY...",
+        "...YYYYYY...",
         "...Y1yyyY...",
         "...YyyyyY...",
-        "....YYYY....",
+        "...YYYYYY...",
     ])
 
     /// Bounce: resting on the anchor line (key pose), then 2 and 4 px up, then 2 px up.
@@ -76,14 +82,30 @@ public enum OverlaySprites {
         }
     }
 
-    /// A 2-px yellow ring and a dotted orange ring that pulse outward.
+    /// An iso diamond (2:1 steps, like a floor tile) that pulses outward: a 2-px yellow band, and 2 px further out a
+    /// dotted orange diamond (the outermost texel of each of its rows). Frame 0 is 24 (28) px wide, frame 1 28 (32).
+    /// A round ring, around the round head of the first "!", made a light bulb. One halo serves both sizes: the
+    /// scenes put its anchor 12 px (XL: 24) above the anchor of the "!" (`SceneCompositor.haloLift`), and the diamond
+    /// is centred 2 px higher, on the middle of the bar, so that in the key pose neither its band nor its dots reach
+    /// the gap above the dot, at either size.
     private static func halo(_ frame: Int) -> PixelImage {
-        var image = PixelImage(width: 32, height: 32)
-        let (inner, outer) = frame == 0 ? (22, 28) : (26, 32)
-        let dotted = OverlayArt.ring(diameter: outer, thickness: 1)
-        OverlayArt.paint(dotted, into: &image, at: OverlayArt.centred(outer, in: 32), color: orange) { ($0 + $1) % 2 == 0 }
-        OverlayArt.paint(OverlayArt.ring(diameter: inner, thickness: 2), into: &image, at: OverlayArt.centred(inner, in: 32),
-                         color: yellow)
+        let size = 32, rise = 2
+        var image = PixelImage(width: size, height: size)
+        let (inner, outer) = frame == 0 ? (24, 28) : (28, 32)
+        /// Top-left of a diamond `width` wide (width / 2 rows), centred `rise` px above the centre of the square.
+        func origin(_ width: Int) -> PixelPoint { PixelPoint((size - width) / 2, (size - width / 2) / 2 - rise) }
+        let dotted = Draw.isoDiamondMask(width: outer)
+        var tips = BitMask(width: dotted.width, height: dotted.height)
+        for y in 0..<dotted.height {
+            let xs = (0..<dotted.width).filter { dotted[$0, y] }
+            if let first = xs.first, let last = xs.last {
+                tips[first, y] = true
+                tips[last, y] = true
+            }
+        }
+        OverlayArt.paint(tips, into: &image, at: origin(outer), color: orange)
+        OverlayArt.paint(OverlayArt.band(Draw.isoDiamondMask(width: inner), thickness: 2), into: &image,
+                         at: origin(inner), color: yellow)
         return image
     }
 
@@ -420,8 +442,8 @@ public enum OverlaySprites {
     // MARK: Off-screen arrow, signs, selection
 
     /// Arrow pointing up, in the colours of the "!": a 45° head 16 px across its barbs, an 8-px shaft, an ink "!"
-    /// from the head down into the shaft. Symmetric (the scene turns it toward the agent off screen, by 45°
-    /// steps); nudges 1 px toward its tip.
+    /// from the head down into the shaft. Symmetric (the scene turns it toward the agent off screen by quarter turns,
+    /// `~diagonal` covers the 4 other directions); nudges 1 px toward its tip.
     private static func edgeArrow(lift: Int) -> PixelImage {
         let glyph = OverlayArt.map([
             ".......YY.......",
@@ -442,6 +464,36 @@ public enum OverlaySprites {
         ])
         var image = PixelImage(width: 16, height: 16)
         image.blit(glyph, x: 0, y: 1 - lift)
+        return image
+    }
+
+    /// The same arrow pointing up-right, for the diagonal directions (its quarter turns give the 3 others, so the
+    /// scene never turns pixel art by 45°): a right-angled head in the top-right corner (legs of 12 px along the top
+    /// and right edges), a shaft down the rising diagonal, the colours of the "!", an ink "!" on the axis (a 2-px
+    /// diagonal bar toward the tip, a gap, a 2×2 dot). Symmetric about that diagonal (x + y = 15); a free row on top
+    /// and a free column on the right leave room for the nudge of frame 1.
+    private static func edgeArrowDiagonal() -> PixelImage {
+        let size = 16
+        // s runs along the axis toward the tip (13 at the tip), p across it (0 on the axis); s + p is always odd.
+        func s(_ x: Int, _ y: Int) -> Int { x - y }
+        func p(_ x: Int, _ y: Int) -> Int { x + y - (size - 1) }
+        var body = BitMask(width: size, height: size)
+        for y in 0..<size {
+            for x in 0..<size {
+                let head = x <= size - 2 && y >= 1 && s(x, y) >= 2
+                let shaft = abs(p(x, y)) <= 4 && (-11..<2).contains(s(x, y))
+                body[x, y] = head || shaft
+            }
+        }
+        let outline = OverlayArt.outerRing(body)
+        var image = PixelImage(width: size, height: size)
+        for y in 0..<size {
+            for x in 0..<size where body[x, y] {
+                let onAxis = abs(p(x, y)) <= 1
+                let bang = onAxis && ((3...9).contains(s(x, y)) || (-3...(-1)).contains(s(x, y)))
+                image[x, y] = outline[x, y] ? orange : (bang ? ink : yellow)
+            }
+        }
         return image
     }
 
@@ -556,8 +608,13 @@ enum OverlayArt {
 
     /// The `thickness` outer rings of a disc.
     static func ring(diameter: Int, thickness: Int) -> BitMask {
-        var rest = disc(diameter: diameter)
-        var band = BitMask(width: diameter, height: diameter)
+        band(disc(diameter: diameter), thickness: thickness)
+    }
+
+    /// The `thickness` outer rings of any mask.
+    static func band(_ mask: BitMask, thickness: Int) -> BitMask {
+        var rest = mask
+        var band = BitMask(width: mask.width, height: mask.height)
         for _ in 0..<thickness {
             let outer = outerRing(rest)
             band = band.union(outer)

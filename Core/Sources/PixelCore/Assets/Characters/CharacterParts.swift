@@ -75,6 +75,7 @@ enum CharacterParts {
         ....qqqqqq....
         """)
 
+    /// Closed eyes: a horizontal line of 2 px each, on the lower row of the open eyes (1-px dots read as open eyes).
     static let headFrontEyesClosed = PixelMap("""
         ..............
         ....qqqqqq....
@@ -85,7 +86,7 @@ enum CharacterParts {
         .qssssssssssq.
         .qsssssssssSq.
         .qssssssssSSq.
-        .qssssesseSSq.
+        .qssseesseeSq.
         .qsssssssSSSq.
         ..qssssssSSq..
         ...qsssssSq...
@@ -219,7 +220,9 @@ enum CharacterParts {
     ]
 
     /// From behind: strands (outline texels inside the hair, kept by the reshaded mirrors) so that no cut reads
-    /// as a helmet or a beanie; the short cuts also show the ears and the nape.
+    /// as a helmet or a beanie; the short cuts also show the ears and the nape, and carry strands of 2 px in the shade
+    /// tone in the lit mass (a single texel left them a uniform mass at ×1, second render; the reshaded mirrors
+    /// flatten these, their outline strands stay).
     static let hairBack: [PixelMap] = [
         // 0 short: ears and a bare nape under a tapered hairline
         PixelMap("""
@@ -227,12 +230,12 @@ enum CharacterParts {
             ..............
             ....jjjjjj....
             ..jjhhhhhhjj..
-            .jhhhhhhhhhHj.
-            jhhhhhhhhhhHHj
-            jhhhhhHjhhhHHj
+            .jhhhhhhhHhHj.
+            jhhHhhhhhHhHHj
+            jhhHhhHjhhhHHj
             jhhhhHjhhhHjHj
-            qjhhHjhhhhhHjq
-            qsjhhhhhhhHjSq
+            qjhhHjhHhhhHjq
+            qsjhhhhHhhHjSq
             .qjhhhhhhhHjq.
             .qSjjhhhhjjSq.
             .qsSSSSSSSSSq.
@@ -306,11 +309,11 @@ enum CharacterParts {
             ....jhhhHj....
             ....jjjjjj....
             ..jjhhhhhhjj..
-            .jhhhhhhhhhHj.
-            jhhhhjhhhhhHHj
+            .jhhhhhHhhhHj.
+            jhhhhjhHhhhHHj
             jhhhjhhhhjhHHj
-            jhhjhhhhhhjHHj
-            qjhhhhhhhhHHjq
+            jhhjhhHhHhjHHj
+            qjhhhhHhHhHHjq
             qsjhhhhhhhHjSq
             .qShhhhhhhHSq.
             .qsSSSSSSSSSq.
@@ -320,13 +323,13 @@ enum CharacterParts {
             ..............
             ..............
             ....jjjjjj....
-            ..jjhhhhhhjj..
-            .jhhhhhhhhhHj.
-            .jhhhhhjhhHHj.
+            ..jjhhhhHhjj..
+            .jhhHhhhHhhHj.
+            .jhhHhhjhhHHj.
             .jhhhhjhhhHHj.
-            .jhhhhhhhjHHj.
-            qjhhhhhhjhHHjq
-            qsjhhhhhhhHjSq
+            .jhHhhhhhjHHj.
+            qjhHhhHhjhHHjq
+            qsjhhhHhhhHjSq
             .qShhhhhhhHSq.
             .qsSSSSSSSSSq.
             """),

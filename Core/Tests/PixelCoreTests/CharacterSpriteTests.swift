@@ -198,6 +198,27 @@ import Testing
         }
     }
 
+    /// Second render: the closed eyes of the slumped sleeper were 1-px dots, which read as open eyes. Each closed eye
+    /// is now a horizontal line of 2 px, drawn (SE) and in the reshaded mirror (SW).
+    @Test func sleepingEyesAreClosedLines() {
+        let looks = [Self.defaultLook] + CharacterSprites.sampleLooks.map { ResolvedLook($0, projectHue: 2) }
+        for look in looks {
+            for facing in [Facing.se, .sw] {
+                let canvas = Self.canvas(.sleep, facing, look: look)
+                let eyes = Self.components(of: .eye, in: canvas)
+                #expect(eyes.count == 2, "sleep@\(facing) \(look.variantName): \(eyes.count) eyes")
+                for eye in eyes {
+                    let xs = Set(eye.map(\.x)), ys = Set(eye.map(\.y))
+                    #expect(eye.count == 2 && xs.count == 2 && ys.count == 1,
+                            "sleep@\(facing) \(look.variantName): eye \(eye) is not a 2 × 1 line")
+                }
+                if eyes.count == 2 {
+                    #expect(eyes[0][0].y == eyes[1][0].y, "sleep@\(facing): both eyes on one row")
+                }
+            }
+        }
+    }
+
     /// Below each eye, and between the eyes, only skin and its shade down to the chin outline: no mouth.
     @Test func noMouthAtRest() {
         for animation in [CharacterAnimation.stand, .sitIdle, .type, .think, .sleep] {
@@ -353,6 +374,30 @@ import Testing
                         && ((right + 1)..<canvas.width).contains { skin.contains(canvas[$0, y]) }
                 }
                 #expect(ears, "haircut \(style)@\(facing): no ear beside the hair")
+            }
+        }
+    }
+
+    /// Second render: at ×1 the short cuts seen from behind (short, bun, buzz cut) stayed a rather uniform rounded
+    /// mass, their strands a single texel. They now also carry strands of 2 px in the shade tone of the hair, inside
+    /// the lit mass (plain hair on both sides), whatever the hair colour (grey above all: Zéphyr, Lou).
+    @Test func shortHairFromBehindHasStrands() {
+        for style in [0, 4, 5] {
+            for color in 0..<CharacterPalette.hairColorCount {
+                let look = ResolvedLook(AgentLook(hairStyle: style, hairColor: color), projectHue: 4)
+                let canvas = Self.canvas(.sitIdle, .ne, look: look)
+                func inMass(_ x: Int, _ y: Int) -> Bool {
+                    x > 0 && x < canvas.width - 1 && canvas[x, y] == .hairShade
+                        && canvas[x - 1, y] == .hair && canvas[x + 1, y] == .hair
+                }
+                var isolated: [PixelPoint] = []
+                for y in 0..<canvas.height {
+                    for x in 0..<canvas.width where inMass(x, y) { isolated.append(PixelPoint(x, y)) }
+                }
+                #expect(isolated.count >= 3, "haircut \(style), colour \(color): \(isolated.count) shade texels in the mass")
+                // Strands of 2 px: a shade texel of the mass right under another one.
+                let strands = isolated.filter { inMass($0.x, $0.y + 1) }
+                #expect(strands.count >= 2, "haircut \(style), colour \(color): \(strands.count) strands of 2 px")
             }
         }
     }

@@ -80,7 +80,7 @@ public enum FurnitureSprites {
     static let chairSize = (width: 32, height: 40)
     static let chairAnchor = PixelPoint(16, 36)
 
-    /// Painted metal (desk legs, slate chair, lamp, keyboard): stone / slate / shade.
+    /// Painted metal (desk legs, slate chair, keyboard): stone / slate / shade. The desk lamp has its own, darker.
     static let metal = Ramp(top: Palette.color(.stone), left: Palette.color(.slate), right: Palette.color(.shade),
                             outline: Palette.color(.ink), highlight: Palette.color(.mist))
     static let chairRamps: [(String, Ramp)] = [("slate", metal)] + (0..<10).map { ("hue\($0)", Ramp.hue($0)) }

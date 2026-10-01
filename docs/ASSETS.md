@@ -17,10 +17,10 @@ fait chaque asset, quoi, et comment. Il est tenu à jour à chaque ajout ou remp
   visuel (`docs/jalon-visuel/`), produits par `sprite-export` à partir du code.
 - **Une seule palette**, originale (`Assets/Palette.swift`, 7.1) : 32 couleurs de base, 10 teintes de projet en 3 tons,
   quelques couleurs dérivées. Un test vérifie chaque pixel de chaque sprite.
-- **Nos propres proportions** : environ 3,5 têtes, yeux de 1 × 2 px, pas de bouche au repos ; nos noms d'objets et
-  de lieux (« îlot », « poste », « mur de liège »). Rien qui reprenne ou évoque un jeu, un hôtel virtuel, une borne
-  d'arcade connue, un personnage de film ou de série, une marque, ni le nom, le logo ou la mascotte d'Anthropic ou
-  de Claude. Les noms d'agents viennent de `NameGenerator` (mots inventés ou courants).
+- **Nos propres proportions** : environ 3,5 têtes, yeux de 1 × 2 px (fermés : un trait de 2 × 1 px), pas de bouche
+  au repos ; nos noms d'objets et de lieux (« îlot », « poste », « mur de liège »). Rien qui reprenne ou évoque un
+  jeu, un hôtel virtuel, une borne d'arcade connue, un personnage de film ou de série, une marque, ni le nom, le logo
+  ou la mascotte d'Anthropic ou de Claude. Les noms d'agents viennent de `NameGenerator` (mots inventés ou courants).
 
 ## Sprites v0 (jalon visuel)
 
@@ -37,7 +37,7 @@ auteur ni aucune source tiers.
 | Décor | `Assets/Sprites/DecorSprites.swift` | `decor.plantSmall`, `decor.coffeeMachine` | Cartes ASCII et boîtes iso |
 | Ombres et lumières | `Assets/Sprites/LightSprites.swift` | `shadow.tile`, `shadow.char`, `shadow.small`, `light.cone`, `light.screenGlow`, `fx.star` | Formes pleines (ellipse et losange par algorithmes entiers) |
 | Moniteurs et écrans | `Assets/Sprites/MonitorSprites.swift` | `monitor.front`, `monitor.back` (LED par état), `screen.*` | Boîtes iso ; contenus d'écran en cartes ASCII cisaillées sur la face |
-| Overlays | `Assets/Sprites/OverlaySprites.swift` | `ov.*` (états, outils, badges, sélection) | Cartes ASCII ; une forme distincte par état (7.9), icônes d'outil génériques |
+| Overlays | `Assets/Sprites/OverlaySprites.swift` | `ov.*` (états, outils, badges, sélection, flèche de bord droite et diagonale) | Cartes ASCII et losanges 2:1 ; une forme distincte par état (7.9), icônes d'outil génériques ; la flèche diagonale est un sprite à part, jamais une rotation de 45° |
 | Effets | `Assets/Sprites/EffectSprites.swift` | `fx.dust`, `fx.ding`, `fx.pinDrop` | Cartes ASCII |
 | HUD | `Assets/Sprites/HUDSprites.swift` | `sign.island`, `desk.nameplate`, `desk.queueBadge`, `hud.state.*`, `minimap.*` | Cartes ASCII, 9-slice, texte en `PixelFont` |
 | Personnages | `Assets/Characters/` (`CharacterParts.swift`, `CharacterPoses.swift`, `CharacterSprites.swift`, `SlotCanvas.swift`, `CharacterPalette.swift`) | `agent.*` (14 animations), `agent.mini` | Parties en cartes ASCII posées image par image ; SE et NE dessinés, SW et NW en miroir ré-ombré |

@@ -180,12 +180,18 @@ public enum DeskItemSprites {
 
     // MARK: Desk lamp
 
-    /// A desk lamp (24×17, its base in the middle so that every facing shares one anchor): a metal base (2×2 units,
-    /// 2 px), a neck rising from its centre and arching over, a cream cone shade at its end, tilted so that its
-    /// opening looks down and back toward the desk. The shade leans toward +a, beside the monitor rather than behind
-    /// it: right on screen for ne and sw, left for se and nw. Both are drawn lit from the top left. On: the opening
-    /// glows (`lampWarm`) around a white bulb; off: a dark opening, a grey bulb.
+    /// A desk lamp (24×17, its base in the middle so that every facing shares one anchor): a dark metal base (2×2
+    /// units, 2 px), a dark neck rising from its centre and arching over, a cream cone shade at its end, tilted so
+    /// that its opening looks down and back toward the desk. The shade leans toward +a, beside the monitor rather than
+    /// behind it: right on screen for ne and sw, left for se and nw. Both are drawn lit from the top left. On: the
+    /// shade glows (its paper turns chalk, its mist paper) and the opening glows (`lampWarm`) around a white bulb;
+    /// off: a dark opening, a grey bulb. The neck and base are `lampMetal`, darker than the neutral greys of the
+    /// monitor's stand: grey like it, the lamp melted into it at ×1 (second render).
     static let lampSize = (width: 24, height: 17)
+
+    /// Dark painted metal of the lamp: shade top and left face, ink right face, a slate rim on the lit front edges.
+    static let lampMetal = Ramp(top: Palette.color(.shade), left: Palette.color(.shade), right: Palette.color(.ink),
+                                outline: Palette.color(.ink), highlight: Palette.color(.slate))
 
     static func lampLeansRight(_ facing: Facing) -> Bool { facing == .ne || facing == .sw }
 
@@ -197,42 +203,42 @@ public enum DeskItemSprites {
     static let lampAnchor = PixelPoint(12, 17)
 
     /// `W` the opening (lit or dark), `B` the bulb (both placeholder roles, painted by `lamp(facing:on:)`); the neck
-    /// goes down into the centre of the base, drawn first.
+    /// (shade, a slate glint on its crown) goes down into the centre of the base, drawn first.
     static let lampLeaningRight = PixelMap("""
         ....oooo........
-        ...o2333oo......
-        ..o3oooo33oo....
-        ..o3o...oo33oo..
-        ..o3o.....oo1o..
-        ..o3o.....o166o.
-        ..o3o....o16662o
-        ..o3o...o166622o
-        ..o3o...oWWWW22o
-        ..o3o...oBBWWoo.
-        ..o3o....ooo....
-        ..o3o...........
-        ..o3o...........
+        ...o4555oo......
+        ..o5oooo55oo....
+        ..o5o...oo55oo..
+        ..o5o.....oo1o..
+        ..o5o.....o166o.
+        ..o5o....o16662o
+        ..o5o...o166622o
+        ..o5o...oWWWW22o
+        ..o5o...oBBWWoo.
+        ..o5o....ooo....
+        ..o5o...........
+        ..o5o...........
         """, legend: lampLegend)
     static let lampLeaningLeft = PixelMap("""
         ........oooo....
-        ......oo2333o...
-        ....oo33oooo3o..
-        ..oo33oo...o3o..
-        ..o1oo.....o3o..
-        .o166o.....o3o..
-        o16662o....o3o..
-        o116662o...o3o..
-        o11WWWWo...o3o..
-        .ooWWBBo...o3o..
-        ....ooo....o3o..
-        ...........o3o..
-        ...........o3o..
+        ......oo4555o...
+        ....oo55oooo5o..
+        ..oo55oo...o5o..
+        ..o1oo.....o5o..
+        .o166o.....o5o..
+        o16662o....o5o..
+        o116662o...o5o..
+        o11WWWWo...o5o..
+        .ooWWBBo...o5o..
+        ....ooo....o5o..
+        ...........o5o..
+        ...........o5o..
         """, legend: lampLegend)
     private static let lampLegend: [Character: Slot] = ["W": .role(.lampWarm), "B": .role(.skyNight)]
 
     static func lamp(facing: Facing, on: Bool) -> SpriteDef {
         var image = PixelImage(width: lampSize.width, height: lampSize.height)
-        let base = Draw.isoBox(w: 2, d: 2, height: 2, ramp: FurnitureSprites.metal)
+        let base = Draw.isoBox(w: 2, d: 2, height: 2, ramp: lampMetal)
         image.blit(base.image, x: lampBaseOrigin.x, y: lampBaseOrigin.y)
         // Each map is 16 wide, its base columns over the base box.
         let (map, mapX) = lampLeansRight(facing) ? (lampLeaningRight, 8) : (lampLeaningLeft, 0)
@@ -241,6 +247,8 @@ public enum DeskItemSprites {
             switch slot {
             case .role(.lampWarm): return opening
             case .role(.skyNight): return bulb
+            case .role(.paper) where on: return Palette.color(.chalk)     // the lit shade glows
+            case .role(.mist) where on: return Palette.color(.paper)
             default: return SlotPaint.decor(slot, hue: nil)
             }
         }, x: mapX, y: 0)

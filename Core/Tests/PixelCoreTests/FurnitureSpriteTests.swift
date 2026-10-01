@@ -96,6 +96,50 @@ import Testing
         }
     }
 
+    /// Second render: by day, `~on` and `~off` differed by a few texels of the opening only (at night the pool said
+    /// it). Lit, the shade itself glows and the white bulb shows: on the desk top, by day, at least 12 pixels change in
+    /// every facing, among them a warm opening of 6 or more and some of the shade's own paper.
+    @Test func lampOnAndOffDifferByDay() {
+        let lookup = DecorSpriteChecks.byKey(Self.items)
+        let warm = Palette.color(.lampWarm), chalk = Palette.color(.chalk)
+        for facing in Facing.allCases {
+            var day: [PixelImage] = []
+            for variant in ["on", "off"] {
+                let lamp = lookup[SpriteKey("lamp.desk", variant: variant, facing: facing)]!.frames[0]
+                var desk = PixelImage(width: lamp.width, height: lamp.height, fill: Ramp.woodLight.top)
+                desk.blit(lamp, x: 0, y: 0)
+                day.append(desk)
+            }
+            let changed = zip(day[0].pixels, day[1].pixels).filter { $0 != $1 }.count
+            #expect(changed >= 12, "@\(facing): only \(changed) pixels differ by day")
+            #expect(day[0].pixels.filter { $0 == warm }.count >= 6, "@\(facing): a warm opening")
+            let lit = day[0].pixels.filter { $0 == chalk }.count, unlit = day[1].pixels.filter { $0 == chalk }.count
+            #expect(lit >= unlit + 4, "@\(facing): the shade lights up (\(unlit) → \(lit) chalk pixels)")
+        }
+    }
+
+    /// Second render: at ×1 the lamp's grey neck and base melted into the stand of the monitor beside it. They are now
+    /// another value: much darker than the neutral greys of the monitor's foot, and never its stone.
+    @Test func lampStandsApartFromTheMonitorFoot() {
+        let lookup = DecorSpriteChecks.byKey(Self.items)
+        let shade: Set<RGBA8> = [Palette.color(.chalk), Palette.color(.paper), Palette.color(.mist), Palette.color(.lampWarm),
+                                 Palette.color(.ink)]
+        let foot = [Ramp.neutral.top, Ramp.neutral.left, Ramp.neutral.right]
+        let footLuma = Double(foot.map(\.luma).reduce(0, +)) / Double(foot.count)
+        for facing in Facing.allCases {
+            for variant in ["on", "off"] {
+                let lamp = lookup[SpriteKey("lamp.desk", variant: variant, facing: facing)]!.frames[0]
+                // Neck and base: whatever is neither the shade, its opening and bulb when lit, nor the outline.
+                let on = lookup[SpriteKey("lamp.desk", variant: "on", facing: facing)]!.frames[0]
+                let metal = zip(lamp.pixels, on.pixels).filter { $0.isOpaque && !shade.contains($1) }.map(\.0)
+                #expect(metal.count >= 16, "@\(facing)~\(variant): a neck and a base")
+                let mean = Double(metal.map(\.luma).reduce(0, +)) / Double(max(metal.count, 1))
+                #expect(mean < 0.6 * footLuma, "@\(facing)~\(variant): metal luma \(Int(mean)) against \(Int(footLuma))")
+                #expect(!metal.contains(Ramp.neutral.left), "@\(facing)~\(variant): stone, the monitor's foot")
+            }
+        }
+    }
+
     /// The shade leans toward +a, the clearance side (right of the base on screen for ne and sw, left for se and
     /// nw), and never overlaps the monitor of its desk: leaning the other way, it hid behind the monitor of row A.
     @Test func lampShadeStandsBesideTheMonitor() {
