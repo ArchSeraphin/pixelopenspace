@@ -1,0 +1,189 @@
+# Jalon visuel : sprites v0, îlot de démonstration et vue d'ensemble
+
+But : valider la direction artistique **avant** l'étape 3 (voir `docs/PROPOSITION.md`, section 8 et section 7).
+Toutes les images de ce dossier sont produites par le cœur seul (`Core/`, Swift pur, compilé et testé sous Linux
+comme sous macOS), sans l'app, sans SpriteKit et sans aucune image externe : chaque sprite est dessiné par le code
+(`docs/ASSETS.md`), puis la scène est composée en logiciel par `SceneCompositor`, comme SpriteKit la dessinera à
+l'étape 3.
+
+**Terminé quand** tu valides les images et que tu as tranché les questions ci-dessous. L'étape 3 ne commence
+qu'après.
+
+## Rendu
+
+Depuis la racine du dépôt :
+
+```bash
+swift run --package-path Core -c release sprite-export --out "$PWD/docs/jalon-visuel"
+```
+
+Une ligne par fichier écrit (nom, largeur × hauteur, taille en octets). Compte une minute au plus la première
+fois (compilation en release), puis quelques secondes pour les 15 images ; le pic de mémoire est d'environ
+1,1 Go (planche 1 à l'échelle 4). Le rendu est déterministe : deux rendus donnent les mêmes octets, sous Linux
+comme sous macOS.
+
+Options : `--only palette,sheets,island,overview` (une partie seulement), `--scale <n>` (échelle des planches,
+de 1 à 8 ; 4 par défaut), `--out <dossier>`, `--help`.
+
+**Contrôles automatiques** :
+
+- `cd Core && swift test` compare l'empreinte de chaque image de chaque sprite (714) et de quatre scènes (îlot 1
+  et 2 à ×1 de jour, vue d'ensemble de jour et de nuit) au fichier
+  `Core/Tests/PixelCoreTests/Fixtures/golden/sprites.txt` (`GoldenTests`).
+- La CI (job Linux de `.github/workflows/core.yml`) refait le rendu, compare chaque PNG à celui du dépôt octet
+  par octet, et publie les images en artefact (`jalon-visuel`).
+
+Après une modification **voulue** d'un sprite ou du compositeur, depuis la racine du dépôt :
+
+```bash
+swift run --package-path Core sprite-export --golden-out Core/Tests/PixelCoreTests/Fixtures/golden/sprites.txt
+swift run --package-path Core -c release sprite-export --out "$PWD/docs/jalon-visuel"
+```
+
+puis commit du golden et des images.
+
+## Les 15 fichiers
+
+| Fichier | Taille (pixels) | Contenu |
+|---|---|---|
+| `planche-0-palette.png` | 3136 × 2380 | Les 32 couleurs de base (pastille, nom, hexadécimal), les 10 teintes de projet en 3 tons, l'ombre, la flaque de lumière et le voile de nuit sur `floorLight`, les couleurs dérivées, les couleurs clés marquées « jamais dans un sprite » |
+| `planche-1-sols-murs.png` | 3136 × 6472 | Catégories `floors` et `walls` |
+| `planche-2-mobilier-decor.png` | 3136 × 4464 | `furniture`, `deskItems`, `decor`, `lights` |
+| `planche-3-ecrans-overlays.png` | 3136 × 3104 | `monitors`, `screens`, `overlays`, `effects` |
+| `planche-4-hud-texte.png` | 3136 × 2248 | `hud`, spécimen de `PixelFont` (alphabet, accents, chiffres, symboles, les 60 noms de `NameGenerator`), pancartes « API », « SITE WEB », « DOCUMENTATION », plaques « NOVA », « ZÉPHYR » et « OFF » |
+| `planche-5-personnage.png` | 3656 × 5580 | Planche complète de `AgentLook()` : une ligne par animation (« TYPE · 4 × 12 FPS »), SE, SW, NE, NW, images côte à côte (184 images) |
+| `planche-6-apparences.png` | 3136 × 1336 | Les 16 apparences de `sampleLooks` assises (`sitIdle`, image 0) en SE et NE, `agent.mini` dans les 10 teintes |
+| `ilot-x1-jour.png` | 672 × 894 | L'îlot « API » de 8 postes dans ses deux distributions, de jour, 1 pixel par texel |
+| `ilot-x2-jour.png` | 1344 × 1788 | Le même, 2 pixels par texel |
+| `ilot-x3-jour.png` | 2016 × 2682 | Le même, 3 pixels par texel |
+| `ilot-x1-nuit.png` | 672 × 894 | L'îlot de nuit, 1 pixel par texel |
+| `ilot-x2-nuit.png` | 1344 × 1788 | De nuit, 2 pixels par texel |
+| `ilot-x3-nuit.png` | 2016 × 2682 | De nuit, 3 pixels par texel |
+| `vue-ensemble-jour.png` | 1920 × 1056 | Maquette 6(q) : 20 agents sur 6 projets, de jour, 1 pixel par texel, 144 ppp |
+| `vue-ensemble-nuit.png` | 1920 × 1056 | La même de nuit |
+
+Planches à l'échelle 4 (4 pixels par texel). Sur les planches, chaque image d'un sprite est posée sur un damier
+`paper` / `mist` de 4 × 4 texels qui montre sa transparence ; un groupe porte l'identifiant, la taille, la cadence
+(« 4 × 8 FPS », « UNE FOIS » sans boucle) et l'ancre, chaque cellule sa variante (`~hue3`), sa direction (`@ne`)
+et « MIROIR » pour un sprite obtenu par miroir (« MIROIR RÉ-OMBRÉ » pour les personnages SW et NW).
+
+### Les deux distributions de l'îlot
+
+Un îlot a au plus 8 postes, dont un toujours libre, donc 7 agents ; il y a 10 états plus l'agent endormi. Chaque
+image de l'îlot montre donc le même îlot dans deux distributions, l'une sous l'autre (décision 13). Rangée A
+(devant, index pairs) : dos au spectateur, écran visible ; rangée B (derrière, index impairs) : visage visible.
+
+| Poste | Distribution 1 | Distribution 2 |
+|---|---|---|
+| 0 (A0) | Nova : attend une permission (Bash « rm -rf dist », depuis 42 s), 1 post-it en file | Pixou : travaille (Edit), post-it collé à l'écran, 2 post-its en file |
+| 1 (B0) | Bip : travaille (Bash), 2 sous-agents | Sol : attend une réponse à une question |
+| 2 (A1) | Lune : réfléchit | Mika : attend une tâche de fond |
+| 3 (B1) | Oslo : tour terminé | Rio : en pause, limite d'usage (reprise dans 40 min) |
+| 4 (A2) | Zéphyr : erreur (serveurs surchargés) | Lou : démarre |
+| 5 (B2) | Tao : au repos depuis 12 min (endormi) | Plume : réfléchit, sans nouvelles, mode dégradé |
+| 6 (A3) | Kiwi : hors ligne | (poste libre) |
+| 7 (B3) | (poste libre) | Galet : au repos, brouillon dans la zone de saisie, mode `bypassPermissions` |
+
+La vue d'ensemble reprend la maquette 6(q) : API (5 agents, dont Nova qui attend), INFRA (4, dont Sol qui attend
+et Zéphyr en erreur), SITE (3), DATA (3), MOBILE (3), DOCS (2, dont Ivo qui attend), 12 mini post-its sur le mur
+de liège, emprise de 36 × 24 tuiles.
+
+## Comment les regarder
+
+- Ouvre les PNG dans **Aperçu**, en **taille réelle** (Présentation › Taille réelle, ⌘0).
+- **Îlot** : sur un écran Retina, `ilot-xk-*.png` en taille réelle s'affiche exactement comme l'app au zoom ×k
+  (1 pt par pixel d'image, donc k pt par texel, 7.3). C'est l'image à juger pour la lisibilité à chaque zoom.
+- **Vue d'ensemble** : 1 pixel par texel, déclarée à 144 ppp (chunk `pHYs`) ; en taille réelle sur Retina elle
+  s'affiche à 0,5 pt par texel, comme le niveau « vue d'ensemble » de l'app.
+- **Planches** : 4 pixels par texel, soit 4 pt par texel en taille réelle (deux fois le zoom ×2 de l'app) ; faites
+  pour regarder chaque sprite de près.
+
+## Questions à trancher
+
+- [ ] **Écran de la rangée A** : l'avatar de dos cache-t-il l'écran ? Le moniteur est décalé de 6 px vers la tuile
+  de dégagement. Sur les rendus, l'écran reste visible à côté de la tête à ×1, ×2 et ×3 (Nova, Lune, Zéphyr, Pixou,
+  Lou) ; à confirmer à l'œil. Repli prévu : LED d'état sur le haut du moniteur (7.4.3).
+- [ ] **Taille des overlays** à ×1 (« ! » de 12 × 24, bulles d'outil de 16 × 16) et en vue d'ensemble (« ! » XL de
+  24 × 48, icône d'état au-dessus de chaque poste occupé).
+- [ ] **Palette** : valeurs à ajuster à l'œil (planche 0, puis les scènes).
+- [ ] **Orientation des rangées** (décision 2) : rangée A regard `ne` (dos et écran visibles), rangée B regard `sw`
+  (visage visible).
+- [ ] **Pas des postes** (décision 3) : un poste toutes les 2 tuiles (bureau, puis une tuile de dégagement qui reçoit
+  les sous-agents et la flaque de la lampe). Repli : postes jointifs, îlot plus étroit.
+- [ ] **Police** (décision 6) : garder `PixelFont` (originale, même rendu partout, texte net garanti) aussi dans
+  l'app, ou revenir à Silkscreen (7.11).
+- [ ] **Nuit** : force du voile (0,55 ; 0,35 avec « Réduire la transparence ») et des flaques de lumière (35 %,
+  additives).
+- [ ] **Visages de la rangée B** derrière les moniteurs : lisibles à ×1 ?
+- [ ] **Texte en vue d'ensemble** : à 0,5 pt par texel, les pancartes et les plaques de nom (capitales de 5 px)
+  font 2,5 pt de haut. Les garder, les agrandir, ou les masquer à ce niveau ?
+
+## Écarts à la proposition
+
+### Décisions du plan (`docs/superpowers/plans/2026-10-01-jalon-visuel.md`)
+
+1. **Sprites v0** : les sprites « Ét. 3 » de 7.4, plus `light.cone`, `light.screenGlow`, `fx.star` (« Ét. 4 »,
+   nécessaires à la nuit) et `elevator.led`. Hors v0 : l'habillage SwiftUI (7.4.6), les post-its du tableau, les
+   punaises, `trash`, `printer`, `ov.smoke`, `ov.speech`, les effets des étapes 4 et 6, le décor déblocable,
+   `portrait.mini`, le contour pointillé, niveaux, badges et mode édition.
+2. **Orientation des rangées** : la taille de l'îlot impose des rangées le long de i ; « nord-ouest / sud-est » de
+   3.8 deviennent `ne` (rangée A) et `sw` (rangée B). `ne` est dessiné, `sw` est le miroir ré-ombré de `se`.
+3. **Pas des postes** : bureau puis une tuile de dégagement, d'où `(2·⌈cap/2⌉ + 2) × 7` tuiles par îlot.
+4. **Index de poste** indépendant de la capacité : partie `d / 8`, rangée selon la parité, poste `l / 2` ; un îlot
+   qui passe de 4 à 8 postes grandit vers +i sans déplacer un poste.
+5. **Moniteurs** : `monitor.front` seulement en `ne` et `nw`, `monitor.back` seulement en `se` et `sw` (les deux
+   autres orientations ne seraient jamais vues), au lieu de « 4 or. ».
+6. **Police** : `PixelFont`, police pixel originale du cœur (pas de Silkscreen sans CoreText).
+7. **Annexes** (« API · 2 ») placées au calcul dans le premier slot libre, slot non persisté (corrigé à l'étape 3).
+8. **Tailles de 7.4** ajustables quand la géométrie l'impose, avec une ligne « Écart » (liste ci-dessous).
+9. **Atlas et manifeste** (7.6) et remplacement par des PNG (7.7) reportés à l'étape 3 : `sprite-export` n'écrit ni
+   pages d'atlas ni `manifest.json`, et n'a pas d'option `--contact-sheet` (les planches font toujours partie du
+   rendu).
+10. **Alpha** : sprites opaques ou transparents ; ombres opaques en `ink` qui reçoivent leurs 30 % une seule fois au
+    compositing, lumières de nuit opaques qui reçoivent 35 % en additif.
+11. **Lecture des PNG** : à ×k, un texel = k pixels ; vue d'ensemble à 144 ppp.
+12. **Apparences** : `AgentLook()` par défaut identique pour tous ; les scènes fixent des apparences à la main. Le
+    choix automatique relève de l'étape 3.
+13. **Un agent dans chaque état** : deux distributions du même îlot (tableau ci-dessus).
+
+### Tailles modifiées (lignes « Écart » des tâches 4 à 7)
+
+- `desk` : 64 × 56 au lieu de 64 × 48 (plateau à 24 px sur toute la profondeur de la tuile). Tâche 4.
+- `keyboard` : 14 × 9 au lieu de 14 × 6 ; `papers` : 12 × 8 au lieu de 12 × 6 (boîtes 2:1 avec 2 px d'épaisseur
+  pour la sonde de lumière). Tâche 4.
+- `mug~steam` : 6 × 14 (la vapeur monte au-dessus de la tasse de 6 × 8). Tâche 4.
+- `elevator` : ancré en (32, 112) au lieu de (32, 120) (point du sol sous le milieu des deux tuiles). Tâche 4.
+- `board.cork` : 192 × 192 ancré en (96, 144) au lieu de 192 × 128 (pan de mur de 6 tuiles portant 4 rangées de
+  12 mini post-its). Tâche 4.
+- `elevator.led` : 6 × 8. Tâche 4.
+- `screen.*` : 12 × 13 au lieu de 16 × 10 (image plate de 12 × 8 cisaillée 2:1 sur la face du moniteur). Tâche 5.
+- Tâches 6 et 7 : aucun écart de taille.
+- Hors 7.4 (tâche 2) : le test `flatImageCompresses` borne une image unie de 512 × 512 à 8 Kio au lieu de 4 Kio (le
+  Huffman fixe ne descend pas sous 6 610 octets pour ces données).
+
+### Écarts de la tâche 8 (ce rendu)
+
+- **Empreintes golden** : FNV-1a 64 bits de chaque image (`PixelImage.fingerprint`), dans un seul fichier trié
+  (`Fixtures/golden/sprites.txt`), au lieu de fichiers `Tests/Golden/*.sha` (7.5).
+- **Planches** : une cellule par sprite, groupées par identifiant (taille, cadence et ancre dans l'en-tête du
+  groupe) ; les familles `hud.state.<nom>`, `minimap.dot.<nom>` et `ov.tool.<nom>` forment un groupe chacune. La
+  planche 4 ajoute la plaque « ZÉPHYR » (hauteur avec accent) et un texte `chalk` à contour `ink` ; la planche 5
+  porte la teinte Lagune (P4), comme le catalogue.
+- **`sprite-export`** : `--scale` va de 1 à 8 et ne touche que les planches ; `--help` ; code de sortie 2 si un
+  fichier ne peut pas être écrit.
+- **Journal de provenance** dans `docs/ASSETS.md` (7.10 le prévoyait dans `Resources/`).
+
+## Défauts constatés
+
+Relevés à la revue des 15 images. Ils ne sont pas corrigés ici : chaque correction fera l'objet d'une tâche de
+suivi, après quoi le golden et les images seront régénérés.
+
+| Fichier | Tâche | Défaut |
+|---|---|---|
+| `ilot-x*-*.png`, `vue-ensemble-*.png` | 7 (placement) | Les overlays du poste B0 chevauchent ou touchent la pancarte de l'îlot (tuile locale (0, 0), juste au-dessus de B0) : en distribution 2, le « ! », son halo et la bulle « ? » de Sol passent sur la pancarte « API » ; en distribution 1 et en vue d'ensemble, la bulle `>_` de Bip la touche. |
+| `ilot-x*-*.png` | 7 (placement) | En rangée A, l'overlay principal flotte au-dessus du bureau du poste de derrière : l'orage de Zéphyr sur le bureau de Lune, le sablier de Mika sur celui de Pixou. On peut l'attribuer au mauvais poste. Piste : un `overlayLift` plus bas en rangée A (avatar de dos, tête plus basse). |
+| `ilot-x*-nuit.png`, `vue-ensemble-nuit.png` | 4 (`light.cone`), 7 (position) | Les flaques de lumière virent au gris mauve pâle : `lampWarm` ajouté à 35 % sur la moquette voilée ne donne pas une lumière chaude. L'ellipse déborde du plateau sur la moquette devant le bureau et se lit comme un spot au sol. À revoir : teinte (ou alpha), taille et position. |
+| `ilot-x*-*.png` (Kiwi, hors ligne), `planche-2-mobilier-decor.png` | 4 | `chair~*.jacket` : la veste posée sur la chaise se lit comme une poubelle grise plutôt qu'un vêtement, à ×1 comme à ×2. |
+| `vue-ensemble-*.png` | 7 | Un agent qui attend porte à la fois le « ! » XL et la petite icône `hud.state.waitingInput` (un autre « ! ») : redondant. Pour les autres états, l'icône d'état s'ajoute à côté de la bulle d'outil : deux petites icônes côte à côte au-dessus de chaque tête. |
+| `vue-ensemble-*.png` | 5, 7 | À 0,5 pt par texel, le texte des pancartes et des plaques (capitales de 5 px) fait 2,5 pt : illisible en taille réelle (voir les questions). |
+| `planche-3-ecrans-overlays.png` | 5 | `ov.edgeArrow` ressemble à une goutte jaune marquée « ! » plus qu'à une flèche qui désigne le bord de l'écran. |

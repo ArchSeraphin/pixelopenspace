@@ -1,4 +1,5 @@
-# Core package (Core/): builds and tests PixelCore, PixelIPC, pixel-hook and fake-claude on Linux and macOS.
+# Core package (Core/): builds and tests PixelCore, PixelIPC, pixel-hook and fake-claude on Linux and macOS;
+# on Linux, also renders the visual milestone with sprite-export and checks the committed images.
 name: Core
 
 on:
@@ -41,6 +42,24 @@ jobs:
       - name: Test
         working-directory: Core
         run: swift test --parallel
+
+      # Visual milestone (docs/jalon-visuel): the committed PNG files must be what the code renders, byte for byte.
+      - name: Render the visual milestone
+        run: swift run --package-path Core -c release sprite-export --out "$PWD/build/jalon-visuel"
+
+      - name: Check the committed images
+        shell: bash
+        run: |
+          for f in build/jalon-visuel/*.png; do
+            cmp -s "$f" "docs/jalon-visuel/$(basename "$f")" || { echo "::error::$(basename "$f") is out of date: run the render command and commit"; exit 1; }
+          done
+
+      - name: Upload the visual milestone
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jalon-visuel
+          path: build/jalon-visuel
 
   macos-core:
     name: macOS (Xcode, swift test)

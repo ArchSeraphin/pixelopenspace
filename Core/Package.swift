@@ -12,12 +12,15 @@ let package = Package(
         .library(name: "PixelIPC", targets: ["PixelIPC"]),
         .executable(name: "pixel-hook", targets: ["pixel-hook"]),
         .executable(name: "fake-claude", targets: ["fake-claude"]),
+        .executable(name: "sprite-export", targets: ["sprite-export"]),
     ],
     targets: [
         .target(name: "PixelIPC"),
         .target(name: "PixelCore", dependencies: ["PixelIPC"]),
         .executableTarget(name: "pixel-hook", dependencies: ["PixelIPC"]),
         .executableTarget(name: "fake-claude", dependencies: ["PixelIPC"]),
+        // Renders the visual milestone's PNG files and golden fingerprints (docs/jalon-visuel).
+        .executableTarget(name: "sprite-export", dependencies: ["PixelCore"]),
         .testTarget(
             name: "PixelCoreTests",
             dependencies: ["PixelCore", "PixelIPC"],
