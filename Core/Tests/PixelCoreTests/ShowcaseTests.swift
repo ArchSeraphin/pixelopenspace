@@ -72,6 +72,8 @@ import Testing
             #expect(cast.layout.islands.count == 1, "cast \(index + 1)")
             let island = cast.layout.islands[0]
             #expect(island.capacity == 8 && island.size == GridSize(w: 10, d: 7))
+            #expect(island.rug == GridRect(origin: GridPoint(1, 8), size: GridSize(w: 10, d: 6)))
+            #expect(island.sign == GridPoint(1, 13) && Showcase.islandCrop().contains(island.sign))
             #expect(island.desks.filter { $0.agentID == nil }.map(\.index) == [index == 0 ? 7 : 6])
             #expect(cast.projects[island.projectID] == ProjectVisual(name: "API", hueIndex: 4))
             #expect(island.rect.intersects(Showcase.islandCrop()) && Showcase.islandCrop().contains(island.rect))
@@ -109,6 +111,8 @@ import Testing
         #expect(counts == [.waitingInput: 3, .working: 9, .thinking: 2, .done: 2, .idle: 3, .error: 1])
         let perIsland = scene.layout.islands.map { $0.desks.filter { $0.agentID != nil }.count }
         #expect(perIsland == [5, 4, 3, 3, 3, 2])
+        // Décision 3: each rug fits its agents (API and INFRA no longer carry two empty posts).
+        #expect(scene.layout.islands.map(\.rug.size.w) == [8, 8, 6, 6, 6, 6])
         #expect(scene.boardCardHues.count == 12)
     }
 

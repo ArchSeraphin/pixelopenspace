@@ -27,6 +27,9 @@ public struct AgentPresentation: Equatable, Sendable {
     public var nameplateAlways: Bool
     /// The "OFF" plate.
     public var nameplateOff: Bool
+    /// A starting agent has no overlay: the small "démarre" sign (`hud.state.launching`) stands above its post at ×1
+    /// and closer, never in the overview (seen from behind, the standing pose reads like sitting).
+    public var launchingSign: Bool
     /// 0…3, `AgentStateKind.urgency`.
     public var urgency: Int
     /// `AgentPresenter.accessibilityLabel` (tooltip, VoiceOver).
@@ -36,8 +39,8 @@ public struct AgentPresentation: Equatable, Sendable {
     public init(kind: AgentStateKind, asleep: Bool = false, animation: CharacterAnimation? = nil,
                 facesViewer: Bool = false, overlay: OverlayKind? = nil, toolIcon: ToolIcon? = nil, halo: Bool = false,
                 screen: ScreenState = .off, badges: [SceneBadge] = [], subagents: Int = 0, jacketOnChair: Bool = false,
-                deskLit: Bool = true, nameplateAlways: Bool = false, nameplateOff: Bool = false, urgency: Int? = nil,
-                label: String = "") {
+                deskLit: Bool = true, nameplateAlways: Bool = false, nameplateOff: Bool = false,
+                launchingSign: Bool = false, urgency: Int? = nil, label: String = "") {
         self.kind = kind
         self.asleep = asleep
         self.animation = animation
@@ -52,9 +55,14 @@ public struct AgentPresentation: Equatable, Sendable {
         self.deskLit = deskLit
         self.nameplateAlways = nameplateAlways
         self.nameplateOff = nameplateOff
+        self.launchingSign = launchingSign
         self.urgency = urgency ?? kind.urgency
         self.label = label
     }
+
+    /// The "!" of a wait or the storm of an error: the only signs the overview keeps (décision 2 of the first render),
+    /// with the name plate of their agent.
+    public var showsUrgentSign: Bool { overlay == .bang || overlay == .storm }
 }
 
 public struct ScenePresentationOptions: Hashable, Sendable {
@@ -99,6 +107,7 @@ extension AgentPresenter {
             case .launching:
                 p.animation = .stand
                 p.screen = .boot
+                p.launchingSign = true
             case .idle:
                 p.asleep = now.timeIntervalSince(r.phaseSince) > asleepAfter
                 p.animation = p.asleep ? .sleep : .sitIdle

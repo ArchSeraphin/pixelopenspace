@@ -150,7 +150,29 @@ import Testing
         #expect(p.animation == .stand && p.overlay == nil && p.toolIcon == nil)
         #expect(p.screen == .boot)
         #expect(!p.nameplateAlways)
+        // No overlay, but the small "démarre" sign above the post (seen from behind, standing reads as sitting).
+        #expect(p.launchingSign)
         Self.expectSeatedDefaults(p, "launching")
+        // A wait opened while launching: the "!" replaces the sign.
+        let waiting = Self.scene(Self.waiting(.terminal, phase: .launching))
+        #expect(waiting.overlay == .bang && !waiting.launchingSign)
+    }
+
+    @Test func urgentSignsAndLaunchingSign() {
+        let runtimes: [AgentRuntime] = [
+            Self.waiting(.terminal), Self.waiting(.question([Self.question])), Self.runtime(.thinking),
+            Self.runtime(.working(.read)), Self.runtime(.idle), Self.runtime(.idle, since: Self.t0 - 3_600),
+            Self.runtime(.done), Self.runtime(.waitingBackground(tasks: 0, crons: 1)),
+            Self.runtime(.quotaPaused(resetAt: nil, autoResume: true)), Self.runtime(.error(.crashed(2))),
+            Self.runtime(.launching), Self.runtime(.offline(.notStarted), pid: nil),
+        ]
+        for r in runtimes {
+            let p = Self.scene(r)
+            // The overview keeps the "!" of a wait and the storm of an error, nothing else (décision 2).
+            #expect(p.showsUrgentSign == (p.kind == .waitingInput || p.kind == .error), "\(r.phase)")
+            #expect(p.showsUrgentSign == (p.overlay == .bang || p.overlay == .storm), "\(r.phase)")
+            #expect(p.launchingSign == (p.kind == .launching), "\(r.phase)")
+        }
     }
 
     @Test(arguments: [OfflineReason.notStarted, .closedByUser, .appRelaunched, .exited, .orphanElsewhere])

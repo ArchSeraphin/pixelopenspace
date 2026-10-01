@@ -86,11 +86,93 @@ import Testing
                 let moved = before.keys.sorted().filter { key in
                     guard let island = after[key] else { return false }
                     return island.origin != before[key]!.origin || island.slot != before[key]!.slot
-                        || island.sign != before[key]!.sign
+                        || island.sign != before[key]!.sign || island.rug.origin != before[key]!.rug.origin
                 }
                 #expect(moved.isEmpty, "run \(run), step \(step): \(moved)")
             }
         }
+    }
+
+    /// The slot of an island, computed here from the 12×9 pitch below the 6-tile hall (not from the layout).
+    static func slotRect(_ slot: Int) -> GridRect {
+        let (column, row) = WorldLayout.slotCoordinates(slot)
+        return GridRect(origin: GridPoint(12 * column, 6 + 9 * row), size: GridSize(w: 12, d: 9))
+    }
+
+    /// Décision 3: a grown rug stays in its own slot, inside the island's reserved tiles (so the corridor ring
+    /// between slots stays bare), and never reaches the hall or another island.
+    @Test func rugNeverLeavesItsSlot() {
+        for (run, history) in Self.histories.enumerated() {
+            for (step, layout) in Self.layouts(history).enumerated() {
+                var problems: [String] = []
+                for (n, island) in layout.islands.enumerated() {
+                    let name = "island \(island.slot).\(island.part)"
+                    let slot = Self.slotRect(island.slot)
+                    let inner = GridRect(origin: slot.origin + GridPoint(1, 1), size: GridSize(w: 10, d: 7))
+                    if !slot.contains(island.rug) { problems.append("\(name): rug \(island.rug) outside its slot") }
+                    if !inner.contains(island.rug) { problems.append("\(name): rug \(island.rug) on the corridor ring") }
+                    if !island.rect.contains(island.rug) { problems.append("\(name): rug outside the island") }
+                    if island.rug.intersects(layout.hall) { problems.append("\(name): rug in the hall") }
+                    for other in layout.islands where other != island && island.rug.intersects(other.rect) {
+                        problems.append("\(name): rug over island \(other.slot).\(other.part)")
+                    }
+                    for other in layout.islands[(n + 1)...] where island.rug.intersects(other.rug) {
+                        problems.append("\(name): rug over the rug of island \(other.slot).\(other.part)")
+                    }
+                }
+                #expect(problems.isEmpty, "run \(run), step \(step): \(problems)")
+            }
+        }
+    }
+
+    /// Décision 3: the rug carries every desk drawn (desk, seat and side tile), the sign and the plant; it fits the
+    /// occupied desks plus the next free one, by whole posts, with no empty post beyond them.
+    @Test func rugCoversEveryDesk() {
+        for (run, history) in Self.histories.enumerated() {
+            for (step, layout) in Self.layouts(history).enumerated() {
+                var problems: [String] = []
+                for island in layout.islands {
+                    let name = "island \(island.slot).\(island.part)"
+                    var own = [island.sign, island.plant]
+                    for desk in island.desks { own += [desk.deskTile, desk.seatTile, desk.sideTile] }
+                    for tile in own where !island.rug.contains(tile) { problems.append("\(name): \(tile) off the rug") }
+                    // A one-tile margin around the furniture: the aisle behind row B, the front border, one column
+                    // before the first desk and one after the last side tile.
+                    let lastPost = island.desks.map(\.post).max() ?? 0
+                    let fitted = GridRect(origin: island.origin + GridPoint(0, 1), size: GridSize(w: 2 * lastPost + 4, d: 6))
+                    if island.rug != fitted { problems.append("\(name): rug \(island.rug) for \(lastPost + 1) post(s)") }
+                    // The last post holds an agent or the lowest free desk; a free desk shows while the part has room.
+                    let free = island.desks.filter { $0.agentID == nil }.map(\.index)
+                    let seated = island.desks.filter { $0.agentID != nil }
+                    let lastHasReason = island.desks.contains { $0.post == lastPost && ($0.agentID != nil || $0.index == free.min()) }
+                    if !lastHasReason { problems.append("\(name): empty post \(lastPost) on the rug") }
+                    if seated.count < 8 && free.isEmpty { problems.append("\(name): no free desk") }
+                    if island.desks.map(\.index) != island.desks.map(\.index).sorted() { problems.append("\(name): desk order") }
+                }
+                #expect(problems.isEmpty, "run \(run), step \(step): \(problems)")
+            }
+        }
+    }
+
+    /// Décision 3: the rug grows when an agent arrives (and never shrinks while nobody leaves), from the same origin.
+    @Test func rugGrowsWithItsAgents() {
+        var grew = 0
+        for (run, history) in Self.histories.enumerated() {
+            let layouts = Self.layouts(history)
+            for step in 1..<layouts.count {
+                let before = Self.islands(layouts[step - 1])
+                let after = Self.islands(layouts[step])
+                for (key, old) in before {
+                    guard let new = after[key] else { continue }
+                    let oldAgents = Set(old.desks.compactMap(\.agentID)), newAgents = Set(new.desks.compactMap(\.agentID))
+                    guard newAgents.isSuperset(of: oldAgents) else { continue }
+                    #expect(new.rug.contains(old.rug) && new.rug.origin == old.rug.origin,
+                            "run \(run), step \(step), \(key): \(old.rug) → \(new.rug)")
+                    if new.rug.size.w > old.rug.size.w { grew += 1 }
+                }
+            }
+        }
+        #expect(grew > 50, "rugs really grow in the histories")
     }
 
     @Test func existingDesksNeverMove() {
@@ -123,8 +205,7 @@ import Testing
         var tiles = Set<GridPoint>()
         for (n, island) in layout.islands.enumerated() {
             let name = "island \(island.slot).\(island.part)"
-            let (column, row) = WorldLayout.slotCoordinates(island.slot)
-            let slot = GridRect(origin: GridPoint(12 * column, 6 + 9 * row), size: GridSize(w: 12, d: 9))
+            let slot = slotRect(island.slot)
             if !slot.contains(island.rect) { problems.append("\(name) outside its slot") }
             if !layout.bounds.contains(island.rect) { problems.append("\(name) outside the bounds") }
             if island.rect.intersects(layout.hall) { problems.append("\(name) in the hall") }

@@ -4,15 +4,17 @@ import Foundation
 /// `PixelImage`, without a GPU, so that the visual milestone renders under Linux. Pure and deterministic.
 ///
 /// Order of a render, in texels (scaled by the zoom at the very end):
-/// 1. floor: hall parquet, corridors, the islands' carpets with their borders;
+/// 1. floor: hall parquet, corridors, the islands' rugs with their borders (`IslandPlacement.rug`);
 /// 2. shadows: drawn opaque in one layer, offset (+2, +1), applied once at 30 % (7.3, rule 4), only over the floor;
-/// 3. walls (whole world only): the two back walls, cork wall and its mini post-its, elevator and its LED, corner;
-/// 4. the world sorted back to front by `IsoMath.depth`, then by insertion order: hall props, island signs and
-///    plants, and every post (chair, avatar, desk, monitor, screen, desk items, subagent minis);
-/// 5. at night: the veil (multiply) over all of the above, then the additive lights (lamp pools, screen glows,
-///    stars);
-/// 6. overlays, never veiled: state overlays, tool bubbles, badges, queue badges, name plates, the "+n" of the
-///    cork wall; in the overview, the XL "!" and a state icon above every occupied post.
+/// 3. walls (whole world only): the two back walls, cork wall and its mini post-its (spread in loose rows),
+///    elevator and its LED, corner;
+/// 4. the world sorted back to front by `IsoMath.depth`, then by insertion order: hall props, island signs (×2 in
+///    the overview) and plants, and every post (chair, avatar, desk, monitor, screen, desk items, subagent minis);
+/// 5. at night: the veil (multiply) over all of the above, then the additive lights (lamp pools on the desk tops,
+///    screen glows, stars);
+/// 6. overlays, never veiled: state overlays, the "démarre" sign of a starting agent, tool bubbles, badges, queue
+///    badges, name plates, the "+n" of the cork wall. The overview keeps only the urgent signs: the XL "!" of a
+///    wait, the storm of an error and those agents' name plates (décision 2 of the first render).
 public enum SceneCompositor {
     public static func render(_ scene: SceneInput, options: RenderOptions) -> PixelImage {
         rasterize(plan(scene, options: options)).scaled(by: options.zoom.pixelsPerTexel)
@@ -34,15 +36,37 @@ public enum SceneCompositor {
 
     // MARK: Placements tuned on the milestone renders
 
-    /// Px above the seat tile's centre where the primary overlay's anchor (its bottom) goes: just over the head of
-    /// a seated agent, raised hand included.
-    static let overlayLift = 54
+    /// Px above the seat tile's centre where the primary overlay's anchor (its bottom) goes. Row B faces the viewer
+    /// and has the aisle behind its head: 9 px over a seated head (top 45 px over the seat), 3 px over a raised hand
+    /// (51). Row A turns its back to the viewer and, on screen, the desk of the post before it fills the space over
+    /// its head: the overlay sits on the head (1 to 3 px over it), so that it reads as this agent's and not as that
+    /// desk's; raised hand as in row B, standing (starting) 2 px over the head (48).
+    static func overlayLift(_ p: AgentPresentation, row: IslandRow) -> Int {
+        if p.animation == .raiseHand || row == .b { return 54 }
+        return p.animation == .stand ? 50 : 48
+    }
     /// Centre of the "!" glyph above the overlay anchor, where the halo is centred (normal, XL).
     static let haloLift = (normal: 12, xl: 24)
     /// Gap between the primary overlay, the question bubble and the badges.
     static let badgeGap = 1
-    /// Where the name plate's bottom centre goes, from the seat tile's centre: under the post, on the floor.
+    /// Row A: where the name plate's bottom centre goes, from the seat tile's centre: under the post, on the floor
+    /// in front of the chair.
     static let nameplateDrop = 18
+    /// Row B: the name plate beside the head, on the side of the post before (the next post's overlays rise on the
+    /// other side), its bottom 35 px over the seat tile's centre (the head spans about x −6…5, y −45…−36; a raised
+    /// hand goes up at x −11). Offline, nobody sits there: the "OFF" plate takes the place of the head, centred over
+    /// the chair (wider, it would cover the agent of the post before). Returns the plate's top-left corner.
+    static func rowBNameplateOrigin(_ p: AgentPresentation, plate: (width: Int, height: Int),
+                                    seat c: PixelPoint) -> PixelPoint {
+        let bottom = c.y - 35 - plate.height
+        guard p.animation != nil else { return PixelPoint(c.x - plate.width / 2, bottom) }
+        return PixelPoint(c.x - (p.animation == .raiseHand ? 13 : 9) - plate.width, bottom)
+    }
+    /// The island sign stands on the outer corner of its tile, the rug's front-left corner (in the back corner, the
+    /// overlays of desk B0 covered it), its foot this far from the tile's centre.
+    static let signFoot = PixelPoint(-IsoMath.tileWidth / 2, 0)
+    /// The sign drawn ×2 in the overview (0.5 pt per texel): its text keeps the 5 pt capitals of ×1.
+    static let overviewSignScale = 2
     /// Queue badge anchor, from the anchor of `desk.queue`.
     static let queueBadgeOffset = PixelPoint(6, -5)
     /// Where the post-it stuck on the monitor goes: from the screen's anchor (row A), from the monitor's (row B).
@@ -53,8 +77,10 @@ public enum SceneCompositor {
     static func miniOffsets(rowFacesViewer: Bool) -> [PixelPoint] {
         rowFacesViewer ? [PixelPoint(-12, -6), PixelPoint(-2, -11)] : [PixelPoint(-20, 0), PixelPoint(-10, -8)]
     }
-    /// Centre of a lamp's light pool, from the lamp's anchor: under the bulb, which hangs toward +i (decision 3).
-    static let coneOffset = PixelPoint(3, 4)
+    /// A lamp's light pool (`light.cone`) has its anchor on the lamp's anchor (the foot of the lamp on the desk top)
+    /// and is clipped to the desk top: the iso diamond of this half-width, `IsoMath.deskTopHeight` over the desk
+    /// tile's centre (the top of `desk` spans x −30…29 around it). It never spills on the carpet.
+    static let deskTopHalfWidth = 30
     /// Centre of a screen's glow: in front of the screen (row A, from the screen's anchor), on the agent's side of
     /// the monitor (row B, from the monitor's anchor).
     static let glowOnScreen = PixelPoint(-4, 0)
@@ -82,12 +108,47 @@ public enum SceneCompositor {
             canvas.multiply(by: Palette.nightVeil, alpha: veil)
             if !plan.lights.isEmpty {
                 var lights = PixelImage(width: plan.width, height: plan.height)
-                for p in plan.lights { lights.blit(p.image, x: p.origin.x, y: p.origin.y) }
+                let front = plan.lights.contains(where: \.behindWorld) ? worldMask(plan) : []
+                for p in plan.lights {
+                    if p.behindWorld {
+                        blit(p, into: &lights, outside: front)
+                    } else {
+                        lights.blit(p.image, x: p.origin.x, y: p.origin.y)
+                    }
+                }
                 canvas.add(lights, alpha: Palette.lightPoolAlpha)
             }
         }
         for p in plan.overlays { canvas.blit(p.image, x: p.origin.x, y: p.origin.y) }
         return canvas
+    }
+
+    /// Where the world pass draws (row-major, one flag per canvas pixel): what hides the lights of the back walls.
+    private static func worldMask(_ plan: ScenePlan) -> [Bool] {
+        var mask = [Bool](repeating: false, count: plan.width * plan.height)
+        for p in plan.world {
+            for y in 0..<p.image.height {
+                let cy = p.origin.y + y
+                guard cy >= 0, cy < plan.height else { continue }
+                for x in 0..<p.image.width where p.image[x, y].a != 0 {
+                    let cx = p.origin.x + x
+                    if cx >= 0, cx < plan.width { mask[cy * plan.width + cx] = true }
+                }
+            }
+        }
+        return mask
+    }
+
+    /// Blits `p` into the light layer except where `mask` is set.
+    private static func blit(_ p: ScenePlacement, into layer: inout PixelImage, outside mask: [Bool]) {
+        for y in 0..<p.image.height {
+            let cy = p.origin.y + y
+            guard cy >= 0, cy < layer.height else { continue }
+            for x in 0..<p.image.width where p.image[x, y].a != 0 {
+                let cx = p.origin.x + x
+                if cx >= 0, cx < layer.width, !mask[cy * layer.width + cx] { layer[cx, cy] = p.image[x, y] }
+            }
+        }
     }
 
     /// Every shadow, opaque ink in one layer (overlaps do not darken twice), kept only over what is drawn:
@@ -100,6 +161,39 @@ public enum SceneCompositor {
             layer[index % plan.width, index / plan.width] = .clear
         }
         return layer
+    }
+
+    // MARK: Cork wall
+
+    /// The order in which the cork wall fills its slots (`slots` row-major, `WallSprites.boardRows` rows): the cards
+    /// go round the rows (0, 2, 1, 3), and along a row they spread in van der Corput order (columns 0, 8, 4, 2, 10…
+    /// of 12), each row shifted by its own offset. Every prefix covers the whole board in a few loose rows (12 cards:
+    /// three per row, in a brick pattern, never one line), and a new card never moves the cards already pinned.
+    static func boardSpread(_ slots: [PixelPoint]) -> [Int] {
+        let rows = WallSprites.boardRows
+        guard rows > 0, !slots.isEmpty, slots.count % rows == 0 else { return Array(slots.indices) }
+        let columns = slots.count / rows
+        let rowOrder = vanDerCorput(rows), columnOrder = vanDerCorput(columns)
+        return (0..<slots.count).map { k in
+            let row = rowOrder[k % rows]
+            return row * columns + (columnOrder[k / rows] + rowOrder[row]) % columns
+        }
+    }
+
+    /// 0..<n in van der Corput order (bit-reversed indices, those ≥ n left out): 0, 2, 1, 3 for 4; 0, 8, 4, 2, 10,
+    /// 6, 1, 9, 5, 3, 11, 7 for 12. Each prefix is spread over the whole range.
+    static func vanDerCorput(_ n: Int) -> [Int] {
+        var bits = 0
+        while 1 << bits < n { bits += 1 }
+        return (0..<(1 << bits)).map { i in
+            (0..<bits).reduce(0) { reversed, bit in reversed | ((i >> bit) & 1) << (bits - 1 - bit) }
+        }.filter { $0 < n }
+    }
+
+    /// A pinned card is never quite straight in its slot: 0 or 1 px off, from the slot index.
+    static func boardJitter(_ index: Int) -> PixelPoint {
+        let steps = [0, 1, 0, -1, 0]
+        return PixelPoint(steps[(index * 7) % 5], steps[(index * 3 + 2) % 5])
     }
 
     // MARK: Stars of the night windows
@@ -146,6 +240,9 @@ struct ScenePlacement: Sendable {
     var depth: Int
     /// Insertion order, unique in a plan.
     var sequence: Int
+    /// A light of the back walls (a star in a window, the elevator's LED): hidden wherever the world stands in front
+    /// of the wall (a sign, a plant), like the wall itself.
+    var behindWorld = false
 
     /// The opaque pixel of the image at canvas (x, y); nil when transparent or outside the image.
     func pixel(atCanvasX x: Int, _ y: Int) -> RGBA8? {
@@ -176,7 +273,8 @@ struct ScenePlan: Sendable {
 /// Builds the plan of one render. Character frames are composed on demand (`CharacterSprites.canvas`, the very
 /// function the sheets use) and cached for the duration of the call.
 struct ScenePlanBuilder {
-    enum Pass { case floor, shadows, walls, world, lights, overlays }
+    /// `wallLights`: lights of the back walls, in `plan.lights` but hidden by the world (`behindWorld`).
+    enum Pass { case floor, shadows, walls, world, lights, wallLights, overlays }
 
     struct CharacterFrameKey: Hashable {
         var look: AgentLook
@@ -261,6 +359,10 @@ struct ScenePlanBuilder {
         case .walls: plan.walls.append(placement)
         case .world: plan.world.append(placement)
         case .lights: plan.lights.append(placement)
+        case .wallLights:
+            var light = placement
+            light.behindWorld = true
+            plan.lights.append(light)
         case .overlays: plan.overlays.append(placement)
         }
     }
@@ -277,8 +379,8 @@ struct ScenePlanBuilder {
         var carpet: [GridPoint: SpriteKey] = [:]
         for island in layout.islands {
             let hue = hue(of: island.projectID)
-            for tile in island.rect.tiles {
-                carpet[tile] = Self.carpetKey(local: tile - island.origin, size: island.size, hue: hue)
+            for tile in island.rug.tiles {
+                carpet[tile] = Self.carpetKey(local: tile - island.rug.origin, size: island.rug.size, hue: hue)
             }
         }
         // j-major: each tile covers the 2-step overlap of the tiles behind it.
@@ -353,7 +455,7 @@ struct ScenePlanBuilder {
                 let led = Self.plus(PixelPoint(frame.x, frame.y), WallSprites.elevatorLEDPoint)
                 put(SpriteKey("elevator.led"), at: led, tile: tile, depth: depth, in: .walls)
                 if options.night, let def = SpriteCatalog.sprite(SpriteKey("elevator.led")), def.frameIndex(atTick: options.tick) == 0 {
-                    put(SpriteKey("elevator.led"), at: led, tile: tile, depth: depth, in: .lights)
+                    put(SpriteKey("elevator.led"), at: led, tile: tile, depth: depth, in: .wallLights)
                 }
             case .corner:
                 continue
@@ -364,13 +466,15 @@ struct ScenePlanBuilder {
         }
     }
 
-    /// The mini post-its of the cork wall in its 48 slots (hue 0…9, anything else paper); the "+n" counter beyond.
+    /// The mini post-its of the cork wall (hue 0…9, anything else paper), card k in the k-th slot of
+    /// `boardSpread`, so that a few cards already cover the board in loose rows; the "+n" counter beyond 48.
     mutating func addBoardCards(board: PixelPoint, side: WallSide, tile: GridPoint) {
         let facing: Facing = side == .ne ? .ne : .nw
         let slots = WallSprites.boardSlots(wall: side)
-        for (slot, hue) in zip(slots, scene.boardCardHues) {
+        for (index, hue) in zip(SceneCompositor.boardSpread(slots), scene.boardCardHues) {
             let variant = (0..<Palette.projectHues.count).contains(hue) ? "hue\(hue)" : "paper"
-            put(SpriteKey("postit.mini", variant: variant, facing: facing), at: Self.plus(board, slot), tile: tile,
+            put(SpriteKey("postit.mini", variant: variant, facing: facing),
+                at: Self.plus(board, Self.plus(slots[index], SceneCompositor.boardJitter(index))), tile: tile,
                 depth: Self.depth(tile, .carpet), in: .walls)
         }
         let extra = scene.boardCardHues.count - slots.count
@@ -388,12 +492,13 @@ struct ScenePlanBuilder {
         let depth = Self.depth(tile, .carpet)
         if !spots.big.isEmpty {
             let spot = spots.big[(start * 37 + 11) % spots.big.count]
-            put(SpriteKey("fx.star", variant: "big"), at: Self.plus(origin, spot), tile: tile, depth: depth, in: .lights)
+            put(SpriteKey("fx.star", variant: "big"), at: Self.plus(origin, spot), tile: tile, depth: depth, in: .wallLights)
         }
         guard !spots.small.isEmpty else { return }
         for k in 0..<2 {
             let spot = spots.small[(start * 53 + k * 101 + 7) % spots.small.count]
-            put(SpriteKey("fx.star", variant: "small"), at: Self.plus(origin, spot), tile: tile, depth: depth, in: .lights)
+            put(SpriteKey("fx.star", variant: "small"), at: Self.plus(origin, spot), tile: tile, depth: depth,
+                in: .wallLights)
         }
     }
 
@@ -428,9 +533,11 @@ struct ScenePlanBuilder {
             let name = visual?.name ?? ""
             let label = island.part == 0 ? name : "\(name) · \(island.part + 1)"
             let anchor = SpriteCatalog.sprite(SpriteKey("sign.island", variant: "hue\(hue)"))?.anchor ?? PixelPoint(32, 38)
-            let c = center(island.sign)
-            put(name: "sign:\(label)", key: nil, image: HUDSprites.sign(name: label, hue: hue),
-                origin: PixelPoint(c.x - anchor.x, c.y - anchor.y), tile: island.sign,
+            // ×2 in the overview, so that the name keeps the size it has at ×1 (décision 2 of the first render).
+            let scale = overview ? SceneCompositor.overviewSignScale : 1
+            let foot = Self.plus(center(island.sign), SceneCompositor.signFoot)
+            put(name: "sign:\(label)", key: nil, image: HUDSprites.sign(name: label, hue: hue).scaled(by: scale),
+                origin: PixelPoint(foot.x - anchor.x * scale, foot.y - anchor.y * scale), tile: island.sign,
                 depth: Self.depth(island.sign, .furniture), in: .world)
         }
         if inScope(island.plant) { addPlant(at: island.plant) }
@@ -587,14 +694,32 @@ struct ScenePlanBuilder {
         }
 
         guard options.night else { return }
-        if lampLit {
-            let toward = gaze == .ne || gaze == .sw ? 1 : -1   // the shade hangs toward +i
-            let cone = PixelPoint(lamp.x + toward * SceneCompositor.coneOffset.x, lamp.y + SceneCompositor.coneOffset.y)
-            put(SpriteKey("light.cone"), at: cone, tile: tile, depth: depth, in: .lights)
+        if lampLit, let def = SpriteCatalog.sprite(SpriteKey("light.cone")) {
+            // The pool lies on the desk top around the lamp: its anchor on the lamp's, clipped to the top.
+            let origin = PixelPoint(lamp.x - def.anchor.x, lamp.y - def.anchor.y)
+            let deskTop = PixelPoint(point.x, point.y - IsoMath.deskTopHeight)
+            let pool = Self.clipped(def.frames[0], at: origin, toDiamondAt: deskTop,
+                                    halfWidth: SceneCompositor.deskTopHalfWidth)
+            put(name: SpriteKey("light.cone").frameName(0), key: SpriteKey("light.cone"), image: pool, origin: origin,
+                tile: tile, depth: depth, in: .lights)
         }
         if screen != .off {
             put(SpriteKey("light.screenGlow"), at: glow, tile: tile, depth: depth, in: .lights)
         }
+    }
+
+    /// `image` placed at `origin`, keeping only its pixels inside the iso diamond centred on `center` (2:1, the
+    /// given half-width in px): |dx| + 2·|dy| ≤ halfWidth.
+    static func clipped(_ image: PixelImage, at origin: PixelPoint, toDiamondAt center: PixelPoint,
+                        halfWidth: Int) -> PixelImage {
+        var out = image
+        for y in 0..<image.height {
+            for x in 0..<image.width where image[x, y].a != 0 {
+                let dx = origin.x + x - center.x, dy = origin.y + y - center.y
+                if abs(dx) + 2 * abs(dy) > halfWidth { out[x, y] = .clear }
+            }
+        }
+        return out
     }
 
     /// `desk.postit~hueN`, or `~paper` for 10 and any other value.
@@ -604,16 +729,19 @@ struct ScenePlanBuilder {
 
     // MARK: Overlays
 
-    /// Above the head: the halo, the primary overlay (XL "!" in the overview), the question bubble beside a "!", the
-    /// badges in a row; the overview's state icon on the left; the queue badge on the desk; the name plate under the
-    /// post when it shows without hovering.
+    /// Above the head: the halo, the primary overlay (or the "démarre" sign of a starting agent), the question
+    /// bubble beside a "!", the badges in a row; the queue badge on the desk; the name plate when it shows without
+    /// hovering (row A under the post, row B beside the head). The overview keeps only the urgent signs (décision 2
+    /// of the first render): the XL "!" of a wait with its halo, the storm of an error, and their agents' name
+    /// plates; no bubble, badge, state icon or queue badge.
     mutating func addOverlays(_ desk: DeskPlacement, agent: SceneAgent) {
         let p = agent.presentation
+        if overview && !p.showsUrgentSign { return }
         let seat = desk.seatTile
         let depth = Self.depth(seat, .overlay)
         let c = center(seat)
-        let head = PixelPoint(c.x, c.y - SceneCompositor.overlayLift)
-        var left = head.x, right = head.x
+        let head = PixelPoint(c.x, c.y - SceneCompositor.overlayLift(p, row: desk.row))
+        var right = head.x
         if let overlay = p.overlay {
             if overlay == .bang && p.halo {
                 let lift = overview ? SceneCompositor.haloLift.xl : SceneCompositor.haloLift.normal
@@ -621,31 +749,35 @@ struct ScenePlanBuilder {
             }
             if let frame = put(Self.primaryKey(overlay, tool: p.toolIcon, overview: overview), at: head, tile: seat,
                                depth: depth, in: .overlays) {
-                left = frame.x
                 right = frame.x + frame.width
             }
-            if overlay == .bang, let icon = p.toolIcon {
+            if overlay == .bang, let icon = p.toolIcon, !overview {
                 right = putBeside(SpriteKey(icon.spriteID), right: right, baseline: head.y, tile: seat, depth: depth)
             }
+        } else if p.launchingSign, let frame = put(HUDSprites.stateKey(.launching), at: head, tile: seat, depth: depth,
+                                                   in: .overlays) {
+            right = frame.x + frame.width
         }
-        for badge in p.badges {
-            right = putBeside(SpriteKey(badge.spriteID), right: right, baseline: head.y, tile: seat, depth: depth)
-        }
-        if overview, let def = SpriteCatalog.sprite(HUDSprites.stateKey(p.kind)) {
-            // Left of the primary overlay, or centred above the head when there is none.
-            let x = p.overlay == nil ? head.x : left - SceneCompositor.badgeGap - (def.width - def.anchor.x)
-            put(HUDSprites.stateKey(p.kind), at: PixelPoint(x, head.y), tile: seat, depth: depth, in: .overlays)
-        }
-        if agent.extras.queued > 0, inScope(desk.deskTile) {
-            let queue = Self.plus(center(desk.deskTile), FurnitureSprites.queueOffset(facing: desk.facing))
-            put(HUDSprites.queueBadgeKey(count: agent.extras.queued), at: Self.plus(queue, SceneCompositor.queueBadgeOffset),
-                tile: seat, depth: depth, in: .overlays)
+        if !overview {
+            for badge in p.badges {
+                right = putBeside(SpriteKey(badge.spriteID), right: right, baseline: head.y, tile: seat, depth: depth)
+            }
+            if agent.extras.queued > 0, inScope(desk.deskTile) {
+                let queue = Self.plus(center(desk.deskTile), FurnitureSprites.queueOffset(facing: desk.facing))
+                put(HUDSprites.queueBadgeKey(count: agent.extras.queued),
+                    at: Self.plus(queue, SceneCompositor.queueBadgeOffset), tile: seat, depth: depth, in: .overlays)
+            }
         }
         if p.nameplateAlways {
             let plate = HUDSprites.nameplate(p.nameplateOff ? "\(agent.name) · OFF" : agent.name, off: p.nameplateOff)
-            let base = PixelPoint(c.x, c.y + SceneCompositor.nameplateDrop)
-            put(name: "nameplate:\(agent.name)", key: nil, image: plate,
-                origin: PixelPoint(base.x - plate.width / 2, base.y - plate.height), tile: seat, depth: depth, in: .overlays)
+            let origin: PixelPoint
+            if desk.row == .b {
+                origin = SceneCompositor.rowBNameplateOrigin(p, plate: (plate.width, plate.height), seat: c)
+            } else {
+                origin = PixelPoint(c.x - plate.width / 2, c.y + SceneCompositor.nameplateDrop - plate.height)
+            }
+            put(name: "nameplate:\(agent.name)", key: nil, image: plate, origin: origin, tile: seat, depth: depth,
+                in: .overlays)
         }
     }
 

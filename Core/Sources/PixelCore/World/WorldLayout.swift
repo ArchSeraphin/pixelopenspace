@@ -3,7 +3,8 @@ import Foundation
 /// Pure, deterministic placement of islands, desks, walls and hall on the grid (3.8). Append-only: a live project
 /// keeps `Project.slot` and an agent keeps `Agent.deskIndex`, and every tile below derives from those two numbers
 /// alone, so adding, removing or archiving a project or an agent never moves an existing island or desk, even when
-/// an island grows from 4 to 8 desks (it grows toward +i, inside its slot).
+/// an island grows from 4 to 8 desks (it grows toward +i, inside its slot). The rug follows the agents more closely
+/// (one post at a time, `rugDesks`) but also grows toward +i from a fixed corner, inside the island's reserved rect.
 public enum WorldLayout {
     /// Depth of an island along j, sign and border included.
     static let islandDepth = 7
@@ -127,6 +128,18 @@ public enum WorldLayout {
         GridSize(w: 2 * ((capacity + 1) / 2) + 2, d: islandDepth)
     }
 
+    /// The desks on the rug (décision 3 of the first render): every occupied desk and at least one free desk, by
+    /// whole posts (a post is the desk of row A and the desk of row B at the same i): 2·⌈max(agents + 1,
+    /// highestLocalIndex + 1) / 2⌉, at most the capacity. With desks 0, 1, … filled in order: 2 desks for 0 or 1
+    /// agent, 4 for 2 or 3, 6 for 4 or 5, 8 for 6 and 7. The rug grows by one post every second agent instead of
+    /// jumping from 4 to 8 desks, and never shrinks while agents arrive.
+    public static func rugDesks(agents: Int, highestLocalIndex: Int?,
+                                maximum: Int = LayoutConfig.standard.desksPerIsland) -> Int {
+        let needed = max(agents + 1, (highestLocalIndex ?? -1) + 1)
+        let capacity = capacity(agents: agents, highestLocalIndex: highestLocalIndex, maximum: maximum)
+        return min(2 * ((needed + 1) / 2), capacity)
+    }
+
     /// Even local index → row A, odd → row B; post = index / 2. Independent of the capacity.
     public static func deskLocal(_ localIndex: Int) -> (row: IslandRow, post: Int) {
         (row: localIndex % 2 == 0 ? .a : .b, post: localIndex / 2)
@@ -140,17 +153,24 @@ public enum WorldLayout {
                  size: config.slotPitch)
     }
 
-    /// Local geometry (origin of the island, W = 2·⌈capacity / 2⌉ + 2, D = 7): sign (0, 0), plant (W − 1, 0), row B
-    /// aisle j = 1, row B seats j = 2 and desks j = 3, row A desks j = 4 and seats j = 5, front border j = 6. Post n
-    /// has its desk at i = 1 + 2n and its free side tile at i = 2 + 2n, on the desk's row.
+    /// Local geometry (origin of the island, W = 2·⌈capacity / 2⌉ + 2, D = 7): back row j = 0 (bare, a corridor
+    /// between the islands), row B aisle j = 1, row B seats j = 2 and desks j = 3, row A desks j = 4 and seats
+    /// j = 5, front border j = 6. Post n has its desk at i = 1 + 2n and its free side tile at i = 2 + 2n, on the
+    /// desk's row. The rug is the desks on it plus a one-tile margin: from (0, 1), 2·⌈rugDesks / 2⌉ + 2 wide and 6
+    /// deep. The sign stands on its front-left corner (0, 6), away from every overlay (in the back corner the
+    /// overlays of desk B0 covered it), the plant on its back-right corner (rug W − 1, 1).
     static func island(project: ProjectID, part: Int, slot: Int, locals: [Int: AgentID],
                        config: LayoutConfig) -> IslandPlacement {
         let perIsland = max(1, config.desksPerIsland)
-        let capacity = WorldLayout.capacity(agents: locals.count, highestLocalIndex: locals.keys.max(), maximum: perIsland)
+        let highest = locals.keys.max()
+        let capacity = WorldLayout.capacity(agents: locals.count, highestLocalIndex: highest, maximum: perIsland)
+        let shown = rugDesks(agents: locals.count, highestLocalIndex: highest, maximum: perIsland)
         let size = islandSize(capacity: capacity)
         let (column, row) = slotCoordinates(slot)
         let origin = slotRect(column: column, row: row, config: config).origin + config.islandInset
-        let desks = (0..<capacity).map { local -> DeskPlacement in
+        let rug = GridRect(origin: origin + GridPoint(0, 1),
+                           size: GridSize(w: islandSize(capacity: shown).w, d: islandDepth - 1))
+        let desks = (0..<shown).map { local -> DeskPlacement in
             let (deskRow, post) = deskLocal(local)
             let i = 1 + 2 * post
             let deskJ = deskRow == .a ? 4 : 3
@@ -161,8 +181,8 @@ public enum WorldLayout {
                                  agentID: locals[local])
         }
         return IslandPlacement(projectID: project, part: part, slot: slot, origin: origin, size: size,
-                               capacity: capacity, sign: origin, plant: origin + GridPoint(size.w - 1, 0),
-                               desks: desks)
+                               capacity: capacity, rug: rug, sign: origin + GridPoint(0, islandDepth - 1),
+                               plant: rug.origin + GridPoint(rug.size.w - 1, 0), desks: desks)
     }
 
     /// One back wall, tile by tile from the corner: the cork wall (`ne`) and the elevator (`nw`) on their tiles,

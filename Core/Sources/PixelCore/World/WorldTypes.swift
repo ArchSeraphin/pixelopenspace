@@ -113,26 +113,32 @@ public struct IslandPlacement: Hashable, Sendable {
     /// 0: the main island, in `Project.slot`; 1 and more: annexes.
     public var part: Int
     public var slot: Int
+    /// Never moves: it derives from the slot alone.
     public var origin: GridPoint
-    /// (capacity + 2) × 7.
+    /// (capacity + 2) × 7: the tiles the island reserves in its slot.
     public var size: GridSize
-    /// 4 or 8 desks.
+    /// 4 or 8 desks (the 4-step rule of 3.8): how far the island may grow before it reserves more of its slot.
     public var capacity: Int
-    /// Local (0, 0): the island sign.
+    /// The carpet: the occupied desks and a free one, by whole posts (`WorldLayout.rugDesks`), plus a one-tile
+    /// margin, from local (0, 1), 6 tiles deep. Grows toward +i as agents arrive, from a corner that never moves;
+    /// always inside `rect`.
+    public var rug: GridRect
+    /// Local (0, 6): the island sign, on the front-left corner of the rug (it never moves).
     public var sign: GridPoint
-    /// Local (W − 1, 0): the island plant.
+    /// Local (rug W − 1, 1): the island plant, on the back-right corner of the rug.
     public var plant: GridPoint
-    /// Every desk up to the capacity, free ones included, by index.
+    /// The desks on the rug, by index: every occupied desk and at least one free desk while the island is not full.
     public var desks: [DeskPlacement]
 
     public init(projectID: ProjectID, part: Int, slot: Int, origin: GridPoint, size: GridSize, capacity: Int,
-                sign: GridPoint, plant: GridPoint, desks: [DeskPlacement]) {
+                rug: GridRect, sign: GridPoint, plant: GridPoint, desks: [DeskPlacement]) {
         self.projectID = projectID
         self.part = part
         self.slot = slot
         self.origin = origin
         self.size = size
         self.capacity = capacity
+        self.rug = rug
         self.sign = sign
         self.plant = plant
         self.desks = desks

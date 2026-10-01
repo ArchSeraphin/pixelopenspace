@@ -113,7 +113,9 @@ enum SceneFixtures {
         #expect(floorKey(GridPoint(3, 2)) == SpriteKey("floor.hall", variant: "n\((3 * 7 + 2 * 13) % 3)"))
         #expect(floorKey(GridPoint(0, 6)) == SpriteKey("floor.corridor", variant: "n0"))
         #expect(floorKey(GridPoint(11, 14)) == SpriteKey("floor.corridor", variant: "n\((11 * 7 + 14 * 13) % 2)"))
-        let o = island.origin, w = island.size.w, d = island.size.d
+        // The carpet is the rug, not the whole reserved island: the back row of the island stays corridor.
+        #expect(floorKey(island.origin) == SpriteKey("floor.corridor", variant: "n\((island.origin.i * 7 + island.origin.j * 13) % 2)"))
+        let o = island.rug.origin, w = island.rug.size.w, d = island.rug.size.d
         let expected: [(GridPoint, String)] = [
             (GridPoint(0, 0), "floor.carpet.corner.n"), (GridPoint(w - 1, 0), "floor.carpet.corner.e"),
             (GridPoint(w - 1, d - 1), "floor.carpet.corner.s"), (GridPoint(0, d - 1), "floor.carpet.corner.w"),
@@ -243,28 +245,27 @@ enum SceneFixtures {
         #expect(Palette.hue(4).light == day[cx, cy] || Palette.hue(4).base == day[cx, cy] || Palette.hue(4).dark == day[cx, cy])
         #expect(night[cx, cy].luma < day[cx, cy].luma)
 
-        // Under a lamp's light: lighter than the same floor colour just outside the pool.
+        // Under a lamp's light (on the desk top): lighter than the same pixel at night with every lamp off.
         let cones = lit.filter { $0.key == SpriteKey("light.cone") }
         #expect(!cones.isEmpty)
-        var pairs = 0
+        var dark = scene
+        for id in dark.agents.keys { dark.agents[id]!.presentation.deskLit = false }
+        let unlit = SceneCompositor.render(dark, options: RenderOptions(night: true, crop: crop))
+        // Left out: the lamps themselves (on / off), the overlays, and the screen glows (later in the light layer).
+        let lamps = plan.world.filter { $0.key?.id == "lamp.desk" } + plan.overlays
+            + lit.filter { $0.key != SpriteKey("light.cone") }
+        var pixels = 0
         for cone in cones {
-            for y in stride(from: 0, to: cone.image.height, by: 3) {
+            for y in 0..<cone.image.height {
                 for x in 0..<cone.image.width where cone.image[x, y].a != 0 {
                     let (ax, ay) = (cone.origin.x + x, cone.origin.y + y)
-                    guard ax >= 0, ay >= 0, ax < day.width, ay < day.height, !covered(covering, ax, ay) else { continue }
-                    for dx in 1...30 {
-                        let bx = ax + dx
-                        guard bx < day.width, !covered(lit, bx, ay) else { continue }
-                        if !covered(covering, bx, ay) && day[bx, ay] == day[ax, ay] && day[ax, ay].a == 255 {
-                            #expect(night[ax, ay].luma > night[bx, ay].luma, "(\(ax), \(ay)) vs (\(bx), \(ay))")
-                            pairs += 1
-                        }
-                        break
-                    }
+                    guard ax >= 0, ay >= 0, ax < day.width, ay < day.height, !covered(lamps, ax, ay) else { continue }
+                    #expect(night[ax, ay].luma > unlit[ax, ay].luma, "(\(ax), \(ay))")
+                    pixels += 1
                 }
             }
         }
-        #expect(pairs > 0)
+        #expect(pixels > 100)
         // Reduce Transparency: a lighter veil.
         let reduced = SceneCompositor.render(scene, options: RenderOptions(night: true, crop: crop, reduceTransparency: true))
         #expect(reduced[cx, cy].luma > night[cx, cy].luma && reduced[cx, cy].luma < day[cx, cy].luma)
@@ -385,11 +386,292 @@ enum SceneFixtures {
         let bangs = overview.overlays.filter { $0.key?.id == "ov.bang" }
         #expect(bangs.count == 3)
         #expect(bangs.allSatisfy { $0.key?.variant == "xl" })
-        #expect(overview.overlays.filter { $0.key?.id.rawValue.hasPrefix("hud.state.") == true }.count == 20)
         let x1 = SceneCompositor.plan(scene, options: RenderOptions(zoom: .x1))
         let plain = x1.overlays.filter { $0.key?.id == "ov.bang" }
         #expect(plain.count == 3 && plain.allSatisfy { $0.key?.variant == nil })
         #expect(!x1.overlays.contains { $0.key?.id.rawValue.hasPrefix("hud.state.") == true })
+    }
+
+    /// Décision 2 of the first render: the overview draws only the XL "!" of the agents waiting for the user (with
+    /// its halo), the storm of the agents in error, and those agents' name plates; ×1 keeps everything.
+    @Test func overviewKeepsOnlyUrgentSigns() {
+        var scene = Showcase.overview()
+        // Every badge and a queue on everybody: none of it may reach the overview.
+        for id in scene.agents.keys {
+            scene.agents[id]!.presentation.badges = SceneBadge.allCases
+            scene.agents[id]!.extras.queued = 2
+        }
+        let overview = SceneCompositor.plan(scene, options: RenderOptions(zoom: .overview))
+        let agentOverlays = overview.overlays.filter { !$0.name.hasPrefix("nameplate:+") }
+        let keys = Set(agentOverlays.compactMap(\.key))
+        #expect(keys == [SpriteKey("ov.bang", variant: "xl"), SpriteKey("ov.bang.halo"), SpriteKey("ov.storm")])
+        let plates = agentOverlays.filter { $0.key == nil }.map(\.name).sorted()
+        #expect(plates == ["nameplate:Ivo", "nameplate:Nova", "nameplate:Sol", "nameplate:Zéphyr"])
+        // One sign per urgent agent, on its own seat: no second "!" (state icon), no "?" bubble beside Sol's.
+        let urgent = scene.agents.filter { $0.value.presentation.showsUrgentSign }
+        #expect(urgent.count == 4)
+        for (id, agent) in urgent {
+            let seat = scene.layout.islands.flatMap(\.desks).first { $0.agentID == id }!.seatTile
+            let signs = agentOverlays.filter { $0.tile == seat && $0.key != nil && $0.key?.id != "ov.bang.halo" }
+            #expect(signs.count == 1, "\(agent.name)")
+        }
+        // ×1: the bubbles, badges, queue badges and the plate of the offline agents are back.
+        let x1 = SceneCompositor.plan(scene, options: RenderOptions(zoom: .x1))
+        #expect(x1.overlays.contains { $0.key?.id == "ov.tool.question" })
+        #expect(x1.overlays.contains { $0.key?.id == "ov.unsafe" })
+        #expect(x1.overlays.contains { $0.key?.id == "desk.queueBadge" })
+        #expect(x1.overlays.contains { $0.key?.id == "ov.tool.edit" })
+    }
+
+    @Test func overviewSignsAreDoubled() {
+        let scene = Showcase.overview()
+        let overview = SceneCompositor.plan(scene, options: RenderOptions(zoom: .overview))
+        let x1 = SceneCompositor.plan(scene, options: RenderOptions(zoom: .x1))
+        for island in scene.layout.islands {
+            let visual = scene.projects[island.projectID]!
+            let plain = HUDSprites.sign(name: visual.name, hue: visual.hueIndex)
+            let big = overview.world.first { $0.name == "sign:\(visual.name)" }!
+            let small = x1.world.first { $0.name == "sign:\(visual.name)" }!
+            #expect(big.image == plain.scaled(by: SceneCompositor.overviewSignScale) && small.image == plain)
+            #expect(big.tile == island.sign && small.tile == island.sign)
+            // Both stand on the same foot: the outer corner of the sign's tile.
+            let tile = SceneCompositor.imagePoint(of: island.sign, in: scene.layout.bounds)
+            let foot = PixelPoint(tile.x - 32, tile.y + 16)
+            let anchor = SpriteCatalog.sprite(SpriteKey("sign.island", variant: "hue\(visual.hueIndex)"))!.anchor
+            #expect(small.origin == PixelPoint(foot.x - anchor.x, foot.y - anchor.y))
+            #expect(big.origin == PixelPoint(foot.x - 2 * anchor.x, foot.y - 2 * anchor.y))
+        }
+    }
+
+    /// The island sign never touches an overlay, at ×1 or in the overview, even with the widest overlays (a
+    /// question with every badge) or errors on every desk (B0 covered it when the sign stood in the back corner).
+    @Test func signNeverTouchesOverlays() {
+        func scene(_ phase: (Int) -> AgentRuntime) -> SceneInput {
+            var workspace = Workspace()
+            let project = workspace.addProject(path: "/p/api", name: "DOCUMENTATION", hueIndex: 4,
+                                               id: ProjectID(SceneFixtures.uuid(0xA1)), now: SceneFixtures.t0)
+            var runtimes: [AgentID: AgentRuntime] = [:]
+            for n in 0..<7 {
+                let id = workspace.addAgent(to: project, name: "Zéphyr", permissionMode: .bypassPermissions,
+                                            id: AgentID(SceneFixtures.uuid(0xB0 + n)), now: SceneFixtures.t0)!
+                runtimes[id] = phase(n)
+            }
+            return SceneInput.make(workspace: workspace, runtimes: runtimes,
+                                   extras: Dictionary(uniqueKeysWithValues: runtimes.keys.map { ($0, AgentExtras(queued: 12)) }),
+                                   now: SceneFixtures.t0)
+        }
+        let asking = scene { n in
+            var r = SceneFixtures.runtime(.working(.question))
+            r.stale = true
+            r.hookHealth = .degraded
+            r.pendingWaits[.tool(toolUseID: "t\(n)")] = PendingWait(
+                reason: .question([AskedQuestion(header: "Q", question: "?", options: ["a"], multiSelect: false)]),
+                subagentID: nil, since: SceneFixtures.t0 - 5)
+            return r
+        }
+        let failing = scene { _ in SceneFixtures.runtime(.error(.api("overloaded"))) }
+        for (name, input) in [("asking", asking), ("failing", failing), ("cast 1", Showcase.islandCasts()[0]),
+                              ("cast 2", Showcase.islandCasts()[1]), ("overview", Showcase.overview())] {
+            for zoom in [SceneZoom.x1, .overview] {
+                let plan = SceneCompositor.plan(input, options: RenderOptions(zoom: zoom))
+                for sign in plan.world where sign.name.hasPrefix("sign:") {
+                    var touching: Set<String> = []
+                    for overlay in plan.overlays {
+                        for y in 0..<overlay.image.height {
+                            for x in 0..<overlay.image.width where overlay.image[x, y].a != 0 {
+                                let (cx, cy) = (overlay.origin.x + x, overlay.origin.y + y)
+                                let near = (-1...1).contains { dy in (-1...1).contains { dx in sign.pixel(atCanvasX: cx + dx, cy + dy) != nil } }
+                                if near { touching.insert(overlay.name) }
+                            }
+                        }
+                    }
+                    #expect(touching.isEmpty, "\(name) \(zoom) \(sign.name): \(touching.sorted())")
+                }
+            }
+        }
+    }
+
+    /// Row A turns its back to the viewer: its overlay sits right on the head (1 to 3 px over it, never on it),
+    /// centred on the agent, not up over the desk of the post before; row B keeps 9 px over a seated head.
+    @Test func overlaysSitOnTheirOwnAgent() {
+        for cast in Showcase.islandCasts() {
+            let plan = SceneCompositor.plan(cast, options: RenderOptions(crop: Showcase.islandCrop()))
+            for desk in cast.layout.islands[0].desks {
+                guard let id = desk.agentID, let agent = cast.agents[id], let overlay = agent.presentation.overlay,
+                      let avatar = plan.world.first(where: { $0.tile == desk.seatTile && SceneFixtures.isAvatar($0) }),
+                      let head = avatar.image.opaqueBounds
+                else { continue }
+                let key = ScenePlanBuilder.primaryKey(overlay, tool: agent.presentation.toolIcon, overview: false)
+                let sign = plan.overlays.first { $0.tile == desk.seatTile && $0.key == key }!
+                let bounds = sign.image.opaqueBounds!
+                let bottom = sign.origin.y + bounds.y + bounds.height - 1
+                let top = avatar.origin.y + head.y
+                let gap = top - bottom - 1
+                if desk.row == .a && agent.presentation.animation != .raiseHand {
+                    #expect((1...3).contains(gap), "\(agent.name): \(gap) px over the head")
+                } else {
+                    #expect(gap >= 1, "\(agent.name): \(gap) px over the head")
+                }
+                // Anchored straight over the seat (the "zZ" rises to the right of its anchor by design).
+                let seatX = SceneCompositor.imagePoint(of: desk.seatTile, in: Showcase.islandCrop()).x
+                #expect(sign.origin.x + SpriteCatalog.sprite(key)!.anchor.x == seatX, "\(agent.name)")
+            }
+        }
+    }
+
+    /// Row B: the name plate beside the head (same rows, left of it, never on the avatar), not on the desk top.
+    @Test func rowBNameplateBesideTheHead() {
+        let cast = Showcase.islandCasts()[1]
+        let plan = SceneCompositor.plan(cast, options: RenderOptions(crop: Showcase.islandCrop()))
+        let sol = SceneFixtures.desk(of: "Sol", in: cast)!
+        #expect(sol.row == .b)
+        let plate = plan.overlays.first { $0.name == "nameplate:Sol" }!
+        let avatar = plan.world.first { $0.tile == sol.seatTile && SceneFixtures.isAvatar($0) }!
+        let body = avatar.image.opaqueBounds!
+        let headTop = avatar.origin.y + body.y
+        let plateRight = plate.origin.x + plate.image.width - 1
+        #expect(plateRight < avatar.origin.x + body.x, "left of the avatar")
+        #expect(avatar.origin.x + body.x - plateRight <= 4, "next to it")
+        #expect(plate.origin.y <= headTop + 6 && plate.origin.y + plate.image.height >= headTop + 6, "at head height")
+        let deskTop = plan.world.first { $0.tile == sol.deskTile && $0.key?.id == "desk" }!
+        for y in 0..<plate.image.height {
+            for x in 0..<plate.image.width {
+                #expect(deskTop.pixel(atCanvasX: plate.origin.x + x, plate.origin.y + y) == nil, "plate over the desk")
+            }
+        }
+        // Offline in row B: the long "OFF" plate takes the place of the head, centred over the chair, clear of the
+        // agent of the post before.
+        var offline = Showcase.islandCasts()[0]
+        let osloID = SceneFixtures.agentID(named: "Oslo", in: offline)!
+        offline.agents[osloID]!.presentation = AgentPresenter.scene(
+            AgentRuntime(phase: .offline(.exited), phaseSince: Showcase.now), now: Showcase.now, agentName: "Oslo",
+            projectName: "API")
+        let offlinePlan = SceneCompositor.plan(offline, options: RenderOptions(crop: Showcase.islandCrop()))
+        let oslo = SceneFixtures.desk(of: "Oslo", in: offline)!
+        let offPlate = offlinePlan.overlays.first { $0.name == "nameplate:Oslo" }!
+        let osloSeat = SceneCompositor.imagePoint(of: oslo.seatTile, in: Showcase.islandCrop())
+        #expect(abs(offPlate.origin.x + offPlate.image.width / 2 - osloSeat.x) <= 1)
+        let bip = SceneFixtures.desk(of: "Bip", in: offline)!
+        for neighbour in offlinePlan.world where neighbour.tile == bip.seatTile {
+            for y in 0..<offPlate.image.height {
+                for x in 0..<offPlate.image.width {
+                    #expect(neighbour.pixel(atCanvasX: offPlate.origin.x + x, offPlate.origin.y + y) == nil, "\(neighbour.name)")
+                }
+            }
+        }
+        // Row A keeps its plate under the post, in front of the chair.
+        let cast1 = Showcase.islandCasts()[0]
+        let nova = SceneFixtures.desk(of: "Nova", in: cast1)!
+        let plan1 = SceneCompositor.plan(cast1, options: RenderOptions(crop: Showcase.islandCrop()))
+        let novaPlate = plan1.overlays.first { $0.name == "nameplate:Nova" }!
+        let seat = SceneCompositor.imagePoint(of: nova.seatTile, in: Showcase.islandCrop())
+        #expect(novaPlate.origin.y + novaPlate.image.height == seat.y + 16 + SceneCompositor.nameplateDrop)
+    }
+
+    @Test func startingAgentShowsLaunchSign() {
+        let cast = Showcase.islandCasts()[1]
+        let lou = SceneFixtures.desk(of: "Lou", in: cast)!
+        for zoom in [SceneZoom.x1, .x2, .x3] {
+            let plan = SceneCompositor.plan(cast, options: RenderOptions(zoom: zoom, crop: Showcase.islandCrop()))
+            let signs = plan.overlays.filter { $0.tile == lou.seatTile }
+            #expect(signs.map(\.key) == [HUDSprites.stateKey(.launching)], "\(zoom)")
+        }
+        let overview = SceneCompositor.plan(cast, options: RenderOptions(zoom: .overview, crop: Showcase.islandCrop()))
+        #expect(!overview.overlays.contains { $0.tile == lou.seatTile })
+        // Nobody else shows it.
+        let x1 = SceneCompositor.plan(cast, options: RenderOptions(crop: Showcase.islandCrop()))
+        #expect(x1.overlays.filter { $0.key == HUDSprites.stateKey(.launching) }.count == 1)
+    }
+
+    /// The lamp's pool lies on its desk top, around the lamp: the light's anchor on the lamp's, every pixel inside the
+    /// desk-top diamond, none on the carpet.
+    @Test func lampPoolStaysOnTheDeskTop() {
+        let scene = Showcase.islandCasts()[0]
+        let crop = Showcase.islandCrop()
+        let plan = SceneCompositor.plan(scene, options: RenderOptions(night: true, crop: crop))
+        let def = SpriteCatalog.sprite(SpriteKey("light.cone"))!
+        let cones = plan.lights.filter { $0.key == SpriteKey("light.cone") }
+        #expect(cones.count == 6)
+        for cone in cones {
+            let tile = cone.tile!
+            let lamp = plan.world.first { $0.tile == tile && $0.key?.id == "lamp.desk" }!
+            let lampDef = SpriteCatalog.sprite(lamp.key!)!
+            #expect(PixelPoint(cone.origin.x + def.anchor.x, cone.origin.y + def.anchor.y)
+                    == PixelPoint(lamp.origin.x + lampDef.anchor.x, lamp.origin.y + lampDef.anchor.y))
+            let t = SceneCompositor.imagePoint(of: tile, in: crop)
+            let top = PixelPoint(t.x, t.y + 16 - IsoMath.deskTopHeight)
+            var inside = 0
+            for y in 0..<cone.image.height {
+                for x in 0..<cone.image.width where cone.image[x, y].a != 0 {
+                    let dx = cone.origin.x + x - top.x, dy = cone.origin.y + y - top.y
+                    #expect(abs(dx) + 2 * abs(dy) <= SceneCompositor.deskTopHalfWidth, "\(cone.name) at (\(dx), \(dy))")
+                    inside += 1
+                }
+            }
+            #expect(inside > 50)
+        }
+    }
+
+    /// The stars of the night windows and the elevator's LED stay behind what stands in front of the wall (the
+    /// overview's big signs cover windows): only the lights of the desks shine over the world.
+    @Test func wallLightsHideBehindTheWorld() {
+        let plan = SceneCompositor.plan(Showcase.overview(), options: RenderOptions(zoom: .overview, night: true))
+        let wallLights = plan.lights.filter(\.behindWorld)
+        #expect(Set(wallLights.compactMap(\.key?.id)) == ["fx.star", "elevator.led"])
+        #expect(plan.lights.filter { !$0.behindWorld }.allSatisfy { ["light.cone", "light.screenGlow"].contains($0.key?.id) })
+        var withoutWallLights = plan
+        withoutWallLights.lights.removeAll(where: \.behindWorld)
+        let image = SceneCompositor.rasterize(plan)
+        let reference = SceneCompositor.rasterize(withoutWallLights)
+        var hidden = 0, shown = 0
+        for light in wallLights {
+            for y in 0..<light.image.height {
+                for x in 0..<light.image.width where light.image[x, y].a != 0 {
+                    let (cx, cy) = (light.origin.x + x, light.origin.y + y)
+                    let overlaid = plan.overlays.contains { $0.pixel(atCanvasX: cx, cy) != nil }
+                    guard !overlaid else { continue }
+                    if plan.world.contains(where: { $0.pixel(atCanvasX: cx, cy) != nil }) {
+                        #expect(image[cx, cy] == reference[cx, cy], "\(light.name) over the world at (\(cx), \(cy))")
+                        hidden += 1
+                    } else if image[cx, cy] != reference[cx, cy] {
+                        shown += 1
+                    }
+                }
+            }
+        }
+        #expect(hidden > 0, "a sign covers a night window in the overview")
+        #expect(shown > 20, "the stars still shine in the windows")
+    }
+
+    /// Décision of the first render: the cork wall's cards spread over the board in a few loose rows.
+    @Test func corkWallSpreadsItsCards() {
+        let slots = WallSprites.boardSlots(wall: .ne)
+        let order = SceneCompositor.boardSpread(slots)
+        #expect(order.sorted() == Array(slots.indices), "a permutation of the 48 slots")
+        #expect(SceneCompositor.vanDerCorput(12) == [0, 8, 4, 2, 10, 6, 1, 9, 5, 3, 11, 7])
+        let columns = slots.count / WallSprites.boardRows
+        for count in [4, 8, 12, 24] {
+            let used = order.prefix(count)
+            let rows = Dictionary(grouping: used, by: { $0 / columns })
+            // Every row takes its share, and inside a row the cards are spread, never side by side at first.
+            #expect(rows.count == min(count, WallSprites.boardRows), "\(count) cards")
+            #expect(rows.values.allSatisfy { $0.count <= (count + WallSprites.boardRows - 1) / WallSprites.boardRows })
+            if count <= 12 {
+                for cards in rows.values {
+                    let sorted = cards.map { $0 % columns }.sorted()
+                    #expect(zip(sorted, sorted.dropFirst()).allSatisfy { $1 - $0 >= 3 }, "\(count) cards: \(sorted)")
+                }
+            }
+        }
+        // The overview's 12 cards: on all 4 rows of the board, each pinned a little off its slot at most.
+        let plan = SceneCompositor.plan(Showcase.overview(), options: RenderOptions(zoom: .overview))
+        let cards = plan.walls.filter { $0.key?.id == "postit.mini" }
+        #expect(cards.count == 12)
+        #expect(Set(cards.map(\.origin.y)).count >= 8, "not one line")
+        for index in slots.indices {
+            let jitter = SceneCompositor.boardJitter(index)
+            #expect(abs(jitter.x) <= 1 && abs(jitter.y) <= 1)
+        }
     }
 
     @Test func drawOrderBackToFront() {

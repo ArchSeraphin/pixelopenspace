@@ -69,11 +69,33 @@ import Testing
             let island = WorldLayout.compute(Self.world(projects: 1, agents: agents)).islands[0]
             #expect(island.capacity == capacity, "\(agents) agents")
             #expect(island.size == GridSize(w: width, d: 7), "\(agents) agents")
-            #expect(island.desks.count == capacity)
             #expect(island.rect == GridRect(origin: island.origin, size: island.size))
         }
         let gap = Self.layout([Self.project(0, slot: 0)], Self.agents(project: 0, desks: [0, 1, 6])).islands[0]
         #expect(gap.capacity == 8)
+    }
+
+    @Test func rugFitsTheAgents() {
+        // Desks filled in order: one post (2 desks) more every second agent, the next free desk always on the rug.
+        let shown = (0...8).map { WorldLayout.rugDesks(agents: $0, highestLocalIndex: $0 == 0 ? nil : $0 - 1) }
+        #expect(shown == [2, 2, 4, 4, 6, 6, 8, 8, 8])
+        // Gaps: the highest desk sets the rug; a free gap counts as the free desk.
+        #expect(WorldLayout.rugDesks(agents: 1, highestLocalIndex: 1) == 2)
+        #expect(WorldLayout.rugDesks(agents: 3, highestLocalIndex: 6) == 8)
+        #expect(WorldLayout.rugDesks(agents: 2, highestLocalIndex: 4) == 6)
+        // Never past the capacity of the configuration.
+        #expect(WorldLayout.rugDesks(agents: 4, highestLocalIndex: 3, maximum: 4) == 4)
+
+        for (agents, desks, width) in [(0, 2, 4), (1, 2, 4), (2, 4, 6), (3, 4, 6), (4, 6, 8), (5, 6, 8), (6, 8, 10), (7, 8, 10)] {
+            let island = WorldLayout.compute(Self.world(projects: 1, agents: agents)).islands[0]
+            #expect(island.desks.map(\.index) == Array(0..<desks), "\(agents) agents")
+            // The desks plus a one-tile margin: from the aisle (local j = 1) to the front border (j = 6).
+            #expect(island.rug == GridRect(origin: island.origin + GridPoint(0, 1), size: GridSize(w: width, d: 6)),
+                    "\(agents) agents")
+            #expect(island.rect.contains(island.rug))
+            #expect(island.plant == island.origin + GridPoint(width - 1, 1))
+            #expect(island.sign == island.origin + GridPoint(0, 6))
+        }
     }
 
     @Test func footprintTable() {
@@ -107,8 +129,9 @@ import Testing
         #expect(island.part == 0 && island.slot == 0)
         // Slot 0 starts at (0, 6), below the hall; the island is inset by (1, 1).
         #expect(island.origin == GridPoint(1, 7))
-        #expect(island.sign == GridPoint(1, 7))
-        #expect(island.plant == GridPoint(6, 7))
+        #expect(island.sign == GridPoint(1, 13))
+        #expect(island.plant == GridPoint(6, 8))
+        #expect(island.rug == Self.rect(1, 8, 6, 6))
         let expected = [
             DeskPlacement(index: 0, row: .a, post: 0, deskTile: GridPoint(2, 11), seatTile: GridPoint(2, 12),
                           sideTile: GridPoint(3, 11), facing: .ne, agentID: agents[0].id),
@@ -137,6 +160,12 @@ import Testing
         #expect(small.origin == big.origin)
         #expect(small.size.w == 6 && big.size.w == 10)
         #expect(small.capacity == 4 && big.capacity == 8)
+        // The rug grows by one post (the fifth desk is free), from the same corner; the sign stays.
+        #expect(small.rug == GridRect(origin: small.origin + GridPoint(0, 1), size: GridSize(w: 6, d: 6)))
+        #expect(big.rug == GridRect(origin: small.origin + GridPoint(0, 1), size: GridSize(w: 8, d: 6)))
+        #expect(small.sign == big.sign)
+        #expect(small.plant == small.origin + GridPoint(5, 1) && big.plant == small.origin + GridPoint(7, 1))
+        #expect(small.desks.count == 4 && big.desks.count == 6)
         for d in 0..<4 {
             var before = small.desks[d]
             let after = big.desks[d]
@@ -161,7 +190,9 @@ import Testing
         #expect(annex.projectID == Self.projectID(0))
         #expect(annex.capacity == 4 && annex.size == GridSize(w: 6, d: 7))
         #expect(annex.origin == GridPoint(1, 16))
-        #expect(annex.desks.map(\.index) == [8, 9, 10, 11])
+        // An empty annex shows one post on a small rug.
+        #expect(annex.desks.map(\.index) == [8, 9])
+        #expect(annex.rug == GridRect(origin: GridPoint(1, 17), size: GridSize(w: 4, d: 6)))
         #expect(annex.desks.allSatisfy { $0.agentID == nil })
         #expect(annex.desks[0].deskTile == GridPoint(2, 20))
         #expect(full.bounds == Self.rect(0, 0, 24, 24))
