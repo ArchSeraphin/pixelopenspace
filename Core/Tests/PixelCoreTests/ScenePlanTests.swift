@@ -549,6 +549,84 @@ enum PlanFixtures {
         }
     }
 
+    /// One island ("DOCUMENTATION") of 7 agents named Zéphyr, all in the same state: the widest plates side by side.
+    static func crowdedIsland(_ runtime: (Int) -> AgentRuntime) -> SceneInput {
+        var workspace = Workspace()
+        let project = workspace.addProject(path: "/p/docs", name: "DOCUMENTATION", hueIndex: 4,
+                                           id: ProjectID(SceneFixtures.uuid(0xA1)), now: SceneFixtures.t0)
+        var runtimes: [AgentID: AgentRuntime] = [:]
+        for n in 0..<7 {
+            let id = workspace.addAgent(to: project, name: "Zéphyr", id: AgentID(SceneFixtures.uuid(0xB0 + n)),
+                                        now: SceneFixtures.t0)!
+            runtimes[id] = runtime(n)
+        }
+        return SceneInput.make(workspace: workspace, runtimes: runtimes, now: SceneFixtures.t0)
+    }
+
+    /// Décision of the milestone ("Texte en vue d'ensemble"): in the overview, the name plates of the urgent agents are
+    /// drawn ×2 like the signs, above the head, over the "!" or the storm and clear of them, clear of the island
+    /// sign too; ×1 keeps its plates. A hovered agent's plate is ×2 as well, right above its head.
+    @Test func overviewNameplatesAreDoubled() throws {
+        let scene = Showcase.overview()
+        let overview = F.plan(scene, ScenePlanOptions(overview: true))
+        let x1 = F.plan(scene)
+        let urgent = scene.agents.filter { $0.value.presentation.showsUrgentSign }
+        #expect(urgent.count == 4)
+        for (id, agent) in urgent {
+            let plate = HUDSprites.nameplate(agent.name, off: false)
+            let big = try #require(overview.node(F.id("agent:\(id)/nameplate")), "\(agent.name)")
+            #expect(big.sprite == .image(plate.scaled(by: SceneCompositor.overviewSignScale), name: "nameplate:\(agent.name)"))
+            #expect(big.layer == .overlay && big.target == .agent(id))
+            #expect(x1.node(F.id("agent:\(id)/nameplate"))?.sprite == .image(plate, name: "nameplate:\(agent.name)"))
+            // Above the sign (and its halo), over the head.
+            let sign = try #require(overview.node(F.id("agent:\(id)/overlay")))
+            let halo = overview.node(F.id("agent:\(id)/halo"))
+            let top = ([sign] + (halo.map { [$0] } ?? [])).map { overview.canvasOrigin(of: $0).y }.min()!
+            let origin = overview.canvasOrigin(of: big)
+            #expect(origin.y + big.height < top, "\(agent.name): above its sign")
+            #expect(top - (origin.y + big.height) <= 4, "\(agent.name): right above it")
+            let head = overview.canvasPoint(sign.position).x
+            #expect(origin.x <= head && origin.x + big.width > head, "\(agent.name): over the head")
+        }
+        // The plates of the other agents only show on hover, ×2 too, right above the head.
+        let calm = try #require(scene.agents.first { !$0.value.presentation.showsUrgentSign && $0.value.presentation.animation != nil })
+        #expect(overview.node(F.id("agent:\(calm.key)/nameplate")) == nil)
+        var hovered = scene
+        hovered.hovered = .agent(calm.key)
+        let plan = F.plan(hovered, ScenePlanOptions(overview: true))
+        let plate = try #require(plan.node(F.id("agent:\(calm.key)/nameplate")))
+        #expect(plate.sprite == .image(HUDSprites.nameplate(calm.value.name, off: false).scaled(by: 2),
+                                       name: "nameplate:\(calm.value.name)"))
+        let seat = try #require(plan.agentSeats[calm.key])
+        let bottom = plan.canvasOrigin(of: plate).y + plate.height
+        #expect(bottom < plan.canvasPoint(seat).y - 40, "above the head")
+
+        // No plate covers a "!", a halo or a storm, even with every agent of an island waiting or failing.
+        let asking = Self.crowdedIsland { n in
+            var r = SceneFixtures.runtime(.working(.question))
+            r.pendingWaits[.tool(toolUseID: "t\(n)")] = PendingWait(
+                reason: .question([AskedQuestion(header: "Q", question: "?", options: ["a"], multiSelect: false)]),
+                subagentID: nil, since: SceneFixtures.t0 - 5)
+            return r
+        }
+        let failing = Self.crowdedIsland { _ in SceneFixtures.runtime(.error(.api("overloaded"))) }
+        for (name, input) in [("overview", scene), ("asking", asking), ("failing", failing)] {
+            let plan = F.plan(input, ScenePlanOptions(overview: true))
+            let plates = plan.nodes.filter { $0.id.rawValue.hasSuffix("/nameplate") }
+            let signs = plan.nodes.filter { $0.id.rawValue.hasSuffix("/overlay") || $0.id.rawValue.hasSuffix("/halo") }
+            #expect(plates.count == input.agents.values.filter(\.presentation.showsUrgentSign).count, "\(name)")
+            for plate in plates {
+                let p = plan.canvasOrigin(of: plate)
+                for sign in signs {
+                    let s = plan.canvasOrigin(of: sign)
+                    let apart = p.x + plate.width <= s.x || s.x + sign.width <= p.x
+                        || p.y + plate.height <= s.y || s.y + sign.height <= p.y
+                    #expect(apart, "\(name): \(plate.id) over \(sign.id)")
+                }
+            }
+        }
+    }
+
     /// A wall piece drawn over a node in the order of the wall pass (a segment across the cork wall, in a layout
     /// written for the test) is a node too, after the cork wall and its cards; the others stay baked.
     @Test func wallPieceOverANodeIsANode() {

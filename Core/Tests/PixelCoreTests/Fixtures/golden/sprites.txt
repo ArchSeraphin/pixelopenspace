@@ -640,8 +640,8 @@ postit.mini~paper@ne#0 8f6bd124dcba13a5
 postit.mini~paper@nw#0 c7080a38233b130d
 scene:ilot-1-x1-jour c5f4380909b5c4ae
 scene:ilot-2-x1-jour d3d3a98c4b3acd54
-scene:vue-ensemble-jour 8b57f88a3b75e7f0
-scene:vue-ensemble-nuit c8205cb91172607a
+scene:vue-ensemble-jour 5d23bf3e61931dff
+scene:vue-ensemble-nuit b8e13cf3dc6acddc
 screen.background@ne#0 556c6ea029d9bfc8
 screen.background@ne#1 640f92815e4a73d0
 screen.background@ne#2 ac05f5ce436f660c

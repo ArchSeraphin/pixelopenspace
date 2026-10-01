@@ -183,9 +183,10 @@ post-its sur le mur de liège, emprise de 36 × 24 tuiles.
   petite (28 × 14), orange, limitée au plateau ; la lueur des écrans éclaire le bureau autour du moniteur.
 - [x] **Visages de la rangée B** derrière les moniteurs : validés tels quels le 2026-10-01. Tête et yeux visibles
   au-dessus du moniteur à ×1, détail des lunettes et des casques lisible à partir de ×2.
-- [x] **Texte en vue d'ensemble** : tranché le 2026-10-01, plaques des agents urgents ×2, comme les pancartes
-  (étape 3, tâche 6). Les pancartes y sont déjà ×2 (capitales de 5 pt, lisibles) ; les plaques des agents urgents
-  font encore 2,5 pt de haut dans ce rendu.
+- [x] **Texte en vue d'ensemble** : fait (étape 3, tâche 6). Les plaques des agents urgents sont ×2, comme les
+  pancartes (capitales de 5 pt, lisibles : NOVA, SOL, IVO, ZÉPHYR), posées au-dessus du « ! » ou de l'orage sans les
+  chevaucher, et décalées vers la droite là où elles toucheraient la pancarte de l'îlot (ZÉPHYR, à côté d'INFRA).
+  Seules les deux images de la vue d'ensemble changent. Test `overviewNameplatesAreDoubled`.
 - [x] **Démarrage** : validé tel quel le 2026-10-01, le signe « démarre » est gardé et l'arrivée par l'ascenseur s'y
   ajoute à l'étape 3. Un agent qui démarre porte le signe « démarre » (`hud.state.launching`) au-dessus du poste, à
   ×1 et au-delà (Lou), masqué en vue d'ensemble ; de dos, la pose debout seule ressemblait à la pose assise.
@@ -216,7 +217,7 @@ corrigés, tranchés ou acceptés au troisième.
 | `planche-6-apparences.png`, scènes (Zéphyr, Lou) | Les cheveux gris courts vus de dos formaient une calotte grise uniforme (bonnet, casque). | Mèches sur toutes les coupes, oreilles et nuque dégagées pour les coupes courtes, carré qui s'arrête à la mâchoire. Test `hairFromBehindIsNotACap`. |
 | `planche-1`, `planche-2`, `planche-3`, `planche-4` | Les sprites clairs étaient presque invisibles sur le damier `paper` / `mist`. | Damier sombre `slate` / `shade` sous tout sprite clair (règle plus haut). Test `lightSpritesSitOnADarkCheckerboard`. |
 | `ilot-x*-*.png`, `vue-ensemble-*.png`, `planche-3-ecrans-overlays.png` | Deuxième rendu : la tête large et arrondie du « ! » (`ov.bang`, `ov.bang~xl`) avec son halo rond se lisait aussi comme une ampoule, surtout en vue d'ensemble et à ×3. | Troisième rendu, points 1 et 2 : une barre droite et anguleuse qui s'affine vers le bas, 2 rangées vides, un point carré ; un halo en losange iso centré sur la barre, loin du point. Tests `bangReadsAsAnExclamationMark`, `haloIsAnIsoDiamond`, `haloStaysClearOfTheDot`. |
-| `vue-ensemble-*.png` | Deuxième rendu : les plaques des agents urgents (NOVA, SOL, IVO, ZÉPHYR) font 2,5 pt de haut, à la limite du lisible. | Tranché le 2026-10-01 : plaques ×2, comme les pancartes, dessinées par le compositeur à l'étape 3 (tâche 6). Inchangées dans ce rendu. |
+| `vue-ensemble-*.png` | Deuxième rendu : les plaques des agents urgents (NOVA, SOL, IVO, ZÉPHYR) font 2,5 pt de haut, à la limite du lisible. | Tranché le 2026-10-01 : plaques ×2, comme les pancartes, au-dessus du signe urgent. Fait à l'étape 3 (tâche 6), vue d'ensemble rendue de nouveau. |
 | `ilot-x*-*.png` (Tao), `planche-5-personnage.png` | Deuxième rendu : les yeux fermés de la pose avachie étaient des points de 1 px, qu'on lisait comme des yeux ouverts. | Troisième rendu, point 4 : un trait horizontal de 2 px par œil. Test `sleepingEyesAreClosedLines`. |
 | `ilot-x1-*.png`, `planche-2-mobilier-decor.png` | Deuxième rendu : à ×1, la lampe était petite et se mêlait au pied du moniteur ; de jour, `~on` et `~off` ne différaient que de quelques texels (la nuit, la flaque le disait). | Troisième rendu, point 6 : pied et bras en métal sombre, abat-jour qui s'éclaire ; au moins 12 pixels de différence de jour. Tests `lampOnAndOffDifferByDay`, `lampStandsApartFromTheMonitorFoot`. |
 | `ilot-x1-*.png`, `planche-6-apparences.png` | Deuxième rendu : à ×1, les cheveux gris courts vus de dos restaient une masse arrondie assez uniforme (mèches d'un seul pixel). | Troisième rendu, point 5 : mèches de 2 px en ton d'ombre dans la masse de chaque coupe courte, de toute couleur. Test `shortHairFromBehindHasStrands`. |

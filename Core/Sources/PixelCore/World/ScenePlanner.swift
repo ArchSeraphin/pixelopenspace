@@ -557,7 +557,7 @@ struct ScenePlanBuilder {
                     tile: desk.sideTile, target: .agent(agentID))
             }
         }
-        if inScope(desk.seatTile) { addOverlays(desk, agentID: agentID, agent: agent) }
+        if inScope(desk.seatTile) { addOverlays(desk, island: island, agentID: agentID, agent: agent) }
     }
 
     /// A floor mark centred on a tile: under every object (`markOrder`), not clickable.
@@ -757,29 +757,34 @@ struct ScenePlanBuilder {
     /// bubble beside a "!", the badges in a row; the queue badge on the desk; the name plate when it shows without
     /// hovering (row A under the post, row B beside the head), or when the agent is hovered. The overview keeps only
     /// the urgent signs (décision 2 of the first render): the XL "!" of a wait with its halo, the storm of an error,
-    /// and their agents' name plates; no bubble, badge, state icon or queue badge. Reduce Motion (7.9): the XL "!"
-    /// at every zoom, no halo, every overlay on its frame 0.
-    mutating func addOverlays(_ desk: DeskPlacement, agentID: AgentID, agent: SceneAgent) {
+    /// and their agents' name plates, drawn ×2 over the sign (`addOverviewNameplate`); no bubble, badge, state icon
+    /// or queue badge. Reduce Motion (7.9): the XL "!" at every zoom, no halo, every overlay on its frame 0.
+    mutating func addOverlays(_ desk: DeskPlacement, island: IslandPlacement, agentID: AgentID, agent: SceneAgent) {
         let p = agent.presentation
         let id = "agent:\(agentID)/"
         let target = SceneHitTarget.agent(agentID)
         let seat = desk.seatTile
         let c = center(seat)
         let signs = !overview || p.showsUrgentSign
+        let shift = SceneCompositor.headShift(p, facing: Self.avatarFacing(p, gaze: desk.facing))
+        let head = PixelPoint(c.x + shift.x, c.y - SceneCompositor.overlayLift(p, row: desk.row) + shift.y)
+        // The top of the signs over the head (the overlay and its halo), on the canvas.
+        var signTop: Int?
         if signs {
-            let shift = SceneCompositor.headShift(p, facing: Self.avatarFacing(p, gaze: desk.facing))
-            let head = PixelPoint(c.x + shift.x, c.y - SceneCompositor.overlayLift(p, row: desk.row) + shift.y)
             var right = head.x
             if let overlay = p.overlay {
                 if overlay == .bang && p.halo && !options.reduceMotion {
                     let lift = overview ? SceneCompositor.haloLift.xl : SceneCompositor.haloLift.normal
-                    add(id + "halo", .overlay, SpriteKey("ov.bang.halo"), at: PixelPoint(head.x, head.y - lift),
-                        order: Self.overlayOrder(seat, 0), frame: markFrame, tile: seat, target: target)
+                    if let rect = add(id + "halo", .overlay, SpriteKey("ov.bang.halo"), at: PixelPoint(head.x, head.y - lift),
+                                      order: Self.overlayOrder(seat, 0), frame: markFrame, tile: seat, target: target) {
+                        signTop = rect.y
+                    }
                 }
                 let key = Self.primaryKey(overlay, tool: p.toolIcon, overview: overview || options.reduceMotion)
                 if let rect = add(id + "overlay", .overlay, key, at: head, order: Self.overlayOrder(seat, 1),
                                   frame: markFrame, tile: seat, target: target) {
                     right = rect.x + rect.width
+                    signTop = min(signTop ?? rect.y, rect.y)
                 }
                 if overlay == .bang, let icon = p.toolIcon, !overview {
                     right = putBeside(id + "bubble", SpriteKey(icon.spriteID), right: right, baseline: head.y,
@@ -806,6 +811,11 @@ struct ScenePlanBuilder {
         }
         guard (signs && p.nameplateAlways) || scene.hovered == .agent(agentID) else { return }
         let plate = HUDSprites.nameplate(p.nameplateOff ? "\(agent.name) · OFF" : agent.name, off: p.nameplateOff)
+        if overview {
+            addOverviewNameplate(plate, id: id + "nameplate", name: agent.name, head: head, signTop: signTop,
+                                 island: island, seat: seat, target: target)
+            return
+        }
         let origin: PixelPoint, anchor: PixelPoint
         if desk.row == .b {
             origin = SceneCompositor.rowBNameplateOrigin(p, plate: (plate.width, plate.height), seat: c)
@@ -817,6 +827,42 @@ struct ScenePlanBuilder {
         }
         add(id + "nameplate", .overlay, image: plate, name: "nameplate:\(agent.name)", origin: origin, anchor: anchor,
             order: Self.overlayOrder(seat, 9), tile: seat, target: target)
+    }
+
+    /// Px between an overview name plate and the sign under it, or the island sign beside it.
+    static let overviewNameplateGap = 2
+
+    /// The overview's name plate (décision of the milestone, "Texte en vue d'ensemble"): ×2 like the signs
+    /// (`SceneCompositor.overviewSignScale`), so that its text keeps the size it has at ×1; centred over the head,
+    /// `overviewNameplateGap` px over the top of the "!" and its halo or of the storm (`signTop`), right over the head
+    /// without a sign (a hovered agent). Pushed right, past the island's sign and `overviewNameplateGap` px clear of
+    /// it, where it would touch it (desk A0, beside the sign, under a storm). The sign's place comes from the island's
+    /// geometry, drawn or not, so that a crop does not move the plate.
+    mutating func addOverviewNameplate(_ plate: PixelImage, id: String, name: String, head: PixelPoint, signTop: Int?,
+                                       island: IslandPlacement, seat: GridPoint, target: SceneHitTarget) {
+        let scale = SceneCompositor.overviewSignScale, gap = Self.overviewNameplateGap
+        let big = plate.scaled(by: scale)
+        let bottom = (signTop ?? head.y) - gap
+        var origin = PixelPoint(head.x - big.width / 2, bottom - big.height)
+        if let sign = overviewSignRect(island) {
+            let clear = origin.x + big.width + gap <= sign.x || sign.x + sign.width + gap <= origin.x
+                || origin.y + big.height + gap <= sign.y || sign.y + sign.height + gap <= origin.y
+            if !clear { origin.x = max(origin.x, sign.x + sign.width + gap) }
+        }
+        add(id, .overlay, image: big, name: "nameplate:\(name)", origin: origin,
+            anchor: PixelPoint(big.width / 2, big.height), order: Self.overlayOrder(seat, 9), tile: seat, target: target)
+    }
+
+    /// Where the overview draws an island's sign (×2) on the canvas, whether it is in the crop or not; nil for a hue
+    /// missing from the catalog.
+    func overviewSignRect(_ island: IslandPlacement) -> PixelRect? {
+        guard let def = SpriteCatalog.sprite(SpriteKey("sign.island", variant: "hue\(hue(of: island.projectID))")) else {
+            return nil
+        }
+        let scale = SceneCompositor.overviewSignScale
+        let foot = Self.plus(center(island.sign), SceneCompositor.signFoot)
+        return PixelRect(x: foot.x - def.anchor.x * scale, y: foot.y - def.anchor.y * scale, width: def.width * scale,
+                         height: def.height * scale)
     }
 
     /// Places a sprite whose left edge is `badgeGap` right of `right`, its anchor on the baseline; returns its right
