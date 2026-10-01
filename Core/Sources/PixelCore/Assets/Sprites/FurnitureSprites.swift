@@ -9,7 +9,8 @@ import Foundation
 /// panel on the side away from the agent. Écart to 7.4: 56 rows instead of 48, which a top 24 px high over a full
 /// tile needs. Chair (`slate`, `hue0` … `hue9`, each also `.jacket`; 32×40, anchor (16, 36) at the centre of its
 /// tile): star base, gas lift, seat at 16 px, backrest on the side of the agent's back; the `.jacket` variants (an
-/// offline agent) hang a jacket over the backrest, grey, or camel on the grey chairs.
+/// offline agent) hang a jacket over a lower backrest, its back (ne, nw) or its open front (se, sw) toward the
+/// viewer, camel, or navy on the warm chairs (Tomate, Mandarine, Cacao).
 ///
 /// The offset helpers place the items of a post on the desk top; all are px from the desk anchor, for the desk
 /// sprite of the same facing.
@@ -30,6 +31,13 @@ public enum FurnitureSprites {
     /// Where `lamp.desk`'s anchor goes (px from the desk anchor): back corner on the clearance side.
     public static func lampOffset(facing: Facing) -> PixelPoint {
         DeskLayout.anchorOffset(DeskItemSprites.lampPlacement(facing: facing), facing: facing)
+    }
+
+    /// Where `light.cone`'s anchor goes (px from the desk anchor), for a lit `lamp.desk` placed with `lampOffset`:
+    /// the desk-top point at local `DeskItemSprites.lightPoolCell`, under the centre of the lamp's base, so that the
+    /// pool lies on the desk top and on the bench of the facing desk, its checkered edge just past the clearance side.
+    public static func lightConeOffset(facing: Facing) -> PixelPoint {
+        DeskLayout.deskTop(DeskItemSprites.lightPoolCell, facing: facing)
     }
 
     /// Where `keyboard`'s anchor goes (px from the desk anchor): centred, near the agent's edge.
@@ -112,62 +120,114 @@ public enum FurnitureSprites {
         func local(_ a: Range<Int>, _ b: Range<Int>, _ z: Int, _ height: Int) -> SceneryKit.Box {
             DeskLayout.box(a: a, b: b, z: z, height: height, facing: facing)
         }
-        // The backrest rises to 30 px; under a jacket it stops at 26 and the shoulders end at 29, so that the far
-        // corner of the shoulders stays inside the frame when the backrest is away from the viewer (sw, se).
-        var parts: [(SceneryKit.Box, Ramp)] = [
+        // The backrest rises to 30 px; under a jacket it stops at 24, so that the jacket's collar and shoulders
+        // stand above it and stay inside the frame when the backrest is away from the viewer (sw, se).
+        let parts: [(SceneryKit.Box, Ramp)] = [
             (SceneryKit.Box(u: -1, v: -1, z: 2, w: 1, d: 1, height: 11), .neutral),
             (local(-3..<3, -3..<3, 13, 3), ramp),
-            (local(-3..<3, 2..<3, 16, jacket ? 10 : 14), ramp),
+            (local(-3..<3, 2..<3, 16, jacket ? 8 : 14), ramp),
         ]
-        var outlines: Set<RGBA8> = [ramp.outline]
-        let cloth = jacketRamp(for: variant)
-        let back = local(-3..<3, 3..<4, 10, 16)
-        if jacket {
-            // Hung by its shoulders over the backrest: the back falls behind it, below the seat, the open fronts
-            // before it; the shoulders cover the top.
-            outlines.insert(cloth.outline)
-            parts += [
-                (back, cloth),
-                (local(-3..<(-1), 1..<2, 18, 8), cloth),
-                (local(1..<3, 1..<2, 18, 8), cloth),
-                (local(-3..<3, 1..<4, 26, 3), cloth),
-            ]
-        }
-        // The last part drawn on top (backrest, or the jacket's shoulders) carries the probe.
         let probes = canvas.boxes(parts)
-        if jacket && !facing.isTowardViewer {
-            // Seen from behind: the sleeves hang along the sides of the back, lit, with a crease.
-            let face: SceneryKit.Face = facing == .ne ? .left : .right
-            let sleeve = face == .left ? cloth.top : cloth.left
-            let sleeves = PixelMap("""
-                SSo......oSS
-                SSo......oSS
-                SSo......oSS
-                SSo......oSS
-                SSo......oSS
-                SSo......oSS
-                SSo......oSS
-                SSo......oSS
-                SSo......oSS
-                SSo......oSS
-                SSo......oSS
-                ooo......ooo
-                """, legend: ["S": .role(.paper)]).render { slot in
-                    slot == .role(.ink) ? cloth.outline : (slot == .clear ? nil : sleeve)
-                }
-            canvas.paste(sleeves, on: back, face: face, column: 0, row: 1)
+        guard jacket else {
+            return SpriteDef(key: SpriteKey("chair", variant: variant, facing: facing), category: .furniture,
+                             anchor: chairAnchor, frames: [canvas.image], outlineColors: [ramp.outline],
+                             lightProbe: probes.last!)
+        }
+        // Hung by its shoulders over the backrest. The side the viewer sees is drawn front-on (`jacketBack` behind
+        // the backrest, `jacketFront` before it) and pasted on the plane of that side, sheared like a left face (ne,
+        // sw: lit) or a right face (se, nw: in shade), 2 px wider than the backrest on each side for the sleeves:
+        // the drawing alone gives the silhouette (collar above the backrest, sleeves apart from the body, the chair
+        // showing between them), so no box is drawn for the cloth.
+        let cloth = jacketRamp(for: variant)
+        let seenFromBehind = !facing.isTowardViewer
+        let (drawingMap, plane, row) = seenFromBehind
+            ? (jacketBack, local(-3..<3, 3..<4, 10, 16), -3) : (jacketFront, local(-3..<3, 1..<2, 16, 10), -4)
+        let face: SceneryKit.Face = facing == .ne || facing == .sw ? .left : .right
+        let drawing = drawingMap.render { slot in jacketPaint(slot, cloth: cloth, shaded: face == .right) }
+        let at = canvas.paste(drawing, on: plane, face: face, column: -2, row: row)
+        // Light probe on the cloth: the lit outer column of the left sleeve against the dark one of the right sleeve.
+        func column(_ x: Int) -> PixelRect {
+            let shift = face == .left ? x / 2 : (drawing.width - 1 - x) / 2
+            return PixelRect(x: at.x + x, y: at.y + shift + jacketProbeRows.lowerBound, width: 1,
+                             height: jacketProbeRows.count)
         }
         return SpriteDef(key: SpriteKey("chair", variant: variant, facing: facing), category: .furniture,
-                         anchor: chairAnchor, frames: [canvas.image], outlineColors: outlines, lightProbe: probes.last!)
+                         anchor: chairAnchor, frames: [canvas.image], outlineColors: [ramp.outline, cloth.outline],
+                         lightProbe: LightProbe(left: column(1), right: column(14)))
     }
 
-    /// A grey jacket; camel on the slate and slate-blue chairs, whose grey it would match.
+    /// Rows of both jacket drawings where column 1 is `L` and column 14 is `D`.
+    static let jacketProbeRows = 5..<10
+
+    /// The back of the jacket, front-drawn (16 × 19, from the collar, 29 px above the floor, to the hem, 10 px): the
+    /// dark collar band above sloping shoulders, the two sleeves hanging along the sides, apart from the body below
+    /// the elbows, down to their dark cuffs, the back flaring a little down to a vent and a darker hem. `L` light,
+    /// `P` base, `D` dark, `o` outline.
+    static let jacketBack = PixelMap("""
+        .....oooooo.....
+        ....oDDDDDDo....
+        ..ooLDDDDDDLoo..
+        .oLLLLLLLLLLLLo.
+        oLLPPPPPPPPPPPDo
+        oLPoPPPPPPPPoPDo
+        oLPoPPPPPPPPoPDo
+        oLPoPPPPPPPPoPDo
+        oLPooPPPPPPooPDo
+        oLPo.oPPPPo.oPDo
+        oLPo.oPPPPo.oPDo
+        oDDo.oPPPPo.oDDo
+        oooo.oPPPPo.oooo
+        ....oPPPPPPo....
+        ...oPPPPPPPPo...
+        ...oPPPPoPPPo...
+        ..oPPPPPoPPPPo..
+        ..oDDDDDoDDDDo..
+        ..oooooooooooo..
+        """)
+
+    /// The front of the jacket, front-drawn (16 × 14, from the collar, 30 px above the floor, to the seat, 16 px):
+    /// the collar points, the opening on the dark lining (`5`), the lapels meeting in a V, the buttoned closing (`2`
+    /// buttons), two pocket flaps, the sleeves along the sides down to their dark cuffs.
+    static let jacketFront = PixelMap("""
+        ....ooo..ooo....
+        ..ooLLo55oLLoo..
+        .oLLLLo55oLLLDo.
+        oLLPPLo55oLPPPDo
+        oLPPPPLooLPPPPDo
+        oLPoPPPoPPPPoPDo
+        oLPoPPPo2PPPoPDo
+        oLPoPPPoPPPPoPDo
+        oLPoooPo2PoooPDo
+        oLPoPPPoPPPPoPDo
+        oDDoPPPoPPPPoDDo
+        oooPPPPoPPPPPooo
+        ..oPPPPoPPPPPo..
+        ..oooooooooooo..
+        """)
+
+    /// Jacket colours: on a face toward the viewer's left (lit) the light, base and dark tones of the cloth; on a
+    /// face toward the right (in shade) one step darker. `5` is the lining, `2` the buttons.
+    static func jacketPaint(_ slot: Slot, cloth: Ramp, shaded: Bool) -> RGBA8? {
+        switch slot {
+        case .hueLight: return shaded ? cloth.left : cloth.top
+        case .hueBase: return shaded ? cloth.right : cloth.left
+        case .hueDark: return shaded ? cloth.outline : cloth.right
+        case .role(.ink): return cloth.outline
+        case .role(.shade): return Palette.color(.shade)
+        case .role(.mist): return Palette.color(.mist)
+        default: return nil
+        }
+    }
+
+    /// A camel jacket; navy on the warm chairs (Tomate, Mandarine, Cacao), whose colour camel would match.
     static func jacketRamp(for variant: String) -> Ramp {
-        variant.hasPrefix("slate") || variant.hasPrefix("hue9") ? camel : .neutral
+        ["hue0", "hue1", "hue8"].contains { variant.hasPrefix($0) } ? navy : camel
     }
 
     static let camel = Ramp(top: Palette.color(.woodLight), left: Palette.color(.woodMid), right: Palette.color(.woodDark),
                             outline: Palette.color(.hairDark), highlight: Palette.color(.paper))
+    static let navy = Ramp(top: Palette.color(.uiTitle), left: Palette.color(.skyNight), right: Palette.color(.shade),
+                           outline: Palette.color(.ink), highlight: Palette.color(.stone))
 }
 
 /// The layout of a post in local coordinates, shared by the desk, the chair and the desk items: `a` runs along

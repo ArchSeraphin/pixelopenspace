@@ -5,7 +5,9 @@ import Foundation
 /// wall (drawn from the front, then sheared once per wall).
 ///
 /// Écarts to 7.4: a 2:1 box 14 (12) px wide is at least 7 (6) rows, plus 2 rows of thickness for its light probe, so
-/// `keyboard` is 14×9 and `papers` 12×8; `mug~steam` is 6×14, its steam rising above the 6×8 mug.
+/// `keyboard` is 14×9 and `papers` 12×8; `mug~steam` is 6×14, its steam rising above the 6×8 mug; `lamp.desk` is
+/// 24×17, anchor (12, 17), instead of 12×18 (6, 17): an arched neck and a cone shade that read as a desk lamp, the
+/// base in the middle so that the shade can lean right or left of it with one anchor (milestone revision).
 public enum DeskItemSprites {
     public static func all() -> [SpriteDef] { catalog }
 
@@ -23,7 +25,14 @@ public enum DeskItemSprites {
     static let keyboardCells = (a: -3..<2, b: 5..<7)
     static let papersCells = (a: 3..<7, b: 3..<5)
     static let mugCells = (a: -6..<(-5), b: 4..<5)
-    static let lampCells = (a: 5..<7, b: -7..<(-5))
+    /// The lamp's base: near the back corner on the clearance side, one unit in from the edges, so that the shade,
+    /// which hangs toward +a, stays beside the monitor of row A (never behind it) and the two lamps of facing desks
+    /// stand 6 units apart.
+    static let lampCells = (a: 4..<6, b: -6..<(-4))
+    /// The centre of the lamp's light pool on the desk top (`light.cone`): under the centre of the lamp's base. The
+    /// pool (solid within 3.5 units of it, checkered out to 5) covers the corner of the desk and the bench of the
+    /// facing desk, only its checkered ring passing the clearance edge, and stays below the screen of row A.
+    static let lightPoolCell = (a: 5, b: -5)
 
     static func keyboardPlacement(facing: Facing) -> Placement {
         let (w, d) = footprint(keyboardCells.a, keyboardCells.b, facing)
@@ -171,52 +180,73 @@ public enum DeskItemSprites {
 
     // MARK: Desk lamp
 
-    static let lampAnchor = PixelPoint(6, 17)
-    /// The base box (2×2 units, 2 px) has its top-left at (2, 12): its footprint's back corner is at (6, 14).
-    static let lampBaseOrigin = PixelPoint(2, 12)
-    static let lampBaseCorner = PixelPoint(6, 14)
+    /// A desk lamp (24×17, its base in the middle so that every facing shares one anchor): a metal base (2×2 units,
+    /// 2 px), a neck rising from its centre and arching over, a cream cone shade at its end, tilted so that its
+    /// opening looks down and back toward the desk. The shade leans toward +a, beside the monitor rather than behind
+    /// it: right on screen for ne and sw, left for se and nw. Both are drawn lit from the top left. On: the opening
+    /// glows (`lampWarm`) around a white bulb; off: a dark opening, a grey bulb.
+    static let lampSize = (width: 24, height: 17)
 
-    /// A post rising from the base, bent over: the shade hangs toward the clearance tile (+a), whose floor receives
-    /// the light pool (décision 3), right on screen for ne and sw, left for se and nw. Both are drawn lit from the
-    /// top left. `B` is the bulb.
-    static let lampHeadRight = PixelMap("""
-        ...oooo.....
-        ..o3334oo...
-        ..o4ooo33oo.
-        ..o4o.o3344o
-        ..o4o.o3444o
-        ..o4o..oBBo.
-        ..o4o...oo..
-        ..o4o.......
-        ..o4o.......
-        ..o4o.......
-        ..o4o.......
-        .o444o......
-        """, legend: ["B": .role(.lampWarm)])
-    static let lampHeadLeft = PixelMap("""
-        .....oooo...
-        ...oo3334o..
-        .oo33ooo4o..
-        o3344o.o4o..
-        o3444o.o4o..
-        .oBBo..o4o..
-        ..oo...o4o..
-        .......o4o..
-        .......o4o..
-        .......o4o..
-        .......o4o..
-        ......o444o.
-        """, legend: ["B": .role(.lampWarm)])
+    static func lampLeansRight(_ facing: Facing) -> Bool { facing == .ne || facing == .sw }
+
+    /// Top-left of the base box.
+    static let lampBaseOrigin = PixelPoint(8, 11)
+    /// The back corner of the base footprint in the image (a corner between pixels).
+    static let lampBaseCorner = PixelPoint(12, 13)
+    /// The anchor: the front corner of the base footprint, at the bottom of the image.
+    static let lampAnchor = PixelPoint(12, 17)
+
+    /// `W` the opening (lit or dark), `B` the bulb (both placeholder roles, painted by `lamp(facing:on:)`); the neck
+    /// goes down into the centre of the base, drawn first.
+    static let lampLeaningRight = PixelMap("""
+        ....oooo........
+        ...o2333oo......
+        ..o3oooo33oo....
+        ..o3o...oo33oo..
+        ..o3o.....oo1o..
+        ..o3o.....o166o.
+        ..o3o....o16662o
+        ..o3o...o166622o
+        ..o3o...oWWWW22o
+        ..o3o...oBBWWoo.
+        ..o3o....ooo....
+        ..o3o...........
+        ..o3o...........
+        """, legend: lampLegend)
+    static let lampLeaningLeft = PixelMap("""
+        ........oooo....
+        ......oo2333o...
+        ....oo33oooo3o..
+        ..oo33oo...o3o..
+        ..o1oo.....o3o..
+        .o166o.....o3o..
+        o16662o....o3o..
+        o116662o...o3o..
+        o11WWWWo...o3o..
+        .ooWWBBo...o3o..
+        ....ooo....o3o..
+        ...........o3o..
+        ...........o3o..
+        """, legend: lampLegend)
+    private static let lampLegend: [Character: Slot] = ["W": .role(.lampWarm), "B": .role(.skyNight)]
 
     static func lamp(facing: Facing, on: Bool) -> SpriteDef {
-        var image = PixelImage(width: 12, height: 18)
+        var image = PixelImage(width: lampSize.width, height: lampSize.height)
         let base = Draw.isoBox(w: 2, d: 2, height: 2, ramp: FurnitureSprites.metal)
         image.blit(base.image, x: lampBaseOrigin.x, y: lampBaseOrigin.y)
-        let map = facing == .ne || facing == .sw ? lampHeadRight : lampHeadLeft
-        let bulb = Palette.color(on ? .lampWarm : .shade)
-        image.blit(map.render { slot in slot == .role(.lampWarm) ? bulb : SlotPaint.decor(slot, hue: nil) }, x: 0, y: 0)
+        // Each map is 16 wide, its base columns over the base box.
+        let (map, mapX) = lampLeansRight(facing) ? (lampLeaningRight, 8) : (lampLeaningLeft, 0)
+        let opening = Palette.color(on ? .lampWarm : .slate), bulb = Palette.color(on ? .chalk : .stone)
+        image.blit(map.render { slot in
+            switch slot {
+            case .role(.lampWarm): return opening
+            case .role(.skyNight): return bulb
+            default: return SlotPaint.decor(slot, hue: nil)
+            }
+        }, x: mapX, y: 0)
         return SpriteDef(key: SpriteKey("lamp.desk", variant: on ? "on" : "off", facing: facing), category: .deskItems,
-                         anchor: lampAnchor, frames: [image], lightProbe: SceneryKit.offset(base.lightProbe, by: lampBaseOrigin))
+                         anchor: lampAnchor, frames: [image],
+                         lightProbe: SceneryKit.offset(base.lightProbe, by: lampBaseOrigin))
     }
 
     // MARK: Post-its

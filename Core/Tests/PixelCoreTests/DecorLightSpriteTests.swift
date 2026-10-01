@@ -17,7 +17,7 @@ import Testing
             DecorSpriteExpectation(id: "shadow.tile", width: 56, height: 28, anchor: PixelPoint(28, 14)),
             DecorSpriteExpectation(id: "shadow.char", width: 20, height: 8, anchor: PixelPoint(10, 4)),
             DecorSpriteExpectation(id: "shadow.small", width: 16, height: 8, anchor: PixelPoint(8, 4)),
-            DecorSpriteExpectation(id: "light.cone", width: 48, height: 32, anchor: PixelPoint(24, 16)),
+            DecorSpriteExpectation(id: "light.cone", width: 28, height: 14, anchor: PixelPoint(14, 7)),
             DecorSpriteExpectation(id: "light.screenGlow", width: 24, height: 16, anchor: PixelPoint(12, 8)),
             DecorSpriteExpectation(id: "fx.star", width: 1, height: 1, anchor: PixelPoint(0, 0), frames: 2, holds: [24, 24],
                                    variants: ["small"]),
@@ -59,22 +59,124 @@ import Testing
         }
     }
 
-    @Test func lightsAreOpaqueWarmOrGlow() {
-        let lookup = DecorSpriteChecks.byKey(Self.lights)
-        let cone = lookup[SpriteKey("light.cone")]!.frames[0]
-        let glow = lookup[SpriteKey("light.screenGlow")]!.frames[0]
-        #expect(cone.distinctColors == [Palette.color(.lampWarm)])
-        #expect(glow.distinctColors == [Palette.color(.screenGlow)])
-        for (name, image) in [("light.cone", cone), ("light.screenGlow", glow)] {
-            #expect(image.pixels.allSatisfy { $0.a == 0 || $0.a == 255 }, "\(name): opaque, alpha applied at compositing")
-            // Centred on its anchor: symmetric left to right.
-            #expect(image == image.mirrored(), "\(name)")
-            let w = image.width
-            #expect(image[w / 2, image.height / 2].a == 255, "\(name): lit at the anchor")
+    static var cone: SpriteDef { DecorSpriteChecks.byKey(lights)[SpriteKey("light.cone")]! }
+    static var glow: SpriteDef { DecorSpriteChecks.byKey(lights)[SpriteKey("light.screenGlow")]! }
+
+    @Test func lightsAreOpaqueSymmetricAndLitAtTheAnchor() {
+        #expect(Self.cone.frames[0].distinctColors == [Palette.color(.alertOrange)], "one colour: overlapping pools merge")
+        #expect(Set(Self.glow.frames[0].distinctColors) == [Palette.color(.screenGlow), Palette.color(.uiTitle)])
+        for def in [Self.cone, Self.glow] {
+            let image = def.frames[0]
+            #expect(image.pixels.allSatisfy { $0.a == 0 || $0.a == 255 }, "\(def.key.name): opaque, alpha applied at compositing")
+            // Centred on its anchor: as many lit pixels on each side of it in every row (up to the checkerboard,
+            // whose parity flips in a mirror).
+            #expect(def.anchor.x * 2 == image.width, "\(def.key.name)")
+            for y in 0..<image.height {
+                let left = (0..<def.anchor.x).filter { image[$0, y].a != 0 }.count
+                let right = (def.anchor.x..<image.width).filter { image[$0, y].a != 0 }.count
+                #expect(abs(left - right) <= 1, "\(def.key.name) row \(y): \(left) | \(right)")
+            }
+            #expect(image[def.anchor.x, def.anchor.y].a == 255, "\(def.key.name): lit at the anchor")
         }
-        // The cone narrows toward the lamp: its top row is narrower than its widest row.
-        let rows = (0..<cone.height).map { y in (0..<cone.width).filter { cone[$0, y].a != 0 }.count }
-        #expect(rows.first! > 0 && rows.first! < rows.max()!)
+    }
+
+    /// Night lights at the milestone review: `lampWarm` added at 35 % turned the veiled, shaded Lagune carpet into
+    /// a grey mauve (#98939B). The pool's colour stays warm (red above blue) on every carpet field, the desk tops and
+    /// the hall floor, in or out of a cast shadow; `lampWarm` does not.
+    @Test func lampPoolStaysWarmOnEveryVeiledFloor() {
+        let floors: [RGBA8] = Palette.projectHues.map(\.light)
+            + ([.woodLight, .woodMid, .floorLight, .floorDark] as [PaletteRole]).map(Palette.color)
+        func lit(_ floor: RGBA8, shaded: Bool, by light: RGBA8) -> RGBA8 {
+            var image = PixelImage(width: 1, height: 1, fill: floor)
+            if shaded { image.composite(PixelImage(width: 1, height: 1, fill: Palette.color(.ink)), alpha: Palette.shadowAlpha) }
+            image.multiply(by: Palette.nightVeil, alpha: Palette.nightVeilAlpha)
+            image.add(PixelImage(width: 1, height: 1, fill: light), alpha: Palette.lightPoolAlpha)
+            return image[0, 0]
+        }
+        let pool = Self.cone.frames[0].distinctColors
+        for light in pool {
+            for floor in floors {
+                for shaded in [false, true] {
+                    let p = lit(floor, shaded: shaded, by: light)
+                    #expect(p.r > p.b, "\(floor.hexString)\(shaded ? " shaded" : ""): lit \(p.hexString) is not warm")
+                }
+            }
+        }
+        let mauve = lit(Palette.hue(4).light, shaded: true, by: Palette.color(.lampWarm))
+        #expect(mauve.r < mauve.b, "the defect this colour avoids")
+    }
+
+    /// Mean added luma (0 where transparent) over three rings of the lit ellipse, from the centre out.
+    static func ringMeans(_ image: PixelImage) -> [Double] {
+        let box = image.opaqueBounds!
+        var sums = [0.0, 0.0, 0.0], counts = [0, 0, 0]
+        for y in box.y..<(box.y + box.height) {
+            for x in box.x..<(box.x + box.width) {
+                let dx = Double(2 * (x - box.x) + 1 - box.width) / Double(box.width)
+                let dy = Double(2 * (y - box.y) + 1 - box.height) / Double(box.height)
+                let r = (dx * dx + dy * dy).squareRoot()
+                guard r <= 1 else { continue }
+                let ring = min(Int(r * 3), 2)
+                sums[ring] += image[x, y].a == 0 ? 0 : Double(image[x, y].luma)
+                counts[ring] += 1
+            }
+        }
+        return (0..<3).map { sums[$0] / Double(counts[$0]) }
+    }
+
+    /// Soft lights, not hard-edged shapes (the screen glow read as a pane of glass on the desk): the light fades
+    /// from the centre to the edge, through the checkerboard and dimmer colours.
+    @Test func lightsFadeOut() {
+        let glow = Self.ringMeans(Self.glow.frames[0])
+        #expect(glow[0] > glow[1] && glow[1] > glow[2], "screen glow \(glow)")
+        #expect(glow[2] < glow[0] * 0.4, "screen glow: a faint edge \(glow)")
+        let pool = Self.ringMeans(Self.cone.frames[0])
+        #expect(pool[0] >= pool[1] && pool[1] > pool[2], "lamp pool \(pool)")
+        #expect(pool[2] < pool[0] * 0.75, "lamp pool: a checkered edge \(pool)")
+        // The brightest colour never reaches the edge of the glow.
+        let image = Self.glow.frames[0], bright = Palette.color(.screenGlow)
+        let box = image.opaqueBounds!
+        for y in box.y..<(box.y + box.height) {
+            let row = (box.x..<(box.x + box.width)).filter { image[$0, y].a != 0 }
+            guard let first = row.first, let last = row.last else { continue }
+            #expect(image[first, y] != bright && image[last, y] != bright, "row \(y)")
+        }
+    }
+
+    /// A desk lamp's pool, not a floor spotlight: placed with `lightConeOffset`, its solid part lies on the desk top
+    /// or on the bench of the facing desk (local −8 ≤ a ≤ 8, −24 ≤ b ≤ 8), its checkered ring at most 2 units past
+    /// an edge, and at least 80 % of it is over the desk tops.
+    @Test func lampPoolStaysOnTheDeskTop() {
+        let image = Self.cone.frames[0], anchor = Self.cone.anchor
+        let solid = Palette.color(.alertOrange)
+        for facing in Facing.allCases {
+            let offset = FurnitureSprites.lightConeOffset(facing: facing)
+            var onDesks = 0, total = 0
+            for y in 0..<image.height {
+                for x in 0..<image.width where image[x, y].a != 0 {
+                    // Pixel centre, px from the desk anchor, then floor units at desk-top height.
+                    let px = Double(offset.x - anchor.x + x) + 0.5
+                    let py = Double(offset.y - anchor.y + y) + 0.5 + Double(IsoMath.deskTopHeight)
+                    let u = (py + px / 2) / 2, v = (py - px / 2) / 2
+                    let (a, b): (Double, Double)
+                    switch facing {
+                    case .ne: (a, b) = (u, v)
+                    case .sw: (a, b) = (u, -v)
+                    case .se: (a, b) = (v, -u)
+                    case .nw: (a, b) = (v, u)
+                    }
+                    let inside = abs(a) <= 8 && b >= -24 && b <= 8
+                    total += 1
+                    if inside { onDesks += 1 }
+                    let interior = (x > 0 && image[x - 1, y].a != 0) && (x + 1 < image.width && image[x + 1, y].a != 0)
+                    if image[x, y] == solid && interior {
+                        #expect(abs(a) <= 8.5 && b >= -24 && b <= 8.5, "@\(facing): solid light at (\(a), \(b))")
+                    }
+                    #expect(abs(a) <= 10 && b >= -26 && b <= 10, "@\(facing): light at (\(a), \(b))")
+                }
+            }
+            #expect(Double(onDesks) >= 0.8 * Double(total), "@\(facing): \(onDesks) of \(total) pixels on the desks")
+        }
     }
 
     @Test func starsTwinkle() {

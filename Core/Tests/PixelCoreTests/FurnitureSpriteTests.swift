@@ -26,7 +26,8 @@ import Testing
             // Écart: the steam rises above the mug.
             DecorSpriteExpectation(id: "mug", width: 6, height: 14, anchor: PixelPoint(3, 14), frames: 3, holds: [6, 6, 6],
                                    variants: ["steam"], facings: four),
-            DecorSpriteExpectation(id: "lamp.desk", width: 12, height: 18, anchor: PixelPoint(6, 17),
+            // The anchor is the front corner of the base, in the middle: the shade leans right or left of it.
+            DecorSpriteExpectation(id: "lamp.desk", width: 24, height: 17, anchor: PixelPoint(12, 17),
                                    variants: ["on", "off"], facings: four),
             DecorSpriteExpectation(id: "desk.postit", width: 6, height: 6, anchor: PixelPoint(3, 6), variants: postitVariants),
             DecorSpriteExpectation(id: "desk.queue", width: 10, height: 8, anchor: PixelPoint(5, 8), variants: ["1", "2", "3"]),
@@ -81,13 +82,83 @@ import Testing
     @Test func lampOnOff() {
         let lookup = DecorSpriteChecks.byKey(Self.items)
         let warm = Palette.color(.lampWarm)
+        let cream: Set<RGBA8> = [Palette.color(.chalk), Palette.color(.paper)]
         for facing in Facing.allCases {
             let on = lookup[SpriteKey("lamp.desk", variant: "on", facing: facing)]!.frames[0]
             let off = lookup[SpriteKey("lamp.desk", variant: "off", facing: facing)]!.frames[0]
             #expect(on.distinctColors.contains(warm), "on @\(facing)")
             #expect(!off.distinctColors.contains(warm), "off @\(facing)")
             #expect(on.alphaMask() == off.alphaMask(), "same lamp @\(facing)")
+            // The whole opening of the shade lights up, not one or two texels (milestone review).
+            let changed = zip(on.pixels, off.pixels).filter { $0 != $1 }.count
+            #expect(changed >= 8, "@\(facing): only \(changed) pixels differ between on and off")
+            #expect(cream.isSubset(of: Set(off.distinctColors)), "@\(facing): a cream shade on a dark neck")
         }
+    }
+
+    /// The shade leans toward +a, the clearance side (right of the base on screen for ne and sw, left for se and
+    /// nw), and never overlaps the monitor of its desk: leaning the other way, it hid behind the monitor of row A.
+    @Test func lampShadeStandsBesideTheMonitor() {
+        let items = DecorSpriteChecks.byKey(Self.items), monitors = DecorSpriteChecks.byKey(MonitorSprites.all())
+        let shade: Set<RGBA8> = [Palette.color(.chalk), Palette.color(.paper), Palette.color(.lampWarm)]
+        let desk = PixelPoint(80, 80)
+        func at(_ offset: PixelPoint) -> PixelPoint { PixelPoint(desk.x + offset.x, desk.y + offset.y) }
+        for facing in Facing.allCases {
+            let lamp = items[SpriteKey("lamp.desk", variant: "on", facing: facing)]!
+            let image = lamp.frames[0]
+            let pixels = (0..<image.height).flatMap { y in (0..<image.width).filter { shade.contains(image[$0, y]) }.map { (x: $0, y: y) } }
+            #expect(pixels.count >= 12, "@\(facing): a shade")
+            let meanX = Double(pixels.map(\.x).reduce(0, +)) / Double(pixels.count) + 0.5 - Double(lamp.anchor.x)
+            #expect(DeskItemSprites.lampLeansRight(facing) ? meanX > 3 : meanX < -3, "@\(facing): shade at \(meanX)")
+            // The monitor of that facing (with its screen in row A), on the same desk.
+            var monitor = PixelImage(width: 160, height: 120)
+            let monitorPoint = at(FurnitureSprites.monitorOffset(facing: facing))
+            if let screenOffset = MonitorSprites.screenOffset(facing: facing) {
+                DecorSpriteChecks.place(monitors[SpriteKey("monitor.front", facing: facing)], at: monitorPoint, into: &monitor)
+                DecorSpriteChecks.place(monitors[MonitorSprites.screenKey(.working, facing: facing)],
+                                        at: PixelPoint(monitorPoint.x + screenOffset.x, monitorPoint.y + screenOffset.y),
+                                        into: &monitor)
+            } else {
+                DecorSpriteChecks.place(monitors[MonitorSprites.ledKey(.working, facing: facing)], at: monitorPoint, into: &monitor)
+            }
+            #expect(monitor.alphaMask().count > 100, "@\(facing): the monitor is drawn")
+            let origin = at(FurnitureSprites.lampOffset(facing: facing))
+            let hidden = pixels.filter { monitor[origin.x - lamp.anchor.x + $0.x, origin.y - lamp.anchor.y + $0.y].a != 0 }
+            #expect(hidden.isEmpty, "@\(facing): \(hidden.count) pixels of the shade on the monitor")
+        }
+    }
+
+    /// The offline agent's jacket read as a grey bin at the milestone review. Now: a cloth that stands out from
+    /// every chair colour, its collar at the very top of the chair, and drawings with the cues of a jacket (collar
+    /// narrower than the shoulders, sleeves hanging apart from the body, lapels open on the lining).
+    @Test func jacketReadsAsAJacket() {
+        let lookup = DecorSpriteChecks.byKey(Self.furniture)
+        func distance(_ a: RGBA8, _ b: RGBA8) -> Double {
+            let (dr, dg, db) = (Double(a.r) - Double(b.r), Double(a.g) - Double(b.g), Double(a.b) - Double(b.b))
+            return (dr * dr + dg * dg + db * db).squareRoot()
+        }
+        for color in Self.chairColors {
+            let chair = color == "slate" ? FurnitureSprites.metal : Ramp.hue(Int(color.dropFirst(3))!)
+            let cloth = FurnitureSprites.jacketRamp(for: "\(color).jacket")
+            let nearest = [chair.top, chair.left, chair.right].map { distance($0, cloth.left) }.min()!
+            #expect(nearest >= 60, "chair~\(color).jacket: cloth \(cloth.left.hexString) too close to the chair (\(nearest))")
+            let clothColors: Set<RGBA8> = [cloth.top, cloth.left, cloth.right, cloth.outline]
+            for facing in Facing.allCases {
+                let image = lookup[SpriteKey("chair", variant: "\(color).jacket", facing: facing)]!.frames[0]
+                let top = image.opaqueBounds!.y
+                let topRow = (0..<image.width).map { image[$0, top] }.filter(\.isOpaque)
+                #expect(Set(topRow).isSubset(of: clothColors), "chair~\(color).jacket@\(facing): the collar tops the chair")
+                #expect(image.pixels.contains(cloth.left), "chair~\(color).jacket@\(facing): the cloth shows")
+            }
+        }
+        func width(_ map: PixelMap, _ row: Int) -> Int { (0..<map.width).filter { map[$0, row] != .clear }.count }
+        for map in [FurnitureSprites.jacketBack, FurnitureSprites.jacketFront] {
+            #expect(width(map, 0) < width(map, 4) / 2, "a collar, narrower than the shoulders")
+        }
+        let back = FurnitureSprites.jacketBack
+        let apart = (0..<back.height).filter { y in back[3, y] != .clear && back[4, y] == .clear && back[5, y] != .clear }
+        #expect(apart.count >= 3, "the sleeves hang apart from the body")
+        #expect(FurnitureSprites.jacketFront.cells.contains(.role(.shade)), "the lapels open on the lining")
     }
 
     @Test func deskMaterialsAndFacings() {
@@ -190,6 +261,72 @@ import Testing
         }, maxWidth: 160), scale: 6)
     }
 
+    /// Close-ups of the lamps, the jackets and the lit posts of the demonstration island, day and night, with the
+    /// lamp pools placed by `lightConeOffset` (preview only).
+    @Test func previewLampsJacketsAndNight() {
+        guard DecorSpriteChecks.previewsEnabled else { return }
+        DecorSpriteChecks.write("lot-a-lamps", Self.lampSheet(), scale: 8)
+        DecorSpriteChecks.write("lot-a-jackets", DecorSpriteChecks.sheet(Self.furniture.filter {
+            ["slate.jacket", "hue0.jacket", "hue4.jacket", "hue8.jacket", "hue2.jacket"].contains($0.key.variant ?? "")
+        }, maxWidth: 150), scale: 6)
+        let crop = PixelRect(x: 120, y: 140, width: 380, height: 230)
+        for (n, cast) in Showcase.islandCasts().enumerated() {
+            for night in [false, true] {
+                let image = Self.island(cast, night: night).cropped(crop)
+                DecorSpriteChecks.write("lot-a-island\(n + 1)-\(night ? "nuit" : "jour")", image, scale: 3)
+            }
+        }
+    }
+
+    /// The island rendered by the compositor, its lamp pools moved to `lightConeOffset` from each lit desk.
+    static func island(_ scene: SceneInput, night: Bool) -> PixelImage {
+        var plan = SceneCompositor.plan(scene, options: RenderOptions(night: night, crop: Showcase.islandCrop()))
+        guard night, let cone = SpriteCatalog.sprite(SpriteKey("light.cone")) else { return SceneCompositor.rasterize(plan) }
+        let lamps = plan.world.filter { $0.key?.id == "lamp.desk" && $0.key?.variant == "on" }
+        var lights = plan.lights.filter { $0.key != SpriteKey("light.cone") }
+        for lamp in lamps {
+            let facing = lamp.key!.facing!
+            let def = DecorSpriteChecks.byKey(Self.items)[lamp.key!]!
+            let anchor = PixelPoint(lamp.origin.x + def.anchor.x, lamp.origin.y + def.anchor.y)
+            let desk = PixelPoint(anchor.x - FurnitureSprites.lampOffset(facing: facing).x,
+                                  anchor.y - FurnitureSprites.lampOffset(facing: facing).y)
+            let at = PixelPoint(desk.x + FurnitureSprites.lightConeOffset(facing: facing).x - cone.anchor.x,
+                                desk.y + FurnitureSprites.lightConeOffset(facing: facing).y - cone.anchor.y)
+            lights.append(ScenePlacement(name: "light.cone", key: cone.key, image: cone.frames[0], origin: at,
+                                         tile: lamp.tile, depth: lamp.depth, sequence: lamp.sequence))
+        }
+        plan.lights = lights
+        return SceneCompositor.rasterize(plan)
+    }
+
+    /// Each facing: the lamp off and on over a desk top, then on at night with its pool (preview only).
+    static func lampSheet() -> PixelImage {
+        let items = DecorSpriteChecks.byKey(Self.items), furniture = DecorSpriteChecks.byKey(Self.furniture)
+        let cone = DecorSpriteChecks.byKey(LightSprites.all())[SpriteKey("light.cone")]
+        var cells: [PixelImage] = []
+        for facing in Facing.allCases {
+            var row: [PixelImage] = []
+            for state in ["off", "on", "night"] {
+                var image = PixelImage(width: 72, height: 56, fill: Palette.hue(4).light)
+                let desk = PixelPoint(36, 44)
+                DecorSpriteChecks.place(furniture[SpriteKey("desk", variant: "light", facing: facing)], at: desk, into: &image)
+                let lamp = FurnitureSprites.lampOffset(facing: facing)
+                DecorSpriteChecks.place(items[SpriteKey("lamp.desk", variant: state == "off" ? "off" : "on", facing: facing)],
+                                        at: PixelPoint(desk.x + lamp.x, desk.y + lamp.y), into: &image)
+                if state == "night" {
+                    var glow = PixelImage(width: image.width, height: image.height)
+                    let at = FurnitureSprites.lightConeOffset(facing: facing)
+                    DecorSpriteChecks.place(cone, at: PixelPoint(desk.x + at.x, desk.y + at.y), into: &glow)
+                    image.multiply(by: Palette.nightVeil, alpha: Palette.nightVeilAlpha)
+                    image.add(glow, alpha: Palette.lightPoolAlpha)
+                }
+                row.append(image)
+            }
+            cells.append(PixelImage.stacked(row, axis: .horizontal, spacing: 2, background: Palette.color(.ink)))
+        }
+        return PixelImage.stacked(cells, axis: .vertical, spacing: 2, background: Palette.color(.ink))
+    }
+
     /// The four facings of a post: floor, chair, desk and its items placed with the offset helpers (preview only).
     static func desks() -> PixelImage {
         let furniture = DecorSpriteChecks.byKey(Self.furniture), items = DecorSpriteChecks.byKey(Self.items)
@@ -221,7 +358,9 @@ import Testing
             image.fill(PixelRect(x: desk.x + monitor.x - 1, y: desk.y + monitor.y - 1, width: 3, height: 3), Palette.color(.errorRed))
             if !towardViewer { DecorSpriteChecks.place(chairDef, at: chair, into: &image) }
             var glow = PixelImage(width: image.width, height: image.height)
-            DecorSpriteChecks.place(lights[SpriteKey("light.cone")], at: PixelPoint(desk.x + 34, desk.y + 6), into: &glow)
+            let pool = FurnitureSprites.lightConeOffset(facing: facing)
+            DecorSpriteChecks.place(lights[SpriteKey("light.cone")], at: PixelPoint(desk.x + pool.x, desk.y + pool.y),
+                                    into: &glow)
             var night = image
             night.multiply(by: Palette.nightVeil, alpha: Palette.nightVeilAlpha)
             night.add(glow, alpha: Palette.lightPoolAlpha)
