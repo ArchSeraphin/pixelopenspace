@@ -130,6 +130,55 @@ import Testing
         for frame in arrow.frames { #expect(frame == frame.mirrored(), "rotated by 45° steps at step 3: left-right symmetric") }
     }
 
+    /// First render: the old pin read as a yellow drop marked "!". The sprite is an arrow pointing up (the scene
+    /// turns it toward the agent off screen): a pointed head, barbs, a straight shaft, the waiting colours.
+    @Test func edgeArrowIsAnArrowWithABang() throws {
+        let arrow = try #require(Self.def(SpriteKey("ov.edgeArrow")))
+        let frame = arrow.frames[0]
+        let bounds = try #require(frame.opaqueBounds)
+        // Row by row from the tip, the inked span: one run, centred, widening to the barbs, then a straight shaft.
+        var widths: [Int] = []
+        for y in bounds.y..<(bounds.y + bounds.height) {
+            let inked = (0..<frame.width).filter { frame[$0, y].a != 0 }
+            let (first, last) = (inked.first ?? 0, inked.last ?? -1)
+            #expect(inked.count == last - first + 1, "row \(y): one run")
+            #expect(first + last == frame.width - 1, "row \(y): centred")
+            widths.append(inked.count)
+        }
+        #expect(widths[0] == 2, "a pointed tip")
+        let widest = try #require(widths.max())
+        let barbs = try #require(widths.lastIndex(of: widest))
+        #expect(zip(widths[..<barbs], widths[1...barbs]).allSatisfy { $0 <= $1 }, "the head widens down to the barbs: \(widths)")
+        let shaft = widths[(barbs + 1)...]
+        #expect(shaft.count >= 4 && Set(shaft).count == 1, "a straight shaft under the head: \(widths)")
+        #expect(widest - (shaft.first ?? widest) >= 6, "barbs of 3 px or more on each side: \(widths)")
+        // Waiting colours: alertOrange outline, alertYellow body, an ink "!" inside on the axis.
+        let ink = Palette.color(.ink)
+        #expect(Set(frame.distinctColors) == [Self.yellow, Self.orange, ink])
+        let mask = frame.alphaMask()
+        var inkRows = Set<Int>()
+        for y in 0..<frame.height {
+            for x in 0..<frame.width where mask[x, y] {
+                let onRing = !mask[x - 1, y] || !mask[x + 1, y] || !mask[x, y - 1] || !mask[x, y + 1]
+                if onRing { #expect(frame[x, y] == Self.orange, "(\(x), \(y)): the outline is alertOrange") }
+                if frame[x, y] == ink {
+                    #expect(!onRing && (frame.width / 2 - 1...frame.width / 2).contains(x), "(\(x), \(y)): ink off the axis")
+                    inkRows.insert(y)
+                }
+            }
+        }
+        var runs: [[Int]] = []
+        for y in inkRows.sorted() {
+            if let last = runs.last?.last, last + 1 == y { runs[runs.count - 1].append(y) } else { runs.append([y]) }
+        }
+        #expect(runs.count == 2 && runs[0].count >= 3 && runs[1].count < runs[0].count, "an ink \"!\": bar, gap, dot")
+        // Frame 1 nudges the same arrow 1 px toward its tip.
+        var nudged = PixelImage(width: frame.width, height: frame.height)
+        nudged.blit(frame, x: 0, y: -1)
+        #expect(arrow.frames[1] == nudged)
+        #expect(bounds.y >= 1, "room for the nudge")
+    }
+
     // MARK: Accessibility (7.9)
 
     @Test func stateShapesAreDistinct() throws {

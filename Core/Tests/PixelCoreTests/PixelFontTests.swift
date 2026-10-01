@@ -41,6 +41,98 @@ import Testing
         }
     }
 
+    // MARK: Digits against letters (first render: "0" read as D or O, "8" as B)
+
+    static let digits = Array("0123456789")
+    static let letters = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ" + "ÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŒ")
+
+    /// The glyph as `lineHeight` rows of ink flags, accent rows included.
+    static func bitmap(_ character: Character) -> [[Bool]] {
+        let image = PixelFont.render(String(character), color: chalk)
+        return (0..<image.height).map { y in (0..<image.width).map { x in image[x, y].a != 0 } }
+    }
+
+    /// Pixels that differ between two glyphs. The wider one is first condensed to the other's width by removing a
+    /// band of adjacent columns that touches neither of its sides (a 4-px D condensed to 3 px is the shape a 3-px
+    /// figure must not have); the closest band counts.
+    static func distance(_ a: [[Bool]], _ b: [[Bool]]) -> Int {
+        let (narrow, wide) = a[0].count <= b[0].count ? (a, b) : (b, a)
+        let band = wide[0].count - narrow[0].count
+        func differing(_ other: [[Bool]]) -> Int {
+            zip(narrow, other).reduce(0) { sum, rows in sum + zip(rows.0, rows.1).filter { $0 != $1 }.count }
+        }
+        guard band > 0 else { return differing(wide) }
+        return (1..<(wide[0].count - band)).map { start in
+            differing(wide.map { Array($0[..<start] + $0[(start + band)...]) })
+        }.min() ?? 0
+    }
+
+    @Test func distanceCondensesTheWiderGlyph() {
+        let d3: [[Bool]] = ["##.", "#.#", "##."].map { $0.map { $0 == "#" } }
+        let d4: [[Bool]] = ["###.", "#..#", "###."].map { $0.map { $0 == "#" } }
+        #expect(Self.distance(d3, d4) == 0, "D drawn 3 px wide is D")
+        #expect(Self.distance(d4, d3) == 0)
+        #expect(Self.distance(d4, d4) == 0)
+        let box: [[Bool]] = ["###", "#.#", "###"].map { $0.map { $0 == "#" } }
+        #expect(Self.distance(box, d4) == 2, "the old 0 against D: 2 px")
+    }
+
+    @Test func digitsDoNotPassForLetters() {
+        for digit in Self.digits {
+            for letter in Self.letters {
+                let pixels = Self.distance(Self.bitmap(digit), Self.bitmap(letter))
+                #expect(pixels >= 3, "\(digit) is \(pixels) px away from \(letter): it reads as the letter")
+            }
+        }
+        for (index, a) in Self.digits.enumerated() {
+            for b in Self.digits[(index + 1)...] {
+                let pixels = Self.distance(Self.bitmap(a), Self.bitmap(b))
+                #expect(pixels >= 2, "\(a) and \(b) are \(pixels) px apart")
+            }
+        }
+    }
+
+    /// The two confusions of the first render, by their shapes rather than by a pixel count.
+    @Test func zeroAndEightReadApartFromTheirLetters() throws {
+        let caps = PixelFont.accentRows..<PixelFont.lineHeight
+        let (top, bottom) = (caps.lowerBound, caps.upperBound - 1)
+        // 0 is the O crossed by a slash: every pixel of O, plus a stroke inside its counter over 2 rows and 2
+        // columns or more. O and D have an empty counter.
+        let zero = Self.bitmap("0"), o = Self.bitmap("O")
+        try #require(zero[0].count == o[0].count, "0 has the width of O")
+        let width = o[0].count
+        var slash: [(x: Int, y: Int)] = []
+        for y in 0..<PixelFont.lineHeight {
+            for x in 0..<width {
+                if o[y][x] { #expect(zero[y][x], "0 lacks O's pixel (\(x), \(y))") }
+                else if zero[y][x] { slash.append((x, y)) }
+            }
+        }
+        #expect(slash.allSatisfy { (top + 1..<bottom).contains($0.y) && (1..<(width - 1)).contains($0.x) },
+                "the slash stays inside the counter")
+        #expect(Set(slash.map(\.y)).count >= 2 && Set(slash.map(\.x)).count >= 2, "a slash, not a dot")
+        for letter: Character in ["O", "D"] {
+            let glyph = Self.bitmap(letter)
+            let inside = (top + 1..<bottom).contains { y in (1..<(glyph[y].count - 1)).contains { glyph[y][$0] } }
+            #expect(!inside, "\(letter) has an empty counter")
+        }
+        // 8 is pinched on both sides with cut corners; B stands on a straight left stem with square corners.
+        let eight = Self.bitmap("8"), b = Self.bitmap("B")
+        #expect(caps.allSatisfy { b[$0][0] }, "B: a straight stem")
+        #expect(!caps.allSatisfy { eight[$0][0] }, "8: no stem")
+        for row in [top, bottom] {
+            #expect(!eight[row][0] && !eight[row][eight[row].count - 1], "8: cut corners on row \(row)")
+        }
+        #expect(eight.allSatisfy { $0 == Array($0.reversed()) }, "8: left-right symmetric")
+    }
+
+    @Test func aQueueBadgeHoldsADigit() {
+        // desk.queueBadge: an 8-px disc whose 6-px face takes the digit at x = 2, with a 1-px margin on the right.
+        for digit in "123456789" {
+            #expect(PixelFont.width(of: String(digit)) <= 4, "\(digit)")
+        }
+    }
+
     // MARK: Metrics
 
     @Test func capHeightAndWidths() throws {
@@ -145,6 +237,7 @@ import Testing
         let lines = [
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
             "ÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŒ 0123456789",
+            "B8 D0 O0 Z2 S5 G6 T7 H4 X8 I1   ~HUE0 PLANCHE 0   4 × 8 FPS   1080 2048",
             ". , : ; ! ? ' \" - + / ( ) # % @ ~ _ < > = · … ×",
             "API · 2   SITE WEB   DOCUMENTA…   NOVA   OFF",
         ] + stride(from: 0, to: NameGenerator.names.count, by: 10).map {

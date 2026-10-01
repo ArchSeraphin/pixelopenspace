@@ -419,24 +419,26 @@ public enum OverlaySprites {
 
     // MARK: Off-screen arrow, signs, selection
 
-    /// Pin pointing up with an ink "!", symmetric (the scene rotates it by 45° steps); nudges toward its tip.
+    /// Arrow pointing up, in the colours of the "!": a 45° head 16 px across its barbs, an 8-px shaft, an ink "!"
+    /// from the head down into the shaft. Symmetric (the scene turns it toward the agent off screen, by 45°
+    /// steps); nudges 1 px toward its tip.
     private static func edgeArrow(lift: Int) -> PixelImage {
         let glyph = OverlayArt.map([
             ".......YY.......",
             "......YyyY......",
             ".....YyyyyY.....",
             "....YyyyyyyY....",
-            "...YyyyyyyyyY...",
-            "..YyyyyyyyyyyY..",
-            ".YyyyyyooyyyyyY.",
+            "...YyyyooyyyY...",
+            "..YyyyyooyyyyY..",
             ".YyyyyyooyyyyyY.",
             "YyyyyyyooyyyyyyY",
-            "YyyyyyyooyyyyyyY",
-            "YyyyyyyyyyyyyyyY",
-            ".YyyyyyooyyyyyY.",
-            ".YyyyyyyyyyyyyY.",
-            "..YyyyyyyyyyyY..",
-            "...YYYYYYYYYY...",
+            "YYYYYyyyyyyYYYYY",
+            "....YyyooyyY....",
+            "....YyyyyyyY....",
+            "....YyyyyyyY....",
+            "....YyyyyyyY....",
+            "....YyyyyyyY....",
+            "....YYYYYYYY....",
         ])
         var image = PixelImage(width: 16, height: 16)
         image.blit(glyph, x: 0, y: 1 - lift)

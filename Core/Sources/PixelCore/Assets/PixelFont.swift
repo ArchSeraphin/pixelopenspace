@@ -177,16 +177,20 @@ public enum PixelFont {
         g["Û"] = Glyph(letterU, accent: circumflex4)
         g["Ü"] = Glyph(letterU, accent: diaeresis4)
         g["Œ"] = Glyph([".####", "#.#..", "#.###", "#.#..", ".####"])
-        // Digits, 3 px wide so that a badge holds one.
-        g["0"] = Glyph(["###", "#.#", "#.#", "#.#", "###"])
+        // Digits, at most 4 px wide so that a queue badge holds one. None may pass for a capital: each differs
+        // from every letter by 3 px or more, a letter wider than the digit being condensed first (a 4-px D
+        // drawn 3 px wide is the old rectangle 0). Hence a slashed 0 with O's round corners, a pinched round 8
+        // where B has a stem, a hooked 2 (not Z), a diagonal 4 (not H), a square 5 (not S), a flagged 6 (not G)
+        // and a 7 that runs down its right side before it slants (not T).
+        g["0"] = Glyph([".##.", "#.##", "#.##", "##.#", ".##."])
         g["1"] = Glyph([".#.", "##.", ".#.", ".#.", "###"])
-        g["2"] = Glyph(["##.", "..#", ".#.", "#..", "###"])
+        g["2"] = Glyph([".#.", "#.#", "..#", ".#.", "###"])
         g["3"] = Glyph(["###", "..#", ".##", "..#", "###"])
-        g["4"] = Glyph(["#.#", "#.#", "###", "..#", "..#"])
-        g["5"] = Glyph(["###", "#..", "##.", "..#", "##."])
-        g["6"] = Glyph([".##", "#..", "###", "#.#", "###"])
-        g["7"] = Glyph(["###", "..#", ".#.", ".#.", ".#."])
-        g["8"] = Glyph(["###", "#.#", ".#.", "#.#", "###"])
+        g["4"] = Glyph(["..#", ".##", "#.#", "###", "..#"])
+        g["5"] = Glyph(["###", "#..", "###", "..#", "###"])
+        g["6"] = Glyph(["##.", "#..", "###", "#.#", "###"])
+        g["7"] = Glyph(["###", "..#", "..#", ".#.", ".#."])
+        g["8"] = Glyph([".##.", "#..#", ".##.", "#..#", ".##."])
         g["9"] = Glyph(["###", "#.#", "###", "..#", "##."])
         // Space and symbols.
         g[" "] = Glyph(["...", "...", "...", "...", "..."])
