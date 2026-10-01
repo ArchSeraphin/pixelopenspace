@@ -158,7 +158,8 @@ extension AppModel {
                                                    lastTurnEndedAt: dispatcher.lastTurnEndedAt[agentID],
                                                    settings: DispatchSettings(settings: settings),
                                                    draftOverride: dispatcher.draftOverride(for: agentID,
-                                                                                           screen: runtime.screen))
+                                                                                           screen: runtime.screen),
+                                                   quitPending: isQuitPending)
         if case .wait(let cause) = decision { return cause }
         return nil
     }

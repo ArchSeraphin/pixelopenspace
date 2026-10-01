@@ -59,6 +59,8 @@ struct SheetContentView: View {
             }
         case .assignCard(let cardID):
             AssignCardSheet(cardID: cardID)
+        case .relaunch:
+            RelaunchSheet()
         }
     }
 }

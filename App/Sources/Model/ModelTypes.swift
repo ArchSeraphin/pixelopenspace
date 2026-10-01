@@ -84,6 +84,31 @@ enum QuitChoice: Equatable, Sendable {
     case waitForTurns
 }
 
+/// What becomes of a relaunched agent's post-it "En cours" (mockup 6(p)).
+enum RelaunchCardChoice: Equatable, Hashable, Sendable {
+    /// "Continuer la tâche" (C14): once the session has started, never before, a "Continue la tâche" instruction
+    /// goes to the head of the agent's queue.
+    case continueTask
+    /// "Remettre à faire" (C15), at once. The default, and what "Tout relancer" does.
+    case putBack
+}
+
+/// A line of the "Relancer les sessions" sheet the user checked.
+struct RelaunchSelection: Equatable, Sendable {
+    let agentID: AgentID
+    /// Applies to the agent's post-it "En cours", if it has one.
+    let cardChoice: RelaunchCardChoice
+}
+
+/// The banner "n sessions peuvent être relancées" (proposal 2.5): the candidates that can be relaunched (resume,
+/// fork, new session), in sidebar order. Live orphans and projects whose folder is gone are not counted.
+struct RelaunchOffer: Equatable, Sendable {
+    let relaunchable: [RelaunchCandidate]
+
+    /// What "Tout relancer" relaunches: the lines checked by default (resume and fork).
+    var byDefault: [RelaunchCandidate] { relaunchable.filter(\.selectedByDefault) }
+}
+
 /// State of the hook pipeline, for the sidebar ("HOOKS ● actifs 6/6") and the degraded-mode banner (mockup 6(o)).
 struct HookStatus: Equatable, Sendable {
     var server: HookServerState

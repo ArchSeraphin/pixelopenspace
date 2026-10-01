@@ -21,6 +21,9 @@ extension AppModel {
         }
         updateDockBadge()
         if isWaitingForTurnsToQuit { quitIfIdle() }
+        // "Continuer la tâche" of the relaunch sheet, once the session has started: its instruction reaches the head
+        // of the queue before the dispatcher looks at it.
+        if pendingContinuations[agentID] != nil { settlePendingContinuation(agentID) }
         if let current = runtimes[agentID] {
             dispatcher.runtimeChanged(agentID, from: previous, to: current)
         }

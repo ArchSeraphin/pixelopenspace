@@ -113,7 +113,8 @@ final class TaskDispatcher {
         guard !queue.isEmpty else { return }
         switch DispatchPolicy.decisionBeforeScreen(agent: agent, runtime: new, queue: queue, now: Date(),
                                                    lastTurnEndedAt: lastTurnEndedAt[agentID],
-                                                   settings: DispatchSettings(settings: model.settings)) {
+                                                   settings: DispatchSettings(settings: model.settings),
+                                                   quitPending: model.isQuitPending) {
         case .deliver, .wait(.cooldown):
             pump(agentID)
         case .wait, .none:
@@ -207,8 +208,10 @@ final class TaskDispatcher {
 
     // MARK: - Decision
 
+    /// While the app quits or waits for the turns to end ("Attendre la fin des tours"), `quitPending` holds every
+    /// queue (`WaitCause.quitting`); `AppModel.cancelWaitingForTurns()` pumps them all again.
     private func runPump(_ agentID: AgentID) {
-        guard let model, deliveries[agentID] == nil, model.acceptsDeliveries, model.workspace.isLiveAgent(agentID),
+        guard let model, deliveries[agentID] == nil, model.workspace.isLiveAgent(agentID),
               let agent = model.agent(agentID), let runtime = model.runtime(for: agentID) else { return }
         let queue = model.queue(of: agentID)
         guard let head = queue.first else {
@@ -220,7 +223,8 @@ final class TaskDispatcher {
         if case .needsConfirmation(let item, _)? = notices[agentID], item != head { notices[agentID] = nil }
         let settings = DispatchSettings(settings: model.settings)
         let before = DispatchPolicy.decisionBeforeScreen(agent: agent, runtime: runtime, queue: queue, now: Date(),
-                                                         lastTurnEndedAt: lastTurnEndedAt[agentID], settings: settings)
+                                                         lastTurnEndedAt: lastTurnEndedAt[agentID], settings: settings,
+                                                         quitPending: model.isQuitPending)
         guard case .deliver = before else {
             // Busy, waiting, paused, offline…: a hook, the clock or the user brings the queue back.
             screenRechecks[agentID] = nil
@@ -237,9 +241,10 @@ final class TaskDispatcher {
         if !overridesDraft { draftOverrides[agentID] = nil }
         let freshQueue = model.queue(of: agentID)
         let now = Date()
+        let quitPending = model.isQuitPending
         let decision = DispatchPolicy.nextDelivery(agent: current, runtime: fresh, queue: freshQueue, now: now,
                                                    lastTurnEndedAt: lastTurnEndedAt[agentID], settings: settings,
-                                                   draftOverride: overridesDraft)
+                                                   draftOverride: overridesDraft, quitPending: quitPending)
         switch decision {
         case .deliver(let item):
             screenRechecks[agentID] = nil
@@ -250,7 +255,7 @@ final class TaskDispatcher {
         case .wait:
             let beforeScreen = DispatchPolicy.decisionBeforeScreen(agent: current, runtime: fresh, queue: freshQueue,
                                                                    now: now, lastTurnEndedAt: lastTurnEndedAt[agentID],
-                                                                   settings: settings)
+                                                                   settings: settings, quitPending: quitPending)
             if case .deliver = beforeScreen {
                 recheckScreen(agentID)
             } else {

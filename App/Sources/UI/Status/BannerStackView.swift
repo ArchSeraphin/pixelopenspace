@@ -3,7 +3,7 @@ import PixelCore
 import SwiftUI
 
 /// Global banners under the status bar (mockup 6(o)): hooks, Claude Code, account, usage limit, degraded mode,
-/// shell environment, pending quit, load warnings, notifications refused. The most serious is shown; the others
+/// shell environment, sessions to relaunch (2.5), pending quit, load warnings, notifications refused. The most serious is shown; the others
 /// behind "+ n autres alertes".
 struct BannerStackView: View {
     @Environment(AppModel.self) private var model
@@ -68,6 +68,12 @@ struct BannerStackView: View {
             model.terminateOrphan(agentID)
         case .cancelQuitWait:
             model.cancelWaitingForTurns()
+        case .relaunchAll:
+            model.relaunchAll()
+        case .chooseRelaunch:
+            workbench.presentRelaunchSheet()
+        case .dismissRelaunch:
+            model.dismissRelaunchOffer()
         case .dismissLoadWarnings:
             model.dismissLoadWarnings()
         case .openNotificationSettings:

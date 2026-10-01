@@ -26,6 +26,12 @@ enum BannerAction: Hashable {
     case openTerminal(AgentID)
     case terminateOrphan(AgentID)
     case cancelQuitWait
+    /// "Tout relancer": the sessions checked by default, post-its in progress put back to do.
+    case relaunchAll
+    /// "Choisir…": the "Relancer les sessions" sheet (mockup 6(p)).
+    case chooseRelaunch
+    /// "Plus tard": hides the relaunch banner until the next launch.
+    case dismissRelaunch
     case dismissLoadWarnings
     case openNotificationSettings
     case hideNotificationWarning
@@ -39,6 +45,9 @@ enum BannerAction: Hashable {
         case .openTerminal: return "Terminal"
         case .terminateOrphan: return "Terminer ce processus"
         case .cancelQuitWait: return "Ne plus quitter"
+        case .relaunchAll: return "Tout relancer"
+        case .chooseRelaunch: return "Choisir…"
+        case .dismissRelaunch: return "Plus tard"
         case .dismissLoadWarnings: return "OK"
         case .openNotificationSettings: return "Réglages Système…"
         case .hideNotificationWarning: return "Masquer"
@@ -58,6 +67,7 @@ enum BannerCatalog {
         if let banner = degradedBanner(model) { result.append(banner) }
         if let banner = orphanBanner(model) { result.append(banner) }
         if let banner = environmentBanner(model) { result.append(banner) }
+        if let banner = relaunchBanner(model) { result.append(banner) }
         if model.isWaitingForTurnsToQuit {
             result.append(Banner(id: "quit-wait", severity: .info, symbol: "hourglass",
                                  title: "Pixel Open Space quittera à la fin des tours en cours",
@@ -167,6 +177,33 @@ enum BannerCatalog {
                       message: "Après un arrêt brutal de l'app, la session précédente tourne toujours. Elle ne peut "
                           + "pas être reprise ici tant que ce processus vit : termine-le, ou laisse-le finir.",
                       actions: [.terminateOrphan(first.id)])
+    }
+
+    /// After a restart or a crash (proposal 2.5): the sessions of the previous run that can be relaunched. Nothing
+    /// starts until the user answers; "Tout relancer" only takes the lines checked by default (resume, fork) and
+    /// puts their post-its in progress back to do, "Choisir…" opens the sheet for the rest.
+    private static func relaunchBanner(_ model: AppModel) -> Banner? {
+        guard let offer = model.relaunchOffer else { return nil }
+        let count = offer.relaunchable.count
+        let title = count == 1 ? "1 session peut être relancée" : "\(count) sessions peuvent être relancées"
+        func names(_ lines: [RelaunchCandidate]) -> String {
+            lines.map { model.names(of: $0.agentID).agent }.joined(separator: ", ")
+        }
+        var message = names(offer.relaunchable) + ". Rien ne repart tout seul."
+        let byDefault = offer.byDefault
+        if byDefault.isEmpty {
+            message += " Leur conversation ne peut pas être reprise : « Choisir… » démarre une nouvelle session."
+        } else if byDefault.count < count {
+            message += " « Tout relancer » reprend \(names(byDefault)) ; les autres se choisissent dans « Choisir… »."
+        }
+        if byDefault.contains(where: { $0.cardInProgress != nil }) {
+            message += " Avec « Tout relancer », les post-its en cours sont remis à faire ; « Choisir… » permet de les "
+                + "continuer."
+        }
+        var actions: [BannerAction] = byDefault.isEmpty ? [] : [.relaunchAll]
+        actions += [.chooseRelaunch, .dismissRelaunch]
+        return Banner(id: "relaunch", severity: .info, symbol: "arrow.clockwise.circle", title: title,
+                      message: message, actions: actions)
     }
 
     private static func environmentBanner(_ model: AppModel) -> Banner? {

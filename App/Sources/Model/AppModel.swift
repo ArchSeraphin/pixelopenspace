@@ -49,6 +49,9 @@ final class AppModel {
     var quitRequest: QuitRequest?
     /// "Attendre la fin des tours" chosen: the app quits by itself once no agent is busy.
     var isWaitingForTurnsToQuit = false
+    /// The banner "n sessions peuvent être relancées" was answered ("Tout relancer", the sheet) or put off
+    /// ("Plus tard"): it stays hidden until the next launch of the app.
+    var isRelaunchOfferDismissed = false
     /// macOS notifications were refused (the Dock badge still counts waiting agents).
     var notificationsDenied = false
     /// Clock of the time-dependent texts ("depuis 2 min", asleep after 10 min): advanced every second.
@@ -86,6 +89,9 @@ final class AppModel {
     @ObservationIgnored var resumeAttempts: [AgentID: Date] = [:]
     /// Agents whose last resume failed: the next relaunch starts a new session.
     @ObservationIgnored var failedResumes: Set<AgentID> = []
+    /// "Continuer la tâche" chosen in the relaunch sheet: the agent's card, continued once its session has started
+    /// (`settlePendingContinuation`), dropped if the process ends first.
+    @ObservationIgnored var pendingContinuations: [AgentID: TaskCardID] = [:]
 
     static let toastLifetime: TimeInterval = 6
     static let maxToasts = 4
@@ -132,10 +138,25 @@ final class AppModel {
         started = true
         sessions.start()
         hookServerState = hookServer.start()
+        // After the hook server: another copy of the app owning the state files makes this one read-only.
+        markLostSessions()
         startHookLoop()
         startClock()
         redetectClaude()
         updateDockBadge()
+    }
+
+    /// The turns of the previous run are lost (proposal 2.5, C13): the card "En cours" of each agent, all offline at
+    /// launch, gets `sessionLost`. It stays in "En cours", flagged; nothing is queued or sent until the user chooses
+    /// (relaunch sheet, or the card's menu). Flagging twice changes nothing. Not in a copy of the app that does not
+    /// own the state files (`isPersistenceSuspended`): the other copy's sessions may still run.
+    private func markLostSessions() {
+        guard !isPersistenceSuspended else { return }
+        for agent in workspace.agents {
+            guard let phase = runtimes[agent.id]?.phase, case .offline = phase,
+                  currentCard(of: agent.id) != nil else { continue }
+            applyTask(.agentSignal(agent.id, .sessionLost))
+        }
     }
 
     /// After an app crash, an agent's last `claude` may still run (same pid, same start time): never resume its
@@ -227,9 +248,10 @@ final class AppModel {
     /// lose updates). The hooks banner says so.
     var isPersistenceSuspended: Bool { hookServerState == .anotherInstance }
 
-    /// New deliveries may start: not while quitting, nor while waiting for the turns to end before quitting ("Rien de
-    /// nouveau ne sera envoyé aux agents").
-    var acceptsDeliveries: Bool { !quitInProgress && !isWaitingForTurnsToQuit }
+    /// No new delivery may start: the app waits for the turns to end before quitting ("Rien de nouveau ne sera envoyé
+    /// aux agents"), or the quit is approved (the termination runs on the next run-loop turn) or in progress. The
+    /// dispatcher passes it to `DispatchPolicy` (`quitPending`).
+    var isQuitPending: Bool { isWaitingForTurnsToQuit || quitApproved || quitInProgress }
 
     /// Replaces the workspace and schedules its save.
     func commit(_ newWorkspace: Workspace) {

@@ -37,6 +37,8 @@ enum ActiveSheet: Identifiable, Equatable {
     case giveInstruction(AgentID)
     /// "Donner à…" from a board card (VoiceOver action): the list of agents.
     case assignCard(TaskCardID)
+    /// "Relancer les sessions" (mockup 6(p)), from the relaunch banner's "Choisir…".
+    case relaunch
 
     var id: String {
         switch self {
@@ -52,6 +54,7 @@ enum ActiveSheet: Identifiable, Equatable {
         case .resendCard(let cardID): return "resendCard-\(cardID)"
         case .giveInstruction(let agentID): return "giveInstruction-\(agentID)"
         case .assignCard(let cardID): return "assignCard-\(cardID)"
+        case .relaunch: return "relaunch"
         }
     }
 }
@@ -305,6 +308,13 @@ final class WorkbenchState {
     func editCard(_ cardID: TaskCardID) {
         guard model.board.card(cardID) != nil, activeSheet == nil else { return }
         present(.cardEditor(cardID))
+    }
+
+    /// "Choisir…" of the relaunch banner: the "Relancer les sessions" sheet (mockup 6(p)). Never over an open sheet
+    /// (the quit sheet, or unsaved edits): that one comes forward instead.
+    func presentRelaunchSheet() {
+        guard activeSheet == nil else { return bringMainWindowForward() }
+        present(.relaunch)
     }
 
     /// "Donner à…" from a board card (VoiceOver action): the list of agents, in a sheet. Same rule as `editCard`.

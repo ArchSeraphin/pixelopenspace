@@ -8,14 +8,19 @@ extension AppModel {
     // MARK: - Sessions
 
     /// Starts a session. Waits for the search for `claude` when it is still running (first seconds after launch).
-    func launch(_ agentID: AgentID, mode: LaunchMode) {
+    /// `workingDirectory` replaces the folder `LaunchPlanner` derives (a fork in the project folder, the session's
+    /// folder being gone). `completion` learns whether a process started (`.processStarted` already reduced).
+    func launch(_ agentID: AgentID, mode: LaunchMode, workingDirectory: String? = nil,
+                completion: (@MainActor (Bool) -> Void)? = nil) {
         guard claude.phase == .detecting, detectionTask != nil else {
-            performLaunch(agentID, mode: mode)
+            let started = performLaunch(agentID, mode: mode, workingDirectory: workingDirectory)
+            completion?(started)
             return
         }
         Task { [weak self] in
             await self?.waitForClaudeDetection()
-            self?.performLaunch(agentID, mode: mode)
+            let started = self?.performLaunch(agentID, mode: mode, workingDirectory: workingDirectory) ?? false
+            completion?(started)
         }
     }
 
@@ -96,34 +101,36 @@ extension AppModel {
 
     // MARK: - Launch plumbing
 
-    private func performLaunch(_ agentID: AgentID, mode requested: LaunchMode) {
+    /// True when a process started.
+    @discardableResult
+    private func performLaunch(_ agentID: AgentID, mode requested: LaunchMode, workingDirectory: String?) -> Bool {
         guard let agent = workspace.agent(agentID), let project = workspace.project(agent.projectID),
-              let runtime = runtimes[agentID] else { return }
+              let runtime = runtimes[agentID] else { return false }
         let name = agent.name
         guard runtime.pid == nil, !sessions.isRunning(agentID) else {
             showToast("\(name) a déjà une session en cours.", agentID: agentID)
-            return
+            return false
         }
         if runtime.phase == .offline(.orphanElsewhere) {
             // Never resume a conversation still held by a live process (proposal 2.5).
             if let stamp = agent.lastProcess, Self.isAlive(stamp) {
                 showToast("\(name) : une session tourne encore hors de l'app (pid \(stamp.pid)). "
                               + "Termine-la avant de relancer.", style: .warning, agentID: agentID)
-                return
+                return false
             }
         }
         guard claude.isUsable, let claudePath = claude.path else {
             showToast("Claude Code est introuvable : indique son chemin dans les réglages.", style: .error)
             post(.claudeSetup)
-            return
+            return false
         }
         guard hookServerState != .anotherInstance else {
             showToast("Une autre copie de l'app reçoit les hooks : lance les agents depuis celle-ci.", style: .error)
-            return
+            return false
         }
         guard Self.isDirectory(project.path) else {
             showToast("Le dossier du projet est introuvable : \(project.path)", style: .error)
-            return
+            return false
         }
         var mode = requested
         if case .resume(let sessionID) = mode,
@@ -137,13 +144,13 @@ extension AppModel {
         let plan: LaunchPlan
         do {
             plan = try LaunchPlanner.plan(launchRequest(agent: agent, project: project, mode: mode,
-                                                        claudePath: claudePath))
+                                                        claudePath: claudePath, workingDirectory: workingDirectory))
         } catch let error as LaunchError {
             failLaunch(agentID, message: error.message)
-            return
+            return false
         } catch {
             failLaunch(agentID, message: error.localizedDescription)
-            return
+            return false
         }
 
         switch sessions.launch(plan: plan, agentID: agentID) {
@@ -158,10 +165,13 @@ extension AppModel {
             dispatch(.processStarted(pid: pid, startedAt: startedAt, withInitialPrompt: withPrompt), to: agentID)
             // "Lancer un nouvel agent avec ce post-it": the card's delivery is the positional prompt (T30b).
             dispatcher.launched(agentID, withPrompt: withPrompt)
+            return true
         case .failure(.alreadyRunning):
             showToast("\(name) a déjà une session en cours.", agentID: agentID)
+            return false
         case .failure(let error):
             failLaunch(agentID, message: error.message)
+            return false
         }
     }
 
@@ -171,14 +181,15 @@ extension AppModel {
         showToast("\(names(of: agentID).agent) : \(message)", style: .error, agentID: agentID)
     }
 
-    private func launchRequest(agent: Agent, project: Project, mode: LaunchMode, claudePath: String) -> LaunchRequest {
+    private func launchRequest(agent: Agent, project: Project, mode: LaunchMode, claudePath: String,
+                               workingDirectory: String? = nil) -> LaunchRequest {
         var newSessionID: String?
         if case .new = mode { newSessionID = UUID().uuidString.lowercased() }
         return LaunchRequest(agent: agent, project: project, mode: mode, claudeExecutable: claudePath,
                              baseEnvironment: locator.environment ?? ProcessInfo.processInfo.environment,
                              hookSettingsPath: hookServer.settingsPath, hookSocketPath: hookServer.socketPath,
                              hookToken: hookServer.token, newSessionID: newSessionID,
-                             options: LaunchOptions(settings: settings))
+                             options: LaunchOptions(settings: settings), workingDirectoryOverride: workingDirectory)
     }
 
     private static func hasInitialPrompt(_ mode: LaunchMode) -> Bool {
