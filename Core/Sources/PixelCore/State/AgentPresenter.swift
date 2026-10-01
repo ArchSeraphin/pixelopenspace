@@ -189,7 +189,7 @@ public enum AgentPresenter {
         case .closedByUser: return "session fermée"
         case .appRelaunched: return "l'app a redémarré"
         case .exited: return "session terminée"
-        case .orphanElsewhere: return "tourne encore hors de l'app"
+        case .orphanElsewhere: return "session détenue par un autre processus"
         }
     }
 

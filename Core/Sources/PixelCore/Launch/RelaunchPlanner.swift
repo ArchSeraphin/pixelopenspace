@@ -12,13 +12,25 @@ public enum RelaunchStatus: Equatable, Sendable {
     case newSession(reason: String)
     /// The previous `claude` of the agent still runs (app crash): not relaunchable while this pid lives.
     case orphanAlive(pid: Int32)
+    /// The project's own folder is gone (moved, deleted, disk not mounted): every launch needs it, so neither a
+    /// resume, a fork nor a new session can start. Not relaunchable until it is back.
+    case projectFolderMissing(path: String)
+
+    /// The sheet can relaunch this line (resume, fork or new session): not an orphan still alive, nor a project
+    /// whose folder is gone.
+    public var isRelaunchable: Bool {
+        switch self {
+        case .resumable, .forkInProjectFolder, .newSession: true
+        case .orphanAlive, .projectFolderMissing: false
+        }
+    }
 }
 
 /// One line of the "Relancer les sessions" sheet.
 public struct RelaunchCandidate: Equatable, Sendable {
     public var agentID: AgentID
     public var status: RelaunchStatus
-    /// Checked when the sheet opens, and relaunched by "Tout relancer": `resumable` and `forkInProjectFolder`.
+    /// Checked when the sheet opens, and relaunched by "Tout relancer": `resumable` and `forkInProjectFolder` only.
     public var selectedByDefault: Bool
     /// The agent's card "En cours" (`BoardQuery.currentCard`), whose fate the user picks.
     public var cardInProgress: TaskCardID?
@@ -37,8 +49,8 @@ public struct RelaunchCandidate: Equatable, Sendable {
 
 /// What exists on disk, read by the app (`FileManager`) and injected: `RelaunchPlanner` stays pure.
 public struct FileFacts: Sendable {
-    /// The paths of `RelaunchPlanner.pathsToCheck` that exist: a folder for a session's folder, a file for a
-    /// transcript. Compared as written there (trimmed).
+    /// The paths of `RelaunchPlanner.pathsToCheck` that exist: a folder for a project or a session's folder, a file
+    /// for a transcript. Compared exactly as written there.
     public var existingPaths: Set<String>
 
     public init(existingPaths: Set<String>) {
@@ -52,28 +64,33 @@ public enum RelaunchPlanner {
     public static let noSessionReason = "aucune session enregistrée : une nouvelle session sera créée"
     public static let unreadableSessionReason = "session illisible : une nouvelle session sera créée"
     public static let transcriptPurgedReason = "transcript purgé : une nouvelle session sera créée"
+    /// The line of a `.projectFolderMissing` candidate.
+    public static let projectFolderMissingReason = "dossier du projet introuvable"
 
     /// Agents whose runtime phase is `.offline(.appRelaunched)` or `.offline(.orphanElsewhere)`, in sidebar order
     /// (`Workspace.projectsInOrder`, then `agents(in:)`: archived projects and agents without a runtime are left
     /// out). The status of each, the first that applies:
-    /// 1. `agent.lastProcess.pid` in `alivePIDs` → `.orphanAlive`, whatever the phase: never `--resume` a session
-    ///    held by a live process;
-    /// 2. no session → `.newSession(noSessionReason)`; an id `--resume` refuses (blank, starting with "-") →
+    /// 1. `liveProcesses[agent.id]` is the agent's own `lastProcess` → `.orphanAlive`, whatever the phase: never
+    ///    `--resume` a session held by a live process;
+    /// 2. the project folder (`Project.path`, as recorded) missing → `.projectFolderMissing`: every launch runs
+    ///    from it or needs it, so nothing can be relaunched;
+    /// 3. no session → `.newSession(noSessionReason)`; an id `--resume` refuses (blank, starting with "-") →
     ///    `.newSession(unreadableSessionReason)`;
-    /// 3. `transcriptPath` of the last session recorded but missing → `.newSession(transcriptPurgedReason)` (a fork
+    /// 4. `transcriptPath` of the last session recorded but missing → `.newSession(transcriptPurgedReason)` (a fork
     ///    needs the transcript too); an unrecorded or blank path is not judged;
-    /// 4. its absolute folder missing, and not the project folder → `.forkInProjectFolder`. A missing project folder
-    ///    is left to the launch, which refuses it; a folder not recorded as absolute is resumed in the project
-    ///    folder, as `LaunchPlanner` does;
-    /// 5. otherwise `.resumable`.
+    /// 5. its absolute folder missing, and not the project folder → `.forkInProjectFolder`; a folder not recorded
+    ///    as absolute is resumed in the project folder, as `LaunchPlanner` does;
+    /// 6. otherwise `.resumable`.
     ///
-    /// `alivePIDs`: pids of `Agent.lastProcess` still running with the same start time, checked by the app.
+    /// `liveProcesses`: for each agent whose `Agent.lastProcess` the app found still running (same pid AND same
+    /// start time), the stamp it verified. Matched per agent and per stamp, never by pid alone: a pid number the
+    /// system reused for another process, or found in another agent's stamp, never makes an orphan.
     public static func candidates(workspace: Workspace, runtimes: [AgentID: AgentRuntime], board: TaskBoardState,
-                                  files: FileFacts, alivePIDs: Set<Int32>) -> [RelaunchCandidate] {
+                                  files: FileFacts, liveProcesses: [AgentID: ProcessStamp]) -> [RelaunchCandidate] {
         workspace.projectsInOrder.flatMap { project in
             workspace.agents(in: project.id).compactMap { agent -> RelaunchCandidate? in
                 guard let runtime = runtimes[agent.id], isRelaunchable(runtime.phase) else { return nil }
-                let status = status(of: agent, project: project, files: files, alivePIDs: alivePIDs)
+                let status = status(of: agent, project: project, files: files, liveProcesses: liveProcesses)
                 let last = agent.sessions.last
                 return RelaunchCandidate(agentID: agent.id, status: status, selectedByDefault: isSelected(status),
                                          cardInProgress: BoardQuery.currentCard(of: agent.id, in: board)?.id,
@@ -82,11 +99,13 @@ public enum RelaunchPlanner {
         }
     }
 
-    /// The paths `candidates` looks up in `FileFacts`: the folder (when absolute) and the transcript (when
-    /// recorded) of each agent's last session, trimmed. The app checks these and passes the ones that exist.
+    /// The paths `candidates` looks up in `FileFacts`: the folder of each agent's project (as recorded), and the
+    /// folder (when absolute) and the transcript (when recorded) of each agent's last session, trimmed. The app
+    /// checks these and passes the ones that exist.
     public static func pathsToCheck(workspace: Workspace) -> Set<String> {
         var paths: Set<String> = []
         for agent in workspace.agents {
+            if let project = workspace.project(agent.projectID) { paths.insert(project.path) }
             guard let last = agent.sessions.last else { continue }
             if let folder = LaunchPlanner.recordedCwd(of: last.sessionID, in: agent) { paths.insert(folder) }
             if let transcript = transcript(of: last) { paths.insert(transcript) }
@@ -103,12 +122,14 @@ public enum RelaunchPlanner {
     static func isSelected(_ status: RelaunchStatus) -> Bool {
         switch status {
         case .resumable, .forkInProjectFolder: true
-        case .newSession, .orphanAlive: false
+        case .newSession, .orphanAlive, .projectFolderMissing: false
         }
     }
 
-    static func status(of agent: Agent, project: Project, files: FileFacts, alivePIDs: Set<Int32>) -> RelaunchStatus {
-        if let pid = agent.lastProcess?.pid, alivePIDs.contains(pid) { return .orphanAlive(pid: pid) }
+    static func status(of agent: Agent, project: Project, files: FileFacts,
+                       liveProcesses: [AgentID: ProcessStamp]) -> RelaunchStatus {
+        if let stamp = agent.lastProcess, liveProcesses[agent.id] == stamp { return .orphanAlive(pid: stamp.pid) }
+        guard files.existingPaths.contains(project.path) else { return .projectFolderMissing(path: project.path) }
         guard let last = agent.sessions.last else { return .newSession(reason: noSessionReason) }
         guard (try? LaunchPlanner.validSessionID(last.sessionID)) != nil else {
             return .newSession(reason: unreadableSessionReason)

@@ -46,16 +46,17 @@ fileprivate enum RelaunchFixture {
         Set(agents.flatMap { $0.sessions.flatMap { [$0.cwd] + ($0.transcriptPath.map { [$0] } ?? []) } })
     }
 
-    /// Candidates with every agent relaunched (unless `runtimes` says otherwise) and every file present (unless
-    /// `existing` says otherwise).
+    /// Candidates with every agent relaunched (unless `runtimes` says otherwise) and every file and project folder
+    /// present (unless `existing` says otherwise).
     static func candidates(_ agents: [Agent], projects: [Project] = [api, site],
                            runtimes: [AgentID: AgentRuntime]? = nil, board: TaskBoardState = TaskBoardState(),
-                           existing: Set<String>? = nil, alive: Set<Int32> = []) -> [RelaunchCandidate] {
+                           existing: Set<String>? = nil,
+                           live: [AgentID: ProcessStamp] = [:]) -> [RelaunchCandidate] {
         let workspace = Workspace(projects: projects, agents: agents)
         let runtimes = runtimes ?? Dictionary(uniqueKeysWithValues: agents.map { ($0.id, offline()) })
-        return RelaunchPlanner.candidates(workspace: workspace, runtimes: runtimes, board: board,
-                                          files: FileFacts(existingPaths: existing ?? allPaths(agents)),
-                                          alivePIDs: alive)
+        let files = FileFacts(existingPaths: existing ?? allPaths(agents).union(projects.map(\.path)))
+        return RelaunchPlanner.candidates(workspace: workspace, runtimes: runtimes, board: board, files: files,
+                                          liveProcesses: live)
     }
 
     static func card(_ n: Int, _ title: String, column: Column, assignee: AgentID?, queueRank: String? = nil,
@@ -87,22 +88,38 @@ fileprivate enum RelaunchFixture {
     @Test func orphanAliveIsNotResumable() {
         let stamp = ProcessStamp(pid: 4312, startedAt: F.at(5))
         let rio = F.agent(F.rio, "Rio", sessions: [F.session("R1")], lastProcess: stamp)
-        let found = F.candidates([rio], runtimes: [F.rio: F.offline(.orphanElsewhere)], alive: [4312])
+        let found = F.candidates([rio], runtimes: [F.rio: F.offline(.orphanElsewhere)], live: [F.rio: stamp])
         #expect(found == [RelaunchCandidate(agentID: F.rio, status: .orphanAlive(pid: 4312), selectedByDefault: false,
                                             cardInProgress: nil, lastActivity: F.at(30))])
-        // Whatever the phase says: a live pid wins (checked again by the app when it builds `alivePIDs`).
-        #expect(F.candidates([rio], alive: [4312]).map(\.status) == [.orphanAlive(pid: 4312)])
+        #expect(!RelaunchStatus.orphanAlive(pid: 4312).isRelaunchable)
+        // Whatever the phase says: a live process wins (checked again by the app when it verifies the stamps).
+        #expect(F.candidates([rio], live: [F.rio: stamp]).map(\.status) == [.orphanAlive(pid: 4312)])
         // Once the process is gone ("Terminer ce processus"), the session can be resumed.
-        let gone = F.candidates([rio], runtimes: [F.rio: F.offline(.orphanElsewhere)], alive: [])
+        let gone = F.candidates([rio], runtimes: [F.rio: F.offline(.orphanElsewhere)], live: [:])
         #expect(gone.map(\.status) == [.resumable(F.session("R1"))])
         #expect(gone.map(\.selectedByDefault) == [true])
-        // Another agent's live pid does not matter.
-        #expect(F.candidates([rio], runtimes: [F.rio: F.offline(.orphanElsewhere)], alive: [999]).map(\.status)
-                == [.resumable(F.session("R1"))])
-        // An orphan without a recorded process is not alive.
+        // An orphan without a recorded process is not alive, whatever is verified for it.
         let unknown = F.agent(F.rio, "Rio", sessions: [F.session("R1")])
-        #expect(F.candidates([unknown], runtimes: [F.rio: F.offline(.orphanElsewhere)], alive: [4312]).map(\.status)
-                == [.resumable(F.session("R1"))])
+        #expect(F.candidates([unknown], runtimes: [F.rio: F.offline(.orphanElsewhere)], live: [F.rio: stamp])
+                    .map(\.status) == [.resumable(F.session("R1"))])
+    }
+
+    /// A pid number is reused by the system: only the agent whose own stamp (pid and start time) was verified alive
+    /// is an orphan. Another agent with the same pid in an older stamp is resumed as usual.
+    @Test func orphanStampsAreMatchedPerAgent() {
+        let rioStamp = ProcessStamp(pid: 4312, startedAt: F.at(5))
+        let staleStamp = ProcessStamp(pid: 4312, startedAt: F.at(-600))
+        let rio = F.agent(F.rio, "Rio", desk: 0, sessions: [F.session("R1")], lastProcess: rioStamp)
+        let nova = F.agent(F.nova, "Nova", desk: 1, sessions: [F.session("N1")], lastProcess: staleStamp)
+        let runtimes = [F.rio: F.offline(.orphanElsewhere), F.nova: F.offline()]
+        let found = F.candidates([rio, nova], runtimes: runtimes, live: [F.rio: rioStamp])
+        #expect(found.map(\.status) == [.orphanAlive(pid: 4312), .resumable(F.session("N1"))])
+        #expect(found.map(\.selectedByDefault) == [false, true])
+        // A stamp verified for another agent never marks this one, even with the same pid.
+        #expect(F.candidates([nova], live: [F.rio: rioStamp]).map(\.status) == [.resumable(F.session("N1"))])
+        // A verified stamp that is not the agent's current one (same pid, another start time) does not count.
+        #expect(F.candidates([nova], live: [F.nova: rioStamp]).map(\.status) == [.resumable(F.session("N1"))])
+        #expect(F.candidates([rio], live: [F.rio: staleStamp]).map(\.status) == [.resumable(F.session("R1"))])
     }
 
     /// Review focus 2: a transcript purged by Claude Code cannot be resumed nor forked.
@@ -117,8 +134,9 @@ fileprivate enum RelaunchFixture {
         // Before the folder: a fork needs the transcript too.
         let worktree = F.agent(F.tao, "Tao", project: F.site,
                                sessions: [F.session("T2", project: F.site, cwd: "/tmp/gone")])
-        #expect(F.candidates([worktree], existing: []).map(\.status)
+        #expect(F.candidates([worktree], existing: [F.site.path]).map(\.status)
                 == [.newSession(reason: RelaunchPlanner.transcriptPurgedReason)])
+        #expect(RelaunchStatus.newSession(reason: RelaunchPlanner.transcriptPurgedReason).isRelaunchable)
     }
 
     /// Review focus 3: the session's folder is gone (worktree removed): fork it in the project folder.
@@ -128,18 +146,39 @@ fileprivate enum RelaunchFixture {
         let found = F.candidates([nova], existing: [F.api.path, last.transcriptPath!])
         #expect(found == [RelaunchCandidate(agentID: F.nova, status: .forkInProjectFolder(last),
                                             selectedByDefault: true, cardInProgress: nil, lastActivity: F.at(30))])
+        #expect(RelaunchStatus.forkInProjectFolder(last).isRelaunchable)
+        // The session's folder spelled differently (trailing slash, "."): still the project folder, which exists.
+        let spelled = F.session("P2", cwd: "/Users/seraphin/dev/./api/")
+        #expect(F.candidates([F.agent(F.nova, sessions: [spelled])], existing: [F.api.path, spelled.transcriptPath!])
+                    .map(\.status) == [.resumable(spelled)])
     }
 
-    @Test func missingProjectFolderIsNotAFork() {
-        // The session ran in the project folder itself: forking "in the project folder" would not help. The launch
-        // reports the missing project folder, as for any launch.
+    /// The project's own folder is gone (moved, deleted, unmounted disk): resume, fork and new session would all
+    /// fail, since every launch needs it. The line says so, is never checked, and cannot be relaunched.
+    @Test func missingProjectFolderIsNotRelaunchable() {
         let last = F.session("P1")
         let nova = F.agent(F.nova, sessions: [last])
-        #expect(F.candidates([nova], existing: [last.transcriptPath!]).map(\.status) == [.resumable(last)])
-        // Spelled differently (trailing slash, "."), still the project folder.
-        let spelled = F.session("P2", cwd: "/Users/seraphin/dev/./api/")
-        #expect(F.candidates([F.agent(F.nova, sessions: [spelled])], existing: [spelled.transcriptPath!])
-                    .map(\.status) == [.resumable(spelled)])
+        let found = F.candidates([nova], existing: [last.transcriptPath!])
+        #expect(found == [RelaunchCandidate(agentID: F.nova, status: .projectFolderMissing(path: F.api.path),
+                                            selectedByDefault: false, cardInProgress: nil, lastActivity: F.at(30))])
+        #expect(!RelaunchStatus.projectFolderMissing(path: F.api.path).isRelaunchable)
+        #expect(RelaunchPlanner.projectFolderMissingReason == "dossier du projet introuvable")
+        // Even when the session ran in a worktree that is still there: the app launches nothing without the project
+        // folder.
+        let worktree = F.session("W1", cwd: "/Volumes/ext/api-wt")
+        let inWorktree = F.agent(F.nova, sessions: [worktree])
+        #expect(F.candidates([inWorktree], existing: [worktree.cwd, worktree.transcriptPath!]).map(\.status)
+                == [.projectFolderMissing(path: F.api.path)])
+        // Without any session (a new session would be started there).
+        let bip = F.agent(F.bip, "Bip", sessions: [])
+        #expect(F.candidates([bip], existing: []).map(\.status) == [.projectFolderMissing(path: F.api.path)])
+        // An orphan still alive stays an orphan: "Terminer ce processus" is still offered.
+        let stamp = ProcessStamp(pid: 77, startedAt: F.at(1))
+        let rio = F.agent(F.rio, "Rio", sessions: [last], lastProcess: stamp)
+        #expect(F.candidates([rio], existing: [], live: [F.rio: stamp]).map(\.status) == [.orphanAlive(pid: 77)])
+        // Once the folder is back, the session is resumed.
+        #expect(F.candidates([nova], existing: [F.api.path, last.transcriptPath!]).map(\.status)
+                == [.resumable(last)])
     }
 
     @Test func unknownTranscriptOrFolderIsNotJudged() {
@@ -152,13 +191,14 @@ fileprivate enum RelaunchFixture {
                 == [.resumable(blank)])
         // A folder that is not absolute: `LaunchPlanner` resumes in the project folder.
         let relative = F.session("U3", cwd: "dev/api")
-        #expect(F.candidates([F.agent(F.nova, sessions: [relative])], existing: [relative.transcriptPath!])
+        #expect(F.candidates([F.agent(F.nova, sessions: [relative])], existing: [F.api.path, relative.transcriptPath!])
                     .map(\.status) == [.resumable(relative)])
         // Paths are looked up trimmed, as `LaunchPlanner` uses them.
         var padded = F.session("U4", cwd: "/Users/seraphin/dev/api/wt")
         padded.cwd = " /Users/seraphin/dev/api/wt\n"
         padded.transcriptPath = " /Users/seraphin/.claude/projects/x/U4.jsonl "
-        let existing: Set<String> = ["/Users/seraphin/dev/api/wt", "/Users/seraphin/.claude/projects/x/U4.jsonl"]
+        let existing: Set<String> = [F.api.path, "/Users/seraphin/dev/api/wt",
+                                     "/Users/seraphin/.claude/projects/x/U4.jsonl"]
         #expect(F.candidates([F.agent(F.nova, sessions: [padded])], existing: existing).map(\.status)
                 == [.resumable(padded)])
     }
@@ -176,6 +216,7 @@ fileprivate enum RelaunchFixture {
                     == [.newSession(reason: "session illisible : une nouvelle session sera créée")])
         }
         #expect(RelaunchPlanner.unreadableSessionReason == "session illisible : une nouvelle session sera créée")
+        #expect(RelaunchStatus.newSession(reason: RelaunchPlanner.noSessionReason).isRelaunchable)
     }
 
     // MARK: - Who, in which order, with what
@@ -254,14 +295,14 @@ fileprivate enum RelaunchFixture {
         var existing = F.allPaths(agents)
         existing.remove("/Users/seraphin/dev/api/wt")
         existing.remove(purged.sessions[0].transcriptPath!)
-        let found = F.candidates(agents, existing: existing, alive: [77])
+        let found = F.candidates(agents, existing: existing, live: [F.rio: stamp])
         #expect(found.map(\.selectedByDefault) == [true, true, false, false])
         #expect(found.map(\.status) == [.resumable(resumable.sessions[0]), .forkInProjectFolder(fork.sessions[0]),
                                         .newSession(reason: RelaunchPlanner.transcriptPurgedReason),
                                         .orphanAlive(pid: 77)])
     }
 
-    @Test func pathsToCheckAreTheLastSessionsFoldersAndTranscripts() {
+    @Test func pathsToCheckAreTheProjectFoldersAndTheLastSessionsFoldersAndTranscripts() {
         var noTranscript = F.session("B", cwd: " /Users/seraphin/dev/api/wt ", transcript: false)
         noTranscript.transcriptPath = "   "
         let agents = [
@@ -269,8 +310,12 @@ fileprivate enum RelaunchFixture {
             F.agent(F.bip, "Bip", desk: 1, sessions: [noTranscript]),
             F.agent(F.tao, "Tao", desk: 2, sessions: []),
         ]
-        let paths = RelaunchPlanner.pathsToCheck(workspace: Workspace(projects: [F.api], agents: agents))
+        let paths = RelaunchPlanner.pathsToCheck(workspace: Workspace(projects: [F.api, F.site], agents: agents))
         #expect(paths == [F.api.path, agents[0].sessions[1].transcriptPath!, "/Users/seraphin/dev/api/wt"])
+        // The project folder of an agent without any session is checked too; a project without agents is not.
+        let rio = F.agent(F.rio, "Rio", project: F.site, sessions: [])
+        let withSite = RelaunchPlanner.pathsToCheck(workspace: Workspace(projects: [F.api, F.site], agents: [rio]))
+        #expect(withSite == [F.site.path])
     }
 
     @Test func reasonsAreFrenchWithoutEmDash() {
@@ -279,6 +324,7 @@ fileprivate enum RelaunchFixture {
             #expect(reason.hasSuffix("une nouvelle session sera créée"))
             #expect(!reason.contains("\u{2014}"))
         }
+        #expect(!RelaunchPlanner.projectFolderMissingReason.contains("\u{2014}"))
     }
 
     // MARK: - With the board (review focus 4, core side)

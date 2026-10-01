@@ -152,7 +152,7 @@ import Testing
         #expect(present(.offline(.closedByUser)).detail == "session fermée")
         #expect(present(.offline(.appRelaunched)).detail == "l'app a redémarré")
         #expect(present(.offline(.exited)).detail == "session terminée")
-        #expect(present(.offline(.orphanElsewhere)).detail == "tourne encore hors de l'app")
+        #expect(present(.offline(.orphanElsewhere)).detail == "session détenue par un autre processus")
         #expect(present(.thinking).detail == nil)
         #expect(present(.done).detail == nil)
     }
