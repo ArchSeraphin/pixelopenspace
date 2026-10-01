@@ -67,27 +67,37 @@ public enum CharacterSprites {
         var canvas = SlotCanvas(width: frameWidth, height: frameHeight)
         let legs = CharacterParts.legs(pose.legs, view)
         canvas.draw(legs.map, x: legs.dx, y: legs.dy)
-        canvas.draw(CharacterParts.torso(view), x: pose.torso.x, y: pose.torso.y)
+        func drawHead() {
+            canvas.draw(CharacterParts.head(view, eyes: pose.eyes), x: pose.head.x, y: pose.head.y)
+            let hairY = pose.head.y + CharacterParts.hairOffsetY
+            // Bent over the desk, long hair falls forward with the head instead of down the back: it stops at the
+            // chin.
+            let hairLimit = pose.lean ? pose.head.y + CharacterParts.headSize - 1 : frameHeight
+            canvas.draw(CharacterParts.hair(style: look.hairStyle, view), x: pose.head.x, y: hairY, aboveRow: hairLimit)
+            if look.accessory == CharacterParts.beanieKind {
+                // The beanie flattens whatever hair rises above the head (spikes, bun).
+                for y in max(hairY, 0)..<min(max(pose.head.y, 0), frameHeight) {
+                    for x in max(pose.head.x, 0)..<min(pose.head.x + CharacterParts.headSize, frameWidth) {
+                        canvas[x, y] = .clear
+                    }
+                }
+            }
+            if let accessory = CharacterParts.accessory(look.accessory, view) {
+                canvas.draw(accessory, x: pose.head.x, y: hairY)
+            }
+        }
+        // Bent over the desk and seen from the back, the head is lower than the shoulders: they cover it.
+        let headBehind = pose.lean && view == .back
+        if headBehind { drawHead() }
+        canvas.draw(pose.lean ? CharacterParts.torsoLean(view) : CharacterParts.torso(view), x: pose.torso.x,
+                    y: pose.torso.y)
         let arms = CharacterParts.arms(pose.arms, view)
         let armsLast = CharacterParts.armsOverHead(pose.arms, view)
         func drawArms() {
             for piece in arms { canvas.draw(piece.map, x: pose.torso.x + piece.dx, y: pose.torso.y + piece.dy) }
         }
         if !armsLast { drawArms() }
-        canvas.draw(CharacterParts.head(view, eyes: pose.eyes), x: pose.head.x, y: pose.head.y)
-        let hairY = pose.head.y + CharacterParts.hairOffsetY
-        canvas.draw(CharacterParts.hair(style: look.hairStyle, view), x: pose.head.x, y: hairY)
-        if look.accessory == CharacterParts.beanieKind {
-            // The beanie flattens whatever hair rises above the head (spikes, bun).
-            for y in max(hairY, 0)..<min(max(pose.head.y, 0), frameHeight) {
-                for x in max(pose.head.x, 0)..<min(pose.head.x + CharacterParts.headSize, frameWidth) {
-                    canvas[x, y] = .clear
-                }
-            }
-        }
-        if let accessory = CharacterParts.accessory(look.accessory, view) {
-            canvas.draw(accessory, x: pose.head.x, y: hairY)
-        }
+        if !headBehind { drawHead() }
         if armsLast { drawArms() }
         return canvas
     }

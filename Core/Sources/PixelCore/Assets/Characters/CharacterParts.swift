@@ -15,10 +15,10 @@ enum CharacterParts {
     enum Legs: Sendable { case stand, stride, passLeftDown, passRightDown, crouch, seated }
 
     /// The arm gestures of 7.4.4 (hang, swing, lap, typing, chin, stretch, mug, raised hand, cheer, sticky note,
-    /// cough, wave).
+    /// cough, wave, arms folded on the desk under the sleeping head).
     enum Arms: Sendable {
         case rest, swingIn, swingOut, crouch, lap, typeLeft, typeRight, typeDown, chin, stretchHalf, stretchUp,
-             mugLow, mugHigh, raise, raiseTilt, cheer, cheerWide, reach, hold, stick, cough, waveLeft, waveRight
+             mugLow, mugHigh, raise, raiseTilt, cheer, cheerWide, reach, hold, stick, cough, waveLeft, waveRight, fold
     }
 
     /// A map and its top-left relative to its reference point (legs: the frame origin; arms: the torso origin).
@@ -218,23 +218,24 @@ enum CharacterParts {
             """),
     ]
 
+    /// From behind: strands (outline texels inside the hair, kept by the reshaded mirrors) so that no cut reads
+    /// as a helmet or a beanie; the short cuts also show the ears and the nape.
     static let hairBack: [PixelMap] = [
-        // 0 short
+        // 0 short: ears and a bare nape under a tapered hairline
         PixelMap("""
             ..............
             ..............
             ....jjjjjj....
             ..jjhhhhhhjj..
-            .jhhhhhhhhhhj.
+            .jhhhhhhhhhHj.
             jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            .jhhhhhhhhHHj.
-            .jhhhhhhhHHHj.
-            ..jjjjjjjjjj..
+            jhhhhhHjhhhHHj
+            jhhhhHjhhhHjHj
+            qjhhHjhhhhhHjq
+            qsjhhhhhhhHjSq
+            .qjhhhhhhhHjq.
+            .qSjjhhhhjjSq.
+            .qsSSSSSSSSSq.
             """),
         // 1 tousled
         PixelMap("""
@@ -242,8 +243,8 @@ enum CharacterParts {
             ..jhjjhhjjhj..
             .jhhhhhhhhhHj.
             .jhhhhhhhhhHj.
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
+            jhhhhhHjhhhHHj
+            jhhhhHjhhhhHHj
             jhhhhhhhhhhHHj
             jhhhhhhhhhhHHj
             jhhhhhhhhhhHHj
@@ -253,7 +254,7 @@ enum CharacterParts {
             .jhhjhhjhhjHj.
             ..jjjjjjjjjj..
             """),
-        // 2 bob
+        // 2 bob: ends at the jaw in uneven tips, the neck shows
         PixelMap("""
             ..............
             ..............
@@ -261,16 +262,14 @@ enum CharacterParts {
             ..jhhhhhhhhj..
             .jhhhhhhhhhHj.
             jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            .jjjjjjjjjjjj.
+            jhhhhhHjhhhHHj
+            jhhhhHjhhhhHHj
+            jhhhHjhhhHjHHj
+            jhhhjhhhhHjHHj
+            jhhHjhhhhjhHHj
+            jhhjhhhhHjhHHj
+            jhHjhhhhjhhHHj
+            .jjhjjhjjhjjj.
             """),
         // 3 long: falls down the back
         PixelMap("""
@@ -280,19 +279,20 @@ enum CharacterParts {
             ..jhhhhhhhhj..
             .jhhhhhhhhhHj.
             jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            .jhhhhhhhhHHj.
-            ..jhhhhhhHHj..
-            ..jhhhhhhHHj..
-            ..jhhhhhhHHj..
+            jhhhhhHjhhhHHj
+            jhhhhHjhhhhHHj
+            jhhhHjhhhhHjHj
+            jhhhjhhhhhHHHj
+            jhhhjhhhhHjHHj
+            jhhHjhhhhjHHHj
+            jhhjhhhhhjHHHj
+            jhhjhhhhHjHHHj
+            jhhjhhhhjhHHHj
+            jhhjhhhhjhHHHj
+            .jhjhhhhjhHHj.
+            ..jhhhhhjHHj..
+            ..jhhhhhjHHj..
+            ..jhhhhhjHHj..
             ..jhhhhhhHHj..
             ..jhhhhhhHHj..
             ..jhhhhhhHHj..
@@ -300,39 +300,35 @@ enum CharacterParts {
             ...jhhhhHHj...
             ....jjjjjj....
             """),
-        // 4 bun
+        // 4 bun: pulled up, ears and nape bare
         PixelMap("""
             .....jjjj.....
             ....jhhhHj....
             ....jjjjjj....
             ..jjhhhhhhjj..
             .jhhhhhhhhhHj.
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhhHHj
-            jhhhhhhhhhHHHj
-            jhhhhhhhhhHHHj
-            .jhhhhhhhhHHj.
-            .jhhhhhhhHHHj.
-            ..jjjjjjjjjj..
+            jhhhhjhhhhhHHj
+            jhhhjhhhhjhHHj
+            jhhjhhhhhhjHHj
+            qjhhhhhhhhHHjq
+            qsjhhhhhhhHjSq
+            .qShhhhhhhHSq.
+            .qsSSSSSSSSSq.
             """),
-        // 5 buzz cut
+        // 5 buzz cut: close to the skull, a grain of short strokes, a soft hairline over a bare nape, the ears
         PixelMap("""
             ..............
             ..............
             ....jjjjjj....
             ..jjhhhhhhjj..
             .jhhhhhhhhhHj.
-            .jhhhhhhhhHHj.
-            .jhhhhhhhhHHj.
-            .jhhhhhhhhHHj.
-            .jhhhhhhhhHHj.
-            .jhhhhhhhhHHj.
-            .jhhhhhhhhHHj.
-            .jhhhhhhhhHHj.
-            .jhhhhhhhhHHj.
-            ..jjjjjjjjjj..
+            .jhhhhhjhhHHj.
+            .jhhhhjhhhHHj.
+            .jhhhhhhhjHHj.
+            qjhhhhhhjhHHjq
+            qsjhhhhhhhHjSq
+            .qShhhhhhhHSq.
+            .qsSSSSSSSSSq.
             """),
     ]
 
@@ -424,6 +420,45 @@ enum CharacterParts {
         .utttttTTTu.
         .uTTTTTTTTu.
         .uuuuuuuuuu.
+        """)
+
+    /// Bent over the desk (sleep), at `CharacterPoses.leanTorsoFront` / `leanTorsoBack`.
+    static func torsoLean(_ view: View) -> PixelMap { view == .front ? torsoFrontLean : torsoBackLean }
+
+    /// From the front the leaning torso is foreshortened: shorter, shifted toward the desk, mostly hidden by the head.
+    static let torsoFrontLean = PixelMap("""
+        ..uuuuuuuu..
+        .uttttttTTu.
+        .uttttttTTu.
+        .uttttttTTu.
+        .uttttttTTu.
+        .uttttttTTu.
+        .uttttttTTu.
+        .utttttTTTu.
+        .uTTTTTTTTu.
+        .uuuuuuuuuu.
+        """)
+
+    /// From the back: hips on the seat, the back rounded and leaning up-right toward the desk, wider at the
+    /// shoulders; no neck (the head, lower than the shoulders, only shows its crown and its right side).
+    static let torsoBackLean = PixelMap("""
+        .....uuuuuuuu....
+        ...uutttttttTTu..
+        ..uttttttttttTTu.
+        .uttttttttttttTTu
+        .uttttttttttttTTu
+        .utttttttttttTTu.
+        .utttttttttttTTu.
+        .uttttttttttTTu..
+        .uttttttttttTTu..
+        .utttttttttTTu...
+        .utttttttttTTu...
+        .uttttttttTTu....
+        .uttttttttTTu....
+        .utttttttTTu.....
+        .uttttttTTTu.....
+        .uTTTTTTTTu......
+        .uuuuuuuuuu......
         """)
 
     static let torsoBack = PixelMap("""
@@ -653,6 +688,9 @@ enum CharacterParts {
         case (.mugHigh, .back), (.hold, .back): return [lapBackLeft, elbowBackRight]
         case (.reach, .back): return [lapBackLeft, reachBackRight]
 
+        case (.fold, .front): return [foldFront]
+        case (.fold, .back): return [foldBackLeft, foldBackRight]
+
         case (.stretchHalf, _): return [goalLeft, goalRight]
         case (.stretchUp, _): return [upLeft, upRight]
         case (.raise, _): return [lapLeft, upRight]
@@ -673,7 +711,7 @@ enum CharacterParts {
             return view == .front
         case .stretchHalf, .stretchUp, .raise, .raiseTilt, .cheer, .cheerWide, .stick, .waveLeft, .waveRight, .reach:
             return true
-        case .rest, .swingIn, .swingOut, .crouch, .lap, .typeLeft, .typeRight, .typeDown, .mugLow, .hold:
+        case .rest, .swingIn, .swingOut, .crouch, .lap, .typeLeft, .typeRight, .typeDown, .mugLow, .hold, .fold:
             return false
         }
     }
@@ -681,6 +719,12 @@ enum CharacterParts {
     /// A seated piece whose top-left is (x, y) in frame pixels when the torso sits at `CharacterPoses.seatTorso`.
     private static func seat(_ x: Int, _ y: Int, _ ascii: String) -> Placed {
         Placed(map: PixelMap(ascii), dx: x - CharacterPoses.seatTorso.x, dy: y - CharacterPoses.seatTorso.y)
+    }
+
+    /// A leaning piece whose top-left is (x, y) in frame pixels when the torso sits at the lean origin of `view`.
+    private static func lean(_ view: View, _ x: Int, _ y: Int, _ ascii: String) -> Placed {
+        let origin = view == .front ? CharacterPoses.leanTorsoFront : CharacterPoses.leanTorsoBack
+        return Placed(map: PixelMap(ascii), dx: x - origin.x, dy: y - origin.y)
     }
 
     // Standing (relative to the torso origin).
@@ -1189,6 +1233,36 @@ enum CharacterParts {
         uuuuuutTu...
         uttttttTu...
         uuuuuuuuu...
+        """)
+
+    /// Asleep toward SE: the left upper arm comes down to the forearms folded on the desk, a band under the chin
+    /// (the head, drawn after, lies on it; the right arm is behind the head).
+    static let foldFront = lean(.front, 11, 27, """
+        .uuu.................
+        uttu.................
+        uttu.................
+        utTu.................
+        utTu.................
+        uttTu................
+        .uutuuuuuuuuuuuuuuuu.
+        uttttttttttttttttttTu
+        uTTTTTTTTTTTTTTTTTTTu
+        .uuuuuuuuuuuuuuuuuuu.
+        """)
+
+    /// Asleep toward NE: the arms are folded on the desk, beyond the back; only the elbows stick out on both sides.
+    static let foldBackLeft = lean(.back, 8, 22, """
+        .uuu.
+        uttTu
+        uttTu
+        .uuu.
+        """)
+
+    static let foldBackRight = lean(.back, 26, 21, """
+        .uuu.
+        uttTu
+        uttTu
+        uuuu.
         """)
 
     // Seated, toward NE: from behind the forearms are hidden by the body.

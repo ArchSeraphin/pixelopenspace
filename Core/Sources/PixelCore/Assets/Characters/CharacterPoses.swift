@@ -16,6 +16,9 @@ enum CharacterPoses {
         var head: PixelPoint
         var eyes: Eyes
         var arms: Arms
+        /// Bent over the desk (sleep): `CharacterParts.torsoLean`, and from the back the head, lower than the
+        /// shoulders, is drawn before them.
+        var lean = false
     }
 
     /// Standing: feet on y 53, head from y 5 (49 px, 3.5 heads of 14 px).
@@ -31,6 +34,21 @@ enum CharacterPoses {
     static func seated(_ arms: Arms, dy: Int = 0, headDY: Int = 0, eyes: Eyes = .open) -> Pose {
         Pose(legs: .seated, torso: PixelPoint(seatTorso.x, seatTorso.y + dy),
              head: PixelPoint(seatHead.x, seatHead.y + dy + headDY), eyes: eyes, arms: arms)
+    }
+
+    /// Slumped over the desk (sleep, "avachi" of 7.9): the hips stay on the seat, the torso leans toward the desk
+    /// (+x in both drawn views: down-right toward SE, up-right toward NE), the head lies on the folded arms. The desk
+    /// edge in front of a seat is at the right edge of the frame, at y 37 toward SE and y 21 toward NE (7.3: seat
+    /// 16 px, desk 24 px, half a tile away). From the front the head drops 13 px and moves 8 px toward the desk;
+    /// from the back it moves 7 px toward the desk and 5 px down, its crown showing beyond the hunched shoulders.
+    static let leanTorsoFront = PixelPoint(12, 27), leanHeadFront = PixelPoint(17, 21)
+    static let leanTorsoBack = PixelPoint(10, 19), leanHeadBack = PixelPoint(16, 13)
+
+    /// `breath` lifts the back (and the elbows with it) by that many pixels; the head stays on the arms.
+    static func slumped(_ view: CharacterParts.View, breath: Int = 0) -> Pose {
+        let torso = view == .front ? leanTorsoFront : leanTorsoBack
+        return Pose(legs: .seated, torso: PixelPoint(torso.x, torso.y - breath),
+                    head: view == .front ? leanHeadFront : leanHeadBack, eyes: .closed, arms: .fold, lean: true)
     }
 
     /// The frames of `animation` toward one drawn direction; empty for raiseHand from the back.
@@ -57,7 +75,7 @@ enum CharacterPoses {
         case .coffee:
             return [seated(.mugLow), seated(.mugHigh), seated(.mugHigh, headDY: -1), seated(.mugLow)]
         case .sleep:
-            return [seated(.lap, dy: 1, headDY: 2, eyes: .closed), seated(.lap, dy: 1, headDY: 3, eyes: .closed)]
+            return [slumped(view), slumped(view, breath: 1)]
         case .raiseHand:
             guard view == .front else { return [] }
             return [seated(.raise), seated(.raiseTilt), seated(.raise, headDY: 1), seated(.raiseTilt, headDY: 1)]

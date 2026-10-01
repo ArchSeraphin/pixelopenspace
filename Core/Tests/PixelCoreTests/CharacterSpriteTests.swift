@@ -222,6 +222,59 @@ import Testing
         }
     }
 
+    /// Opaque in one canvas and not in the other.
+    static func silhouetteDifference(_ a: SlotCanvas, _ b: SlotCanvas) -> Int {
+        zip(a.cells, b.cells).filter { ($0 == .clear) != ($1 == .clear) }.count
+    }
+
+    /// Bounds of the hair and of the accessory worn on it (x range, top row); nil when the canvas has none.
+    static func hairBounds(_ canvas: SlotCanvas) -> (minX: Int, maxX: Int, top: Int)? {
+        let hair: Set<Slot> = [.hair, .hairShade, .hairOutline, .accessory, .accessoryShade]
+        var minX = Int.max, maxX = Int.min, top = Int.max
+        for y in 0..<canvas.height {
+            for x in 0..<canvas.width where hair.contains(canvas[x, y]) {
+                minX = min(minX, x)
+                maxX = max(maxX, x)
+                top = min(top, y)
+            }
+        }
+        return minX <= maxX ? (minX, maxX, top) : nil
+    }
+
+    /// 7.9: asleep, the agent is slumped over its desk, the head on its folded arms. At ×1 and without the "zZ" the
+    /// silhouette must not read as sitIdle with closed eyes: many texels differ, and the head leaves the axis of the
+    /// hips toward the desk (+x when drawn, −x for the mirrors), lower than at rest when seen from the front.
+    @Test func sleepIsSlumpedNotSitIdle() throws {
+        let looks = [Self.defaultLook] + CharacterSprites.sampleLooks.map { ResolvedLook($0, projectHue: 2) }
+        for look in looks {
+            for facing in Facing.allCases {
+                for frame in 0..<CharacterAnimation.sleep.framesPerFacing {
+                    let idle = Self.canvas(.sitIdle, facing, frame: frame % CharacterAnimation.sitIdle.framesPerFacing,
+                                           look: look)
+                    let sleep = Self.canvas(.sleep, facing, frame: frame, look: look)
+                    let label = "sleep@\(facing)#\(frame) \(look.variantName)"
+                    let differing = Self.silhouetteDifference(idle, sleep)
+                    #expect(differing >= 160, "\(label): only \(differing) texels differ from sitIdle")
+                    let idleHair = try #require(Self.hairBounds(idle)), sleepHair = try #require(Self.hairBounds(sleep))
+                    let shift = (sleepHair.minX + sleepHair.maxX) - (idleHair.minX + idleHair.maxX)
+                    let towardDesk = facing == .se || facing == .ne ? shift : -shift
+                    #expect(towardDesk >= 2 * 5, "\(label): the head moves \(towardDesk / 2) px toward the desk")
+                    if facing.isTowardViewer {
+                        #expect(sleepHair.top - idleHair.top >= 8,
+                                "\(label): the head is only \(sleepHair.top - idleHair.top) px lower than at rest")
+                    }
+                    // Long hair falls forward with the head, not down the bent back.
+                    let pose = CharacterPoses.slumped(facing.isTowardViewer ? .front : .back)
+                    let chin = pose.head.y + CharacterParts.headSize - 1
+                    let hairBelowChin = (chin..<sleep.height).contains { y in
+                        (0..<sleep.width).contains { [.hair, .hairShade, .hairOutline].contains(sleep[$0, y]) }
+                    }
+                    #expect(!hairBelowChin, "\(label): hair below the chin (row \(chin))")
+                }
+            }
+        }
+    }
+
     @Test func feetOnAnchor() throws {
         for facing in Facing.allCases {
             for index in 0..<2 {
@@ -264,6 +317,44 @@ import Testing
         let short = Self.canvas(.stand, .se, look: ResolvedLook(AgentLook(hairStyle: 0), projectHue: 4))
         let bun = Self.canvas(.stand, .se, look: ResolvedLook(AgentLook(hairStyle: 4), projectHue: 4))
         #expect(short != bun)
+    }
+
+    /// Row A shows every agent from behind. With grey hair (Zéphyr, Lou) a uniform cap closed by its outline read as
+    /// a helmet or a beanie: every haircut now has strands inside the hair (outline texels surrounded by hair), and
+    /// the short cuts (short, bun, buzz cut) leave the ears and the nape bare.
+    @Test func hairFromBehindIsNotACap() {
+        let hair: Set<Slot> = [.hair, .hairShade, .hairOutline], skin: Set<Slot> = [.skin, .skinShade]
+        for style in 0..<CharacterPalette.hairStyleCount {
+            for facing in [Facing.ne, .nw] {
+                let look = ResolvedLook(AgentLook(hairStyle: style, hairColor: 3), projectHue: 4)
+                let canvas = Self.canvas(.sitIdle, facing, look: look)
+                func isHair(_ x: Int, _ y: Int) -> Bool {
+                    x >= 0 && y >= 0 && x < canvas.width && y < canvas.height && hair.contains(canvas[x, y])
+                }
+                var strands = 0
+                for y in 0..<canvas.height {
+                    for x in 0..<canvas.width where canvas[x, y] == .hairOutline
+                        && isHair(x - 1, y) && isHair(x + 1, y) && isHair(x, y - 1) && isHair(x, y + 1) {
+                        strands += 1
+                    }
+                }
+                #expect(strands >= 3, "haircut \(style)@\(facing): \(strands) strands")
+                guard [0, 4, 5].contains(style) else { continue }
+                // Nape: a row of bare skin right under the hair, wider than the neck.
+                let nape = (1..<canvas.height).contains { y in
+                    (0..<canvas.width).filter { skin.contains(canvas[$0, y]) && isHair($0, y - 1) }.count >= 6
+                }
+                #expect(nape, "haircut \(style)@\(facing): no bare nape under the hair")
+                // Ears: skin on both sides of the hair, on the same row.
+                let ears = (0..<canvas.height).contains { y in
+                    let xs = (0..<canvas.width).filter { isHair($0, y) }
+                    guard let left = xs.min(), let right = xs.max() else { return false }
+                    return (0..<left).contains { skin.contains(canvas[$0, y]) }
+                        && ((right + 1)..<canvas.width).contains { skin.contains(canvas[$0, y]) }
+                }
+                #expect(ears, "haircut \(style)@\(facing): no ear beside the hair")
+            }
+        }
     }
 
     @Test func beanieHidesHairRisingAboveTheHead() {

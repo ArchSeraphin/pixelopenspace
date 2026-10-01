@@ -28,9 +28,14 @@ public struct SlotCanvas: Hashable, Sendable {
 
     /// Non-clear cells of `map` overwrite, its top-left at (x, y); clipped to the canvas.
     public mutating func draw(_ map: PixelMap, x: Int, y: Int) {
+        draw(map, x: x, y: y, aboveRow: height)
+    }
+
+    /// `draw`, also clipped to the canvas rows above `limit`.
+    mutating func draw(_ map: PixelMap, x: Int, y: Int, aboveRow limit: Int) {
         for my in 0..<map.height {
             let cy = y + my
-            guard cy >= 0, cy < height else { continue }
+            guard cy >= 0, cy < min(height, limit) else { continue }
             for mx in 0..<map.width {
                 let cx = x + mx
                 guard cx >= 0, cx < width else { continue }
