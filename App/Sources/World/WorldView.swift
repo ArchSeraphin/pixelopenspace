@@ -228,6 +228,14 @@ final class WorldView: SKView {
         return super.performKeyEquivalent(with: event)
     }
 
+    // MARK: Accessibility (7.9)
+
+    /// SpriteKit's view labels itself "SKView" and ignores `setAccessibilityLabel`: the scene's label replaces it
+    /// here (`WorldAccessibility` gives the view its children and its rotor).
+    override func accessibilityLabel() -> String? {
+        WorldHUD.shared.accessibility.viewLabel
+    }
+
     // MARK: Snapshots
 
     /// Shows `image` (pixels of the whole view) over the Metal drawing, which `cacheDisplay` cannot read; returns
