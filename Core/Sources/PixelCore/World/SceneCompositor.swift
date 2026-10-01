@@ -77,9 +77,10 @@ public enum SceneCompositor {
     static func miniOffsets(rowFacesViewer: Bool) -> [PixelPoint] {
         rowFacesViewer ? [PixelPoint(-12, -6), PixelPoint(-2, -11)] : [PixelPoint(-20, 0), PixelPoint(-10, -8)]
     }
-    /// A lamp's light pool (`light.cone`) has its anchor on the lamp's anchor (the foot of the lamp on the desk top)
-    /// and is clipped to the desk top: the iso diamond of this half-width, `IsoMath.deskTopHeight` over the desk
-    /// tile's centre (the top of `desk` spans x −30…29 around it). It never spills on the carpet.
+    /// A lamp's light pool (`light.cone`) has its anchor on the desk-top point under the lamp's base
+    /// (`FurnitureSprites.lightConeOffset`) and is clipped to the desk top: the iso diamond of this half-width,
+    /// `IsoMath.deskTopHeight` over the desk tile's centre (the top of `desk` spans x −30…29 around it). It never
+    /// spills on the carpet.
     static let deskTopHalfWidth = 30
     /// Centre of a screen's glow: in front of the screen (row A, from the screen's anchor), on the agent's side of
     /// the monitor (row B, from the monitor's anchor).
@@ -695,12 +696,13 @@ struct ScenePlanBuilder {
 
         guard options.night else { return }
         if lampLit, let def = SpriteCatalog.sprite(SpriteKey("light.cone")) {
-            // The pool lies on the desk top around the lamp: its anchor on the lamp's, clipped to the top.
-            let origin = PixelPoint(lamp.x - def.anchor.x, lamp.y - def.anchor.y)
+            // The pool lies on the desk top under the lamp's base, clipped to the top.
+            let pool = Self.plus(point, FurnitureSprites.lightConeOffset(facing: gaze))
+            let origin = PixelPoint(pool.x - def.anchor.x, pool.y - def.anchor.y)
             let deskTop = PixelPoint(point.x, point.y - IsoMath.deskTopHeight)
-            let pool = Self.clipped(def.frames[0], at: origin, toDiamondAt: deskTop,
-                                    halfWidth: SceneCompositor.deskTopHalfWidth)
-            put(name: SpriteKey("light.cone").frameName(0), key: SpriteKey("light.cone"), image: pool, origin: origin,
+            let image = Self.clipped(def.frames[0], at: origin, toDiamondAt: deskTop,
+                                     halfWidth: SceneCompositor.deskTopHalfWidth)
+            put(name: SpriteKey("light.cone").frameName(0), key: SpriteKey("light.cone"), image: image, origin: origin,
                 tile: tile, depth: depth, in: .lights)
         }
         if screen != .off {

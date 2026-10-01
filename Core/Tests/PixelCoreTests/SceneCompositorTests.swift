@@ -583,8 +583,8 @@ enum SceneFixtures {
         #expect(x1.overlays.filter { $0.key == HUDSprites.stateKey(.launching) }.count == 1)
     }
 
-    /// The lamp's pool lies on its desk top, around the lamp: the light's anchor on the lamp's, every pixel inside the
-    /// desk-top diamond, none on the carpet.
+    /// The lamp's pool lies on its desk top, under the lamp's base: the light's anchor at `lightConeOffset` from the
+    /// desk's, every pixel inside the desk-top diamond, none on the carpet.
     @Test func lampPoolStaysOnTheDeskTop() {
         let scene = Showcase.islandCasts()[0]
         let crop = Showcase.islandCrop()
@@ -596,10 +596,16 @@ enum SceneFixtures {
             let tile = cone.tile!
             let lamp = plan.world.first { $0.tile == tile && $0.key?.id == "lamp.desk" }!
             let lampDef = SpriteCatalog.sprite(lamp.key!)!
-            #expect(PixelPoint(cone.origin.x + def.anchor.x, cone.origin.y + def.anchor.y)
-                    == PixelPoint(lamp.origin.x + lampDef.anchor.x, lamp.origin.y + lampDef.anchor.y))
+            let facing = lamp.key!.facing!
             let t = SceneCompositor.imagePoint(of: tile, in: crop)
-            let top = PixelPoint(t.x, t.y + 16 - IsoMath.deskTopHeight)
+            let desk = PixelPoint(t.x, t.y + 16)
+            let lampOffset = FurnitureSprites.lampOffset(facing: facing)
+            #expect(PixelPoint(lamp.origin.x + lampDef.anchor.x, lamp.origin.y + lampDef.anchor.y)
+                    == PixelPoint(desk.x + lampOffset.x, desk.y + lampOffset.y))
+            let poolOffset = FurnitureSprites.lightConeOffset(facing: facing)
+            #expect(PixelPoint(cone.origin.x + def.anchor.x, cone.origin.y + def.anchor.y)
+                    == PixelPoint(desk.x + poolOffset.x, desk.y + poolOffset.y))
+            let top = PixelPoint(desk.x, desk.y - IsoMath.deskTopHeight)
             var inside = 0
             for y in 0..<cone.image.height {
                 for x in 0..<cone.image.width where cone.image[x, y].a != 0 {

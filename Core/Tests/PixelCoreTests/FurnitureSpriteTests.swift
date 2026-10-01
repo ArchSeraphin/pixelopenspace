@@ -278,25 +278,9 @@ import Testing
         }
     }
 
-    /// The island rendered by the compositor, its lamp pools moved to `lightConeOffset` from each lit desk.
+    /// The island rendered by the compositor, which places the lamp pools at `lightConeOffset` from each lit desk.
     static func island(_ scene: SceneInput, night: Bool) -> PixelImage {
-        var plan = SceneCompositor.plan(scene, options: RenderOptions(night: night, crop: Showcase.islandCrop()))
-        guard night, let cone = SpriteCatalog.sprite(SpriteKey("light.cone")) else { return SceneCompositor.rasterize(plan) }
-        let lamps = plan.world.filter { $0.key?.id == "lamp.desk" && $0.key?.variant == "on" }
-        var lights = plan.lights.filter { $0.key != SpriteKey("light.cone") }
-        for lamp in lamps {
-            let facing = lamp.key!.facing!
-            let def = DecorSpriteChecks.byKey(Self.items)[lamp.key!]!
-            let anchor = PixelPoint(lamp.origin.x + def.anchor.x, lamp.origin.y + def.anchor.y)
-            let desk = PixelPoint(anchor.x - FurnitureSprites.lampOffset(facing: facing).x,
-                                  anchor.y - FurnitureSprites.lampOffset(facing: facing).y)
-            let at = PixelPoint(desk.x + FurnitureSprites.lightConeOffset(facing: facing).x - cone.anchor.x,
-                                desk.y + FurnitureSprites.lightConeOffset(facing: facing).y - cone.anchor.y)
-            lights.append(ScenePlacement(name: "light.cone", key: cone.key, image: cone.frames[0], origin: at,
-                                         tile: lamp.tile, depth: lamp.depth, sequence: lamp.sequence))
-        }
-        plan.lights = lights
-        return SceneCompositor.rasterize(plan)
+        SceneCompositor.render(scene, options: RenderOptions(night: night, crop: Showcase.islandCrop()))
     }
 
     /// Each facing: the lamp off and on over a desk top, then on at night with its pool (preview only).
