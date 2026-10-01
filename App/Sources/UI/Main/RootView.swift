@@ -25,22 +25,30 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var bindable = workbench
-        VStack(spacing: 0) {
-            StatusBarView()
-            WaitingTrayView()
-            BannerStackView()
-            Divider()
-            GeometryReader { geometry in
-                let maxPanel = max(Self.minimumPanelHeight, Double(geometry.size.height) - Self.minimumBoardHeight)
-                VStack(spacing: 0) {
-                    mainSplit
-                        .taskConfirmation($bindable.pendingTask) { pending in
-                            model.applyTask(pending.input)
+        // The split view is the window's root: its detail column then sits right under the toolbar. Nested below
+        // other views, macOS 26 still reserved the toolbar's height at the top of the detail column and drew its
+        // scroll edge effect there, over the first project header and the board panel's header.
+        NavigationSplitView {
+            ProjectSidebar()
+                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
+        } detail: {
+            VStack(spacing: 0) {
+                StatusBarView()
+                WaitingTrayView()
+                BannerStackView()
+                Divider()
+                GeometryReader { geometry in
+                    let maxPanel = max(Self.minimumPanelHeight, Double(geometry.size.height) - Self.minimumBoardHeight)
+                    VStack(spacing: 0) {
+                        workArea
+                            .taskConfirmation($bindable.pendingTask) { pending in
+                                model.applyTask(pending.input)
+                            }
+                        if showsPanel {
+                            PanelDivider(height: $panelHeight, range: Self.minimumPanelHeight...maxPanel)
+                            TerminalPanelView()
+                                .frame(height: min(max(panelHeight, Self.minimumPanelHeight), maxPanel))
                         }
-                    if showsPanel {
-                        PanelDivider(height: $panelHeight, range: Self.minimumPanelHeight...maxPanel)
-                        TerminalPanelView()
-                            .frame(height: min(max(panelHeight, Self.minimumPanelHeight), maxPanel))
                     }
                 }
             }
@@ -82,25 +90,21 @@ struct RootView: View {
 
     // MARK: - Layout
 
-    private var mainSplit: some View {
-        NavigationSplitView {
-            ProjectSidebar()
-                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
-        } detail: {
-            GeometryReader { geometry in
-                HStack(spacing: 0) {
-                    AgentBoardView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        // Over the agents, never over the board panel: its last cards stay visible.
-                        .overlay(alignment: .bottomTrailing) {
-                            ToastOverlay()
-                        }
-                    if isBoardVisible {
-                        let range = boardWidthRange(available: Double(geometry.size.width))
-                        BoardPanelDivider(width: $boardWidth, range: range)
-                        BoardPanelView()
-                            .frame(width: min(max(boardWidth, range.lowerBound), range.upperBound))
+    /// The agents, and the post-its board panel on their right.
+    private var workArea: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                AgentBoardView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Over the agents, never over the board panel: its last cards stay visible.
+                    .overlay(alignment: .bottomTrailing) {
+                        ToastOverlay()
                     }
+                if isBoardVisible {
+                    let range = boardWidthRange(available: Double(geometry.size.width))
+                    BoardPanelDivider(width: $boardWidth, range: range)
+                    BoardPanelView()
+                        .frame(width: min(max(boardWidth, range.lowerBound), range.upperBound))
                 }
             }
         }
