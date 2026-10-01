@@ -94,16 +94,22 @@ extension AppModel {
 
     // MARK: - Agents
 
-    /// Adds an agent at the first free desk and, with `launch`, starts a new session (proposal 6(n)). `nil`
-    /// arguments take the project's defaults. `initialPrompt` is passed as the positional prompt.
+    /// Adds an agent and, with `launch`, starts a new session (proposal 6(n)). `nil` arguments take the project's
+    /// defaults. `initialPrompt` is passed as the positional prompt. `deskIndex`: that desk of the project (a free
+    /// desk of the scene, 3.9), refused with a toast when an agent sits there already; `nil`, the first free desk.
     @discardableResult
     func addAgent(projectID: ProjectID, name: String? = nil, model: String? = nil,
                   permissionMode: PermissionMode? = nil, worktree: String? = nil, launch: Bool = true,
-                  initialPrompt: String? = nil) -> AgentID? {
+                  initialPrompt: String? = nil, deskIndex: Int? = nil) -> AgentID? {
         var updated = workspace
         guard let id = updated.addAgent(to: projectID, name: name, permissionMode: permissionMode, model: model,
-                                        worktree: worktree, now: Date()) else {
-            showToast("Impossible d'ajouter un agent à ce projet.", style: .error)
+                                        worktree: worktree, deskIndex: deskIndex, now: Date()) else {
+            if let deskIndex, workspace.liveProject(projectID) != nil,
+               workspace.agents(in: projectID).contains(where: { $0.deskIndex == deskIndex }) {
+                showToast("Ce poste n'est plus libre : choisis-en un autre.", style: .warning)
+            } else {
+                showToast("Impossible d'ajouter un agent à ce projet.", style: .error)
+            }
             return nil
         }
         commit(updated)

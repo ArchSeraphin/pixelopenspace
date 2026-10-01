@@ -8,6 +8,9 @@ import SwiftUI
 struct WorldViewRepresentable: NSViewRepresentable {
     let stage: WorldStage
 
+    @Environment(AppModel.self) private var model
+    @Environment(WorkbenchState.self) private var workbench
+
     func makeNSView(context: Context) -> WorldView {
         let view = WorldView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         let scene = WorldScene(size: view.bounds.size)
@@ -15,6 +18,8 @@ struct WorldViewRepresentable: NSViewRepresentable {
         view.isCaptureMode = SnapshotHooks.shared.isEnabled
         view.presentScene(scene)
         stage.attach(view: view, scene: scene)
+        // Mouse, trackpad and keyboard (task 9): their intents need the model and the workbench.
+        view.connectInput(model: model, workbench: workbench)
         return view
     }
 
