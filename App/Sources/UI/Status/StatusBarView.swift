@@ -1,27 +1,37 @@
 import PixelCore
 import SwiftUI
 
-/// Counters per state (mockup 6(b)): symbol + number + words, most urgent first; states with no agent are hidden.
-/// Clicking a counter filters the board on that state (clicking it again removes the filter).
+/// Counters per state (mockups 6(a), 6(b)): symbol + number + words, most urgent first; states with no agent are
+/// hidden. In the open space, clicking a counter flies the camera to the next agent in that state (décision 13); in
+/// the list view, it filters the board on that state (clicking it again removes the filter). On the right, in the
+/// open space, the zoom (décision 12).
 struct StatusBarView: View {
     @Environment(AppModel.self) private var model
     @Environment(WorkbenchState.self) private var workbench
 
     var body: some View {
         let summary = model.liveStatusSummary
+        let inScene = workbench.mainView == .scene
         HStack(spacing: 6) {
             if summary.visibleKinds.isEmpty {
                 Text("Aucun agent")
                     .foregroundStyle(.secondary)
-            }
-            ForEach(summary.visibleKinds, id: \.self) { kind in
-                StatusCounterButton(kind: kind, text: summary.text(for: kind) ?? "",
-                                    isActive: workbench.stateFilter == kind) {
-                    workbench.toggleFilter(kind)
+            } else {
+                // The words when they fit on one line, else the numbers (6(q)); the waiting counter keeps its words.
+                ViewThatFits(in: .horizontal) {
+                    counters(summary, inScene: inScene, compact: false)
+                    counters(summary, inScene: inScene, compact: true)
                 }
             }
             Spacer(minLength: 8)
+            if inScene, let camera = WorldHUD.shared.stage?.camera {
+                ZoomControl(camera: camera)
+                    .fixedSize()
+                Divider()
+                    .frame(height: 14)
+            }
             HookHealthIndicator()
+                .fixedSize()
         }
         .font(.callout)
         .padding(.horizontal, 12)
@@ -31,19 +41,49 @@ struct StatusBarView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Barre d'état des agents")
     }
+
+    /// One button per state with agents; `compact`: the number alone (the words stay in the tooltip and for
+    /// VoiceOver), except for the waiting agents.
+    private func counters(_ summary: StatusSummary, inScene: Bool, compact: Bool) -> some View {
+        HStack(spacing: 6) {
+            ForEach(summary.visibleKinds, id: \.self) { kind in
+                let text = summary.text(for: kind) ?? ""
+                StatusCounterButton(kind: kind, text: text,
+                                    shown: compact && kind != .waitingInput ? "\(summary.count(of: kind))" : text,
+                                    flies: inScene, isActive: !inScene && workbench.stateFilter == kind) {
+                    counterClicked(kind)
+                }
+            }
+        }
+    }
+
+    /// Open space: the next agent in that state (`WorldFlights`); list view: the board's filter.
+    private func counterClicked(_ kind: AgentStateKind) {
+        if workbench.mainView == .scene, let stage = workbench.worldStage {
+            WorldFlights.flyToNext(kind, model: model, stage: stage)
+        } else {
+            workbench.toggleFilter(kind)
+        }
+    }
 }
 
 private struct StatusCounterButton: View {
     let kind: AgentStateKind
+    /// "2 réfléchissent": the tooltip and VoiceOver.
     let text: String
+    /// On the button: `text`, or the number alone when the bar is short of room.
+    let shown: String
+    /// Open space: a click flies the camera (no filter there).
+    let flies: Bool
     let isActive: Bool
     let action: @MainActor () -> Void
 
     var body: some View {
         Button(action: action) {
             Label {
-                Text(text)
+                Text(shown)
                     .monospacedDigit()
+                    .lineLimit(1)
             } icon: {
                 Image(systemName: StateStyle.symbolName(for: kind))
                     .foregroundStyle(StateStyle.tint(for: kind))
@@ -58,10 +98,20 @@ private struct StatusCounterButton: View {
             )
         }
         .buttonStyle(.plain)
-        .help(isActive ? "Afficher tous les agents" : "N'afficher que ces agents")
+        .help(helpText)
         .accessibilityLabel(text)
-        .accessibilityHint(isActive ? "Retire le filtre" : "Filtre les agents sur cet état")
+        .accessibilityHint(hint)
         .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private var helpText: String {
+        if flies { return "\(text) : aller voir le prochain agent dans cet état" }
+        return "\(text) : " + (isActive ? "afficher tous les agents" : "n'afficher que ces agents")
+    }
+
+    private var hint: String {
+        if flies { return "Fait voler la caméra vers le prochain agent dans cet état" }
+        return isActive ? "Retire le filtre" : "Filtre les agents sur cet état"
     }
 }
 

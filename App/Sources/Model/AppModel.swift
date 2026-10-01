@@ -99,6 +99,11 @@ final class AppModel {
     @ObservationIgnored var pendingContinuations: [AgentID: TaskCardID] = [:]
     /// When `relaunchProbe` was last read.
     @ObservationIgnored var relaunchProbedAt: Date?
+    /// VoiceOver announcements of the agents (7.9): an agent that starts waiting or falls into an error joins the
+    /// open batch, posted as one sentence, waits first, `AnnouncementBatcher.window` seconds after it opened.
+    @ObservationIgnored var announcementBatcher = AnnouncementBatcher()
+    /// The batcher's clock: seconds since this instant (continuous, as `Task.sleep`).
+    @ObservationIgnored let announcementEpoch = ContinuousClock.now
 
     static let toastLifetime: TimeInterval = 6
     static let maxToasts = 4
@@ -367,11 +372,34 @@ final class AppModel {
         DockBadge.update(waiting: count)
     }
 
-    /// VoiceOver announcement (effect `announce`).
+    /// Posts a VoiceOver announcement now (the batched sentence of `queueAnnouncement`).
     func announce(_ text: String) {
         NSAccessibility.post(element: NSApplication.shared, notification: .announcementRequested,
                              userInfo: [.announcement: text,
                                         .priority: NSAccessibilityPriorityLevel.high.rawValue])
+    }
+
+    /// An agent starts waiting (effect `announce`) or falls into an error: it joins the open batch of announcements,
+    /// or opens one, posted `AnnouncementBatcher.window` seconds later as one sentence ("3 agents attendent ta
+    /// réponse ; Zéphyr est en erreur"), so that with 20 agents VoiceOver is not drowned (7.9).
+    func queueAnnouncement(_ kind: AnnouncementKind, for agentID: AgentID) {
+        let name = names(of: agentID).agent
+        guard let due = announcementBatcher.add(kind, agentName: name, time: announcementTime()) else { return }
+        let deadline = announcementEpoch + .seconds(due)
+        Task { [weak self] in
+            // Never cancelled: the batch opened here is flushed only here.
+            try? await Task.sleep(until: deadline, clock: .continuous)
+            guard let self else { return }
+            if let text = self.announcementBatcher.flush(time: max(due, self.announcementTime())) {
+                self.announce(text)
+            }
+        }
+    }
+
+    /// Seconds since `announcementEpoch`.
+    private func announcementTime() -> Double {
+        let elapsed = (ContinuousClock.now - announcementEpoch).components
+        return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
     }
 
     /// "Nova" / "API" for texts, with fallbacks.

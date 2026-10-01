@@ -16,6 +16,10 @@ extension AppModel {
         for effect in effects {
             perform(effect, for: agentID)
         }
+        // VoiceOver hears an agent that falls into an error, with the waits of the same 2 s (7.9).
+        if previous.kind != .error, next.kind == .error {
+            queueAnnouncement(.error, for: agentID)
+        }
         if !previous.pendingWaits.isEmpty, next.pendingWaits.isEmpty {
             notifications.withdraw(agentID: agentID, kinds: [.waiting])
         }
@@ -55,8 +59,10 @@ extension AppModel {
             if isNew { notifications.postGlobal(issue) }
         case .clearGlobalIssue(let kind):
             clearGlobalIssueIfResolved(kind)
-        case .announce(let text):
-            announce("\(names(of: agentID).agent) \(text)")
+        case .announce:
+            // The reducer announces only an agent that starts waiting ("attend ta réponse"): the batcher words it
+            // with the other announcements of its 2 s.
+            queueAnnouncement(.waiting, for: agentID)
         case .resampleScreen(let delay):
             scheduleScreenSample(agentID, after: delay)
         case .reconcile:

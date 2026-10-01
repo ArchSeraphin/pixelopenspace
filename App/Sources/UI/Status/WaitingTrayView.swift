@@ -3,8 +3,9 @@ import SwiftUI
 
 /// Waiting tray (proposal 3.9, "qui attend quoi en moins de 3 s"): one row per waiting agent, oldest wait first,
 /// `agent · projet · raison · depuis`. Shown as long as at least one agent waits. Clicking a row selects the
-/// agent and opens its window (`AgentWindowController`), which acknowledges the wait; the answer is given from
-/// there, by its "Ouvrir le terminal ⌘T".
+/// agent, flies the camera to it in the open space (the list shows its card instead), and opens its window
+/// (`AgentWindowController`), which acknowledges the wait; the answer is given from there, by its "Ouvrir le
+/// terminal ⌘T".
 struct WaitingTrayView: View {
     static let visibleRows = 4
 
@@ -63,9 +64,14 @@ struct WaitingTrayView: View {
         }
     }
 
-    /// Selects the agent (and shows it in the list) and opens its window.
+    /// Open space: selects the agent and flies the camera to it, then opens its window; list view: selects it,
+    /// scrolls to its card and opens its window.
     private func openWindow(of agentID: AgentID) {
-        workbench.reveal(agentID)
+        if workbench.mainView == .scene, let stage = workbench.worldStage {
+            WorldFlights.fly(to: agentID, model: model, stage: stage)
+        } else {
+            workbench.reveal(agentID)
+        }
         AgentWindowController.shared.show(agentID, model: model, workbench: workbench)
     }
 }
