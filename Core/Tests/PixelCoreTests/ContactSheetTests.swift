@@ -210,15 +210,79 @@ import Testing
             #expect(colors.contains(derived), "\(derived.hexString)")
         }
         #expect(colors.isSuperset(of: Palette.keyColors), "key colours, marked never in a sprite")
-        // Shadow and light pool on floorLight, with the compositor's own arithmetic.
-        let floor = Palette.color(.floorLight)
+        // Shadow on floorLight; the lamp's pool as the scenes draw it (the solid middle of `light.cone`, added at
+        // 35 % on the desk top), by day and under the veil, with the compositor's own arithmetic.
+        let floor = Palette.color(.floorLight), deskTop = ContactSheet.poolGround
+        #expect(deskTop == Palette.color(.woodLight))
+        let cone = SpriteCatalog.sprite(SpriteKey("light.cone"))!
+        let warm = cone.frames[0][cone.anchor.x, cone.anchor.y]
+        #expect(warm == Palette.color(.alertOrange))
         var shadow = PixelImage(width: 1, height: 1, fill: floor)
         shadow.composite(PixelImage(width: 1, height: 1, fill: Palette.color(.ink)), alpha: Palette.shadowAlpha)
-        var pool = PixelImage(width: 1, height: 1, fill: floor)
-        pool.add(PixelImage(width: 1, height: 1, fill: Palette.color(.lampWarm)), alpha: Palette.lightPoolAlpha)
-        var veil = PixelImage(width: 1, height: 1, fill: floor)
+        var pool = PixelImage(width: 1, height: 1, fill: deskTop)
+        pool.add(PixelImage(width: 1, height: 1, fill: warm), alpha: Palette.lightPoolAlpha)
+        var veil = PixelImage(width: 1, height: 1, fill: deskTop)
         veil.multiply(by: Palette.nightVeil, alpha: Palette.nightVeilAlpha)
-        #expect(colors.contains(shadow[0, 0]) && colors.contains(pool[0, 0]) && colors.contains(veil[0, 0]))
+        var nightPool = veil
+        nightPool.add(PixelImage(width: 1, height: 1, fill: warm), alpha: Palette.lightPoolAlpha)
+        for sample in [shadow, pool, veil, nightPool] {
+            #expect(colors.contains(sample[0, 0]), "\(sample[0, 0].hexString)")
+        }
+        // The pool stays warm under the veil: more red than blue (lampWarm turned grey mauve).
+        #expect(nightPool[0, 0].r > nightPool[0, 0].b + 40)
+    }
+
+    /// Light sprites go on a dark checkerboard (slate / shade): on paper / mist the floor markings, the stars, the
+    /// dust and the dropped pin all but vanished on the first render.
+    @Test func lightSpritesSitOnADarkCheckerboard() {
+        func frames(_ key: SpriteKey) -> [PixelImage] { SpriteCatalog.sprite(key)!.frames }
+        let light = [SpriteKey("floor.dropTarget"), SpriteKey("floor.hover"), SpriteKey("fx.star", variant: "small"),
+                     SpriteKey("fx.star", variant: "big"), SpriteKey("fx.dust"), SpriteKey("fx.pinDrop"),
+                     SpriteKey("floor.hall", variant: "n0"), SpriteKey("floor.corridor", variant: "n0"),
+                     SpriteKey("desk.postit", variant: "paper"), SpriteKey("minimap.dot.idle")]
+        for key in light { #expect(ContactSheet.needsDarkChecker(frames(key)), "\(key.name)") }
+        // Outlined in ink or drawn in saturated colours: they read on the light checkerboard and stay there.
+        let kept = [SpriteKey("ov.bang"), SpriteKey("ov.bang.halo"), SpriteKey("ov.tool.edit"), SpriteKey("ov.selection"),
+                    SpriteKey("floor.carpet", variant: "hue1.plain"), SpriteKey("floor.carpet", variant: "hue2.plain"),
+                    SpriteKey("desk.postit", variant: "hue1"), SpriteKey("desk", variant: "light", facing: .ne),
+                    SpriteKey("shadow.tile"), SpriteKey("light.cone"), SpriteKey("fx.ding")]
+        for key in kept { #expect(!ContactSheet.needsDarkChecker(frames(key)), "\(key.name)") }
+        #expect(!ContactSheet.needsDarkChecker([PixelImage(width: 4, height: 4)]), "nothing opaque")
+
+        // On the pages, every frame sits on the checkerboard its sprite asks for: the tile's top-left square, one
+        // texel up and left of the frame, is slate on the dark one and paper on the light one.
+        let pad = ContactSheet.Layout.framePad
+        var dark = 0
+        for sheet in [ContactSheet.Sheet.floorsWalls, .furnitureDecor, .screensOverlays, .hudText, .character, .looks] {
+            let page = Self.page(sheet)
+            for cell in page.cells {
+                let shown = Self.catalogFrames(cell) ?? []
+                let expected = ContactSheet.needsDarkChecker(shown) ? Palette.color(.slate) : Palette.color(.paper)
+                if expected == Palette.color(.slate) { dark += 1 }
+                for rect in cell.frames {
+                    #expect(page.image[rect.x - pad, rect.y - pad] == expected, "\(sheet) \(cell.key.name)")
+                }
+            }
+        }
+        #expect(dark >= light.count, "\(dark) cells on the dark checkerboard")
+
+        // And there they stand out: their opaque pixels are farther, in luma, from the dark squares than from the
+        // light ones.
+        func distance(_ frames: [PixelImage], _ squares: [RGBA8]) -> Double {
+            var sum = 0.0, count = 0
+            for frame in frames {
+                for p in frame.pixels where p.a != 0 {
+                    sum += squares.map { abs(Double(p.luma) - Double($0.luma)) }.min()!
+                    count += 1
+                }
+            }
+            return sum / Double(count)
+        }
+        let lightSquares = [Palette.color(.paper), Palette.color(.mist)]
+        let darkSquares = [Palette.color(.slate), Palette.color(.shade)]
+        for key in light {
+            #expect(distance(frames(key), darkSquares) > 2 * distance(frames(key), lightSquares), "\(key.name)")
+        }
     }
 
     @Test func fontSpecimenCoversEveryGlyphAndName() {

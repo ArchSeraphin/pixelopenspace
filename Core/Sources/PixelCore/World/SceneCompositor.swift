@@ -11,7 +11,7 @@ import Foundation
 /// 4. the world sorted back to front by `IsoMath.depth`, then by insertion order: hall props, island signs (×2 in
 ///    the overview) and plants, and every post (chair, avatar, desk, monitor, screen, desk items, subagent minis);
 /// 5. at night: the veil (multiply) over all of the above, then the additive lights (lamp pools on the desk tops,
-///    screen glows, stars);
+///    screen glows around their monitors, stars);
 /// 6. overlays, never veiled: state overlays, the "démarre" sign of a starting agent, tool bubbles, badges, queue
 ///    badges, name plates, the "+n" of the cork wall. The overview keeps only the urgent signs: the XL "!" of a
 ///    wait, the storm of an error and those agents' name plates (décision 2 of the first render).
@@ -44,6 +44,16 @@ public enum SceneCompositor {
     static func overlayLift(_ p: AgentPresentation, row: IslandRow) -> Int {
         if p.animation == .raiseHand || row == .b { return 54 }
         return p.animation == .stand ? 50 : 48
+    }
+    /// Where the head of a sleeping agent lies, from where it is when seated (`CharacterPoses.slumped`): toward the
+    /// desk and lower, 8 px aside and 13 px down from the front (SE), 7 px aside and 5 px down from the back (NE),
+    /// mirrored toward SW and NW. The overlay ("zZ") follows it, so that it does not float over the empty place of a
+    /// seated head. Zero for every other animation.
+    static func headShift(_ p: AgentPresentation, facing: Facing) -> PixelPoint {
+        guard p.animation == .sleep else { return PixelPoint(0, 0) }
+        let lying = facing.isTowardViewer ? CharacterPoses.leanHeadFront : CharacterPoses.leanHeadBack
+        let dx = lying.x - CharacterPoses.seatHead.x, dy = lying.y - CharacterPoses.seatHead.y
+        return PixelPoint(facing == .se || facing == .ne ? dx : -dx, dy)
     }
     /// Centre of the "!" glyph above the overlay anchor, where the halo is centred (normal, XL).
     static let haloLift = (normal: 12, xl: 24)
@@ -688,9 +698,12 @@ struct ScenePlanBuilder {
                                              Self.plus(point, FurnitureSprites.queueOffset(facing: gaze)))]))
         }
         let depth = Self.depth(tile, .screen)
+        // items[0] is the monitor (with its screen or LED and its post-it): what the screen's glow leaves dark.
+        var monitorParts: [ScenePlacement] = []
         for index in SceneryKit.paintersOrder(items.map(\.box)) {
             for sprite in items[index].sprites {
-                put(sprite.key, at: sprite.point, tile: tile, depth: depth, in: .world)
+                guard put(sprite.key, at: sprite.point, tile: tile, depth: depth, in: .world) != nil else { continue }
+                if index == 0, let placed = plan.world.last { monitorParts.append(placed) }
             }
         }
 
@@ -705,9 +718,26 @@ struct ScenePlanBuilder {
             put(name: SpriteKey("light.cone").frameName(0), key: SpriteKey("light.cone"), image: image, origin: origin,
                 tile: tile, depth: depth, in: .lights)
         }
-        if screen != .off {
-            put(SpriteKey("light.screenGlow"), at: glow, tile: tile, depth: depth, in: .lights)
+        if screen != .off, let def = SpriteCatalog.sprite(SpriteKey("light.screenGlow")) {
+            // The glow lights the desk around the monitor, never the monitor itself: from behind (row B) the lit
+            // back read as glass, from the front the screen's own colours shifted.
+            let origin = PixelPoint(glow.x - def.anchor.x, glow.y - def.anchor.y)
+            let image = Self.clipped(def.frames[0], at: origin, outside: monitorParts)
+            put(name: SpriteKey("light.screenGlow").frameName(0), key: SpriteKey("light.screenGlow"), image: image,
+                origin: origin, tile: tile, depth: depth, in: .lights)
         }
+    }
+
+    /// `image` placed at `origin`, without its pixels where one of `placements` is opaque.
+    static func clipped(_ image: PixelImage, at origin: PixelPoint, outside placements: [ScenePlacement]) -> PixelImage {
+        var out = image
+        for y in 0..<image.height {
+            for x in 0..<image.width where image[x, y].a != 0 {
+                let (cx, cy) = (origin.x + x, origin.y + y)
+                if placements.contains(where: { $0.pixel(atCanvasX: cx, cy) != nil }) { out[x, y] = .clear }
+            }
+        }
+        return out
     }
 
     /// `image` placed at `origin`, keeping only its pixels inside the iso diamond centred on `center` (2:1, the
@@ -742,7 +772,8 @@ struct ScenePlanBuilder {
         let seat = desk.seatTile
         let depth = Self.depth(seat, .overlay)
         let c = center(seat)
-        let head = PixelPoint(c.x, c.y - SceneCompositor.overlayLift(p, row: desk.row))
+        let shift = SceneCompositor.headShift(p, facing: Self.avatarFacing(p, gaze: desk.facing))
+        let head = PixelPoint(c.x + shift.x, c.y - SceneCompositor.overlayLift(p, row: desk.row) + shift.y)
         var right = head.x
         if let overlay = p.overlay {
             if overlay == .bang && p.halo {

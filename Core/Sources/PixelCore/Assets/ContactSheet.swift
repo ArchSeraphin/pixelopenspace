@@ -2,7 +2,9 @@ import Foundation
 
 /// The contact sheets of the visual milestone (section 8, 7.5): the palette, every v0 sprite of the catalog with its
 /// key, size and cadence, the pixel font and the labels, the full sheet of the default character and the sample
-/// looks. Each frame sits on a light checkerboard (paper / mist, 4×4 texels) that shows its transparency.
+/// looks. Each frame sits on a checkerboard of 4×4 texels that shows its transparency: paper / mist, or slate / shade
+/// under a light sprite (`needsDarkChecker`: the floor markings, the stars, the dust, the paper post-its), which would
+/// all but vanish on the light one.
 ///
 /// A page is composed at 1 pixel per texel, then scaled by a whole factor at the very end: `page(s, scale: k)` is
 /// exactly `page(s, scale: 1)` upscaled to the nearest neighbour, and its cells keep their texel rects. Pure and
@@ -149,8 +151,37 @@ public enum ContactSheet {
         static let detail = Palette.color(.slate)
         static let mirror = Palette.color(.uiTitle)
         static let warning = Palette.color(.errorRed)
-        static let checkerLight = Palette.color(.paper)
-        static let checkerDark = Palette.color(.mist)
+        /// The checkerboard of every frame, paper in the top-left corner.
+        static let lightChecker = Checker(first: Palette.color(.paper), second: Palette.color(.mist))
+        /// The checkerboard of a light sprite (`needsDarkChecker`), slate in the top-left corner.
+        static let darkChecker = Checker(first: Palette.color(.slate), second: Palette.color(.shade))
+    }
+
+    /// The two squares of a checkerboard, `first` in its top-left corner.
+    struct Checker: Equatable, Sendable {
+        var first: RGBA8
+        var second: RGBA8
+    }
+
+    /// The pale neutrals of the palette: the page (chalk), the light checkerboard (paper, mist) and the greys close
+    /// to them (floorLight, floorDark, uiFace).
+    static let paleNeutrals: Set<RGBA8> = Set([PaletteRole.chalk, .paper, .mist, .floorLight, .floorDark, .uiFace]
+        .map(Palette.color))
+
+    /// Whether a sprite goes on the dark checkerboard: at least two thirds of the opaque pixels of its frames are pale
+    /// neutrals, so that it would all but vanish on paper / mist (decided per sprite, all its frames on the same
+    /// checkerboard). True for `floor.dropTarget`, `floor.hover`, `fx.star`, `fx.dust` and `fx.pinDrop`, and for
+    /// the hall and corridor floors, the paper post-its and the idle minimap dot; false for anything outlined in ink
+    /// or drawn in saturated colours (a tool bubble, the "!", the carpets). False with no opaque pixel.
+    static func needsDarkChecker(_ frames: [PixelImage]) -> Bool {
+        var opaque = 0, pale = 0
+        for frame in frames {
+            for pixel in frame.pixels where pixel.a != 0 {
+                opaque += 1
+                if paleNeutrals.contains(pixel) { pale += 1 }
+            }
+        }
+        return opaque > 0 && 3 * pale >= 2 * opaque
     }
 
     /// An image placed in a block.
@@ -276,11 +307,11 @@ public enum ContactSheet {
         return .column([.column([heading, rule], spacing: 2), notes, body], spacing: 6)
     }
 
-    /// paper / mist squares of `Layout.checkerSize` texels, paper in the top-left corner.
-    static func checkerboard(width: Int, height: Int) -> PixelImage {
+    /// Squares of `Layout.checkerSize` texels, `checker.first` in the top-left corner.
+    static func checkerboard(width: Int, height: Int, _ checker: Checker = Ink.lightChecker) -> PixelImage {
         let size = Layout.checkerSize
         let rows = [0, 1].map { phase in
-            (0..<width).map { (($0 / size + phase) % 2 == 0) ? Ink.checkerLight : Ink.checkerDark }
+            (0..<width).map { (($0 / size + phase) % 2 == 0) ? checker.first : checker.second }
         }
         var pixels: [RGBA8] = []
         pixels.reserveCapacity(width * height)
@@ -288,7 +319,8 @@ public enum ContactSheet {
         return PixelImage(width: width, height: height, pixels: pixels)
     }
 
-    /// Each frame on its own checkerboard tile, the tiles side by side; one cell per entry.
+    /// Each frame on its own checkerboard tile, the tiles side by side; one cell per entry. The frames of an entry
+    /// share one checkerboard: the dark one when they are light (`needsDarkChecker`).
     static func frames(_ entries: [(key: SpriteKey?, frames: [PixelImage])]) -> Block {
         let pad = Layout.framePad
         var x = 0
@@ -296,8 +328,9 @@ public enum ContactSheet {
         var cells: [Cell] = []
         for entry in entries {
             var rects: [PixelRect] = []
+            let checker = needsDarkChecker(entry.frames) ? Ink.darkChecker : Ink.lightChecker
             for frame in entry.frames {
-                var tile = checkerboard(width: frame.width + 2 * pad, height: frame.height + 2 * pad)
+                var tile = checkerboard(width: frame.width + 2 * pad, height: frame.height + 2 * pad, checker)
                 tile.blit(frame, x: pad, y: pad)
                 items.append((Block(image: tile), PixelPoint(x, 0)))
                 rects.append(PixelRect(x: x + pad, y: pad, width: frame.width, height: frame.height))
@@ -627,12 +660,16 @@ public enum ContactSheet {
         return .column([rolesSection, huesSection, light, derivedSection], spacing: Layout.sectionSpacing)
     }
 
-    /// Shadow, light pool and night veil on floorLight, with the compositor's own arithmetic.
+    /// Where the lamp pool lies in the scenes: on the desk top (`desk~light`), never on the floor.
+    static let poolGround = Palette.color(.woodLight)
+
+    /// Shadows on floorLight, then the lamp's pool (`light.cone`, as the compositor adds it) on the desk top, by day
+    /// and under the night veil, with the compositor's own arithmetic.
     static func lightSamples() -> Block {
-        let floor = Palette.color(.floorLight), ink = Palette.color(.ink), lamp = Palette.color(.lampWarm)
+        let floor = Palette.color(.floorLight), ink = Palette.color(.ink)
         let (width, height) = (64, 32)
-        func panel(_ build: (inout PixelImage) -> Void) -> PixelImage {
-            var image = PixelImage(width: width, height: height, fill: floor)
+        func panel(_ ground: RGBA8, _ build: (inout PixelImage) -> Void) -> PixelImage {
+            var image = PixelImage(width: width, height: height, fill: ground)
             build(&image)
             return image
         }
@@ -642,20 +679,25 @@ public enum ContactSheet {
             return image
         }
         let first = PixelRect(x: 8, y: 6, width: 28, height: 14), second = PixelRect(x: 26, y: 12, width: 28, height: 14)
-        let pool = PixelRect(x: 16, y: 8, width: 32, height: 16)
-        let shadow = panel { $0.composite(layer([first, second], ink), alpha: Palette.shadowAlpha) }
-        let lit = panel { $0.add(layer([pool], lamp), alpha: Palette.lightPoolAlpha) }
+        // The pool sprite centred on the panel: its solid middle on the centre pixel, its checkered ring around.
+        var pool = PixelImage(width: width, height: height)
+        if let cone = SpriteCatalog.sprite(SpriteKey("light.cone")) {
+            pool.blit(cone.frames[0], x: width / 2 - cone.anchor.x, y: height / 2 - cone.anchor.y)
+        }
+        let shadow = panel(floor) { $0.composite(layer([first, second], ink), alpha: Palette.shadowAlpha) }
+        let lit = panel(poolGround) { $0.add(pool, alpha: Palette.lightPoolAlpha) }
         func night(_ alpha: UInt8) -> PixelImage {
-            panel {
+            panel(poolGround) {
                 $0.multiply(by: Palette.nightVeil, alpha: alpha)
-                $0.add(layer([pool], lamp), alpha: Palette.lightPoolAlpha)
+                $0.add(pool, alpha: Palette.lightPoolAlpha)
             }
         }
         let nightFull = night(Palette.nightVeilAlpha), nightReduced = night(Palette.nightVeilAlphaReduced)
         let samples: [(PixelImage, [String])] = [
             (shadow, ["Ombre : ink à 30 %, une seule fois", "(deux ombres qui se chevauchent)",
                       shadow[10, 8].hexString]),
-            (lit, ["Flaque : lampWarm à 35 %, additive", lit[width / 2, height / 2].hexString]),
+            (lit, ["Flaque light.cone : alertOrange", "à 35 %, additive, sur le plateau",
+                   "(woodLight) " + lit[width / 2, height / 2].hexString]),
             (nightFull, ["Nuit : voile nightVeil à 55 %", "et flaque d'une lampe",
                          "\(nightFull[2, 2].hexString) / \(nightFull[width / 2, height / 2].hexString)"]),
             (nightReduced, ["Voile réduit à 35 %", "(Réduire la transparence)",
@@ -664,7 +706,7 @@ public enum ContactSheet {
         let blocks = samples.map { image, label in
             Block.column([Block(image: bordered(image)), lines(label, Ink.detail)], spacing: 2)
         }
-        return section("Ombre, flaque de lumière et voile de nuit sur floorLight",
+        return section("Ombre sur floorLight, flaque d'une lampe et voile de nuit sur le plateau",
                        .row(blocks, spacing: 2 * Layout.groupSpacing))
     }
 
@@ -674,8 +716,8 @@ public enum ContactSheet {
     static func framed(_ body: Block, title: String) -> (image: PixelImage, cells: [Cell]) {
         let margin = Layout.margin
         let heading = text(title, Ink.titleText, size: 2)
-        let subtitle = text("Pixel Open Space · jalon visuel · sprites v0 générés par le code, aucune image "
-                            + "externe · damier paper / mist = transparence", Ink.detail)
+        let subtitle = text("Pixel Open Space · jalon visuel · sprites v0 générés par le code, aucune image externe · "
+                            + "damier paper / mist = transparence (slate / shade sous un sprite clair)", Ink.detail)
         let width = max(body.width, heading.width, subtitle.width) + 2 * margin
         let bandHeight = heading.height + 2 * 5
         let content = Block.placed([

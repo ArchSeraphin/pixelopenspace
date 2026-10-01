@@ -95,7 +95,7 @@ public enum Palette {
 
     /// Cast shadows: ink at 30 %, applied once to the whole shadow layer (7.3, rule 4).
     public static let shadowAlpha: UInt8 = 77
-    /// Night light pools: lampWarm at 35 %, additive.
+    /// Night lights (the lamp pool `light.cone`, in alertOrange, the screen glows, the stars): 35 %, additive.
     public static let lightPoolAlpha: UInt8 = 89
     /// Night veil (multiply), 0.55.
     public static let nightVeilAlpha: UInt8 = 140

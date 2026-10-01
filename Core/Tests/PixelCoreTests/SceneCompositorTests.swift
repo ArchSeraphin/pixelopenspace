@@ -512,9 +512,85 @@ enum SceneFixtures {
                 } else {
                     #expect(gap >= 1, "\(agent.name): \(gap) px over the head")
                 }
-                // Anchored straight over the seat (the "zZ" rises to the right of its anchor by design).
+                // Anchored straight over the seat, or over the head of a sleeper, lying on the desk (the "zZ" rises
+                // to the right of its anchor by design).
                 let seatX = SceneCompositor.imagePoint(of: desk.seatTile, in: Showcase.islandCrop()).x
-                #expect(sign.origin.x + SpriteCatalog.sprite(key)!.anchor.x == seatX, "\(agent.name)")
+                let shift = SceneCompositor.headShift(agent.presentation, facing: desk.facing).x
+                #expect(sign.origin.x + SpriteCatalog.sprite(key)!.anchor.x == seatX + shift, "\(agent.name)")
+            }
+        }
+    }
+
+    /// A sleeper lies on the desk: the "zZ" follows the head down and toward the desk, in both rows, as close over it
+    /// as the overlay of a seated agent of that row, instead of floating where a seated head would be.
+    @Test func sleeperOverlayFollowsTheHead() {
+        // The pose data behind the shift: toward the desk and lower, mirrored for the mirrored facings.
+        let asleep = AgentPresentation(kind: .idle, asleep: true, animation: .sleep, overlay: .zzz)
+        #expect(SceneCompositor.headShift(asleep, facing: .se) == PixelPoint(8, 13))
+        #expect(SceneCompositor.headShift(asleep, facing: .sw) == PixelPoint(-8, 13))
+        #expect(SceneCompositor.headShift(asleep, facing: .ne) == PixelPoint(7, 5))
+        #expect(SceneCompositor.headShift(asleep, facing: .nw) == PixelPoint(-7, 5))
+        let awake = AgentPresentation(kind: .idle, animation: .sitIdle)
+        #expect(Facing.allCases.allSatisfy { SceneCompositor.headShift(awake, facing: $0) == PixelPoint(0, 0) })
+
+        // Tao (row B) in the first cast, and Lune (row A) put to sleep.
+        var cast = Showcase.islandCasts()[0]
+        let luneID = SceneFixtures.agentID(named: "Lune", in: cast)!
+        cast.agents[luneID]!.presentation = AgentPresenter.scene(
+            AgentRuntime(phase: .idle, phaseSince: Showcase.now - 3_600), now: Showcase.now, agentName: "Lune",
+            projectName: "API")
+        let crop = Showcase.islandCrop()
+        let plan = SceneCompositor.plan(cast, options: RenderOptions(crop: crop))
+        for (name, row, gaps) in [("Tao", IslandRow.b, 1...9), ("Lune", .a, 1...3)] {
+            let desk = SceneFixtures.desk(of: name, in: cast)!
+            #expect(desk.row == row && cast.agents[desk.agentID!]!.presentation.animation == .sleep, "\(name)")
+            let avatar = plan.world.first { $0.tile == desk.seatTile && SceneFixtures.isAvatar($0) }!
+            let zzz = plan.overlays.first { $0.tile == desk.seatTile && $0.key?.id == "ov.zzz" }!
+            // The head: the top rows of the slumped avatar.
+            let body = avatar.image.opaqueBounds!
+            let top = avatar.origin.y + body.y
+            var headColumns: [Int] = []
+            for x in 0..<avatar.image.width where (0..<3).contains(where: { avatar.image[x, body.y + $0].a != 0 }) {
+                headColumns.append(avatar.origin.x + x)
+            }
+            let anchorX = zzz.origin.x + SpriteCatalog.sprite(SpriteKey("ov.zzz"))!.anchor.x
+            #expect(headColumns.min()! <= anchorX && anchorX <= headColumns.max()!, "\(name): zZ over the head")
+            let bounds = zzz.image.opaqueBounds!
+            let gap = top - (zzz.origin.y + bounds.y + bounds.height - 1) - 1
+            #expect(gaps.contains(gap), "\(name): \(gap) px over the head")
+        }
+    }
+
+    /// At night a screen's glow lights the desk around its monitor, never the monitor (nor its screen, nor the post-it
+    /// stuck on it): from behind, a lit monitor back read as a pane of glass.
+    @Test func screenGlowNeverLightsItsMonitor() {
+        for cast in Showcase.islandCasts() {
+            let plan = SceneCompositor.plan(cast, options: RenderOptions(night: true, crop: Showcase.islandCrop()))
+            let glows = plan.lights.filter { $0.key == SpriteKey("light.screenGlow") }
+            #expect(glows.count >= 5)
+            let def = SpriteCatalog.sprite(SpriteKey("light.screenGlow"))!
+            for glow in glows {
+                let monitor = plan.world.filter {
+                    $0.tile == glow.tile && ["monitor.front", "monitor.back", "desk.postit"].contains($0.key?.id.rawValue)
+                        || $0.tile == glow.tile && $0.key?.id.rawValue.hasPrefix("screen.") == true
+                }
+                #expect(!monitor.isEmpty)
+                var lit = 0
+                for y in 0..<glow.image.height {
+                    for x in 0..<glow.image.width where glow.image[x, y].a != 0 {
+                        lit += 1
+                        let (cx, cy) = (glow.origin.x + x, glow.origin.y + y)
+                        #expect(!monitor.contains { $0.pixel(atCanvasX: cx, cy) != nil }, "\(glow.tile!) (\(cx), \(cy))")
+                    }
+                }
+                // Only what the monitor covers is taken out: the rest of the glow is the sprite's.
+                let full = def.frames[0].pixels.filter { $0.a != 0 }.count
+                #expect(lit > full / 3, "\(glow.tile!): \(lit) of \(full) pixels")
+                for y in 0..<glow.image.height {
+                    for x in 0..<glow.image.width where glow.image[x, y].a != 0 {
+                        #expect(glow.image[x, y] == def.frames[0][x, y])
+                    }
+                }
             }
         }
     }

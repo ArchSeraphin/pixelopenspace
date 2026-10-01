@@ -6,37 +6,73 @@ sous Linux comme sous macOS), sans l'app, sans SpriteKit et sans aucune image ex
 le code (`docs/ASSETS.md`), puis la scène est composée en logiciel par `SceneCompositor`, comme SpriteKit la dessinera
 à l'étape 3.
 
-**Terminé quand** tu valides les images et que tu as tranché les questions ci-dessous. L'étape 3 ne commence
-qu'après.
+**Terminé quand** tu valides les images et que tu as tranché les questions encore ouvertes ci-dessous. L'étape 3 ne
+commence qu'après.
+
+Ces images sont le **deuxième rendu** : il applique les quatre décisions prises sur le premier rendu le 1er octobre
+2026 et corrige les défauts relevés alors. Le bilan, défaut par défaut, est dans « Défauts : corrigés et restants ».
+
+## Décisions du premier rendu (2026-10-01)
+
+1. **Écran de la rangée A** (tranché le 2026-10-01) : on garde le moniteur décalé de 6 px à côté de la tête, sans le
+   repli de 7.4.3 (pas de LED d'état sur le moniteur de la rangée A). Rien n'a changé dans le code : l'écran reste
+   entièrement visible en haut à droite de la tête à ×1, ×2 et ×3 (Lune, Zéphyr, Mika, Lou ; Nova, qui attend, se
+   tourne vers toi et dégage son écran jaune).
+2. **Vue d'ensemble, maquette 6(q)** (tranché le 2026-10-01) : seuls les signes urgents restent, le « ! » XL d'un agent
+   qui t'attend (avec son halo) et l'orage d'un agent en erreur. Tout le reste disparaît à ce niveau : overlays,
+   bulles d'outil, petites icônes d'état, badges, badges de file, et donc plus de second « ! ». Tout revient à ×1 et
+   au-delà. Choix d'interprétation : la plaque de nom des agents qui portent un signe urgent reste affichée, pour dire
+   qui attend (NOVA, SOL, IVO) et qui est en erreur (ZÉPHYR) ; aucune autre plaque. Les pancartes d'îlot y sont
+   dessinées ×2, leur texte garde la taille qu'il a à ×1. Tests `overviewKeepsOnlyUrgentSigns`,
+   `overviewSignsAreDoubled`.
+3. **Tapis des îlots** (tranché le 2026-10-01) : le tapis porte les postes occupés plus le premier poste libre, par
+   postes entiers (le bureau de la rangée A et celui de la rangée B au même i), avec une marge d'une tuile tout
+   autour, et grandit vers +i quand un agent arrive (`WorldLayout.rugDesks`). Le slot et l'origine de l'îlot ne
+   bougent jamais (la propriété « append-only » de `WorldLayout` tient toujours), et le tapis grandit depuis un coin
+   fixe, à l'intérieur des tuiles réservées de son îlot : il ne déborde jamais sur un slot voisin ni sur le couloir.
+   La pancarte se tient au coin avant gauche du tapis, la plante au coin arrière droit. Tests de propriété
+   `noIslandEverMoves`, `rugNeverLeavesItsSlot`, `rugCoversEveryDesk`, `rugGrowsWithItsAgents`. Les deux
+   distributions de l'îlot occupent les 8 postes, donc la croissance se voit dans la vue d'ensemble : 3 postes pour
+   API (5 agents) et INFRA (4), 2 pour SITE, DATA, MOBILE (3 chacun) et DOCS (2).
+4. **Police** (tranché le 2026-10-01) : on garde `PixelFont`, police originale du cœur, avec les chiffres ambigus
+   redessinés. Le 0 est un ovale barré (il ne se lit plus D ni O), le 8 deux ronds pincés sans hampe (il ne se lit
+   plus B) ; en comparant chaque chiffre à chaque capitale, le 2, le 4, le 5, le 6 et le 7 ont aussi été redessinés
+   pour ne plus passer pour Z, H, S, G et T. Un chiffre fait au plus 4 px de large, un badge de file en tient
+   toujours un. Tests `digitsDoNotPassForLetters`, `zeroAndEightReadApartFromTheirLetters`, `aQueueBadgeHoldsADigit`.
 
 ## Les 15 images et ce qu'il faut y regarder
 
 | Fichier | Pixels | À regarder |
 |---|---|---|
-| `planche-0-palette.png` | 3136 × 2380 | Les 32 couleurs de base et les 10 teintes en 3 tons : la palette te plaît-elle telle quelle ? Regarde aussi la case « flaque d'une lampe » sous le voile de nuit (rose grisé, pas chaud). |
-| `planche-1-sols-murs.png` | 3136 × 6472 | Moquettes des 10 teintes avec leurs bords et coins (ceux marqués « MIROIR » restent éclairés en haut à gauche), carrelage du hall, murs, fenêtres de jour, au crépuscule et de nuit, ascenseur en 6 images, mur de liège. |
-| `planche-2-mobilier-decor.png` | 3136 × 4464 | Chaises en 4 orientations et 11 teintes, chaise avec la veste (agent hors ligne), bureau, lampe éteinte et allumée, petits objets, fontaine, plante, ombres et lumières. |
-| `planche-3-ecrans-overlays.png` | 3136 × 3104 | Moniteurs (LED d'état au dos, côté rangée B), les 10 contenus d'écran de 12 × 13 et tous les overlays : chaque état doit avoir sa forme propre, sans compter sur la couleur. |
-| `planche-4-hud-texte.png` | 3136 × 2248 | Icônes d'état, points de mini-carte, pancartes, plaques de nom et police `PixelFont` : lisibilité des accents et des chiffres (le 0 ressemble à un D). |
-| `planche-5-personnage.png` | 3656 × 5580 | Les 14 animations du personnage par défaut en SE, SW, NE et NW : chaque pose se reconnaît-elle (surtout `sleep` face à `sitIdle`) ? SW et NW, miroirs ré-ombrés, restent-ils éclairés en haut à gauche ? |
-| `planche-6-apparences.png` | 3136 × 1336 | Les 16 apparences de face et de dos (peaux, coupes, accessoires) et `agent.mini` dans les 10 teintes : assez variées, assez originales ? |
-| `ilot-x1-jour.png` | 672 × 894 | Le zoom le plus petit (1 pt par texel) : chaque état se lit-il d'un coup d'œil, l'écran de la rangée A reste-t-il visible à côté de la tête, les overlays sont-ils assez grands ? |
-| `ilot-x2-jour.png` | 1344 × 1788 | Le zoom courant : visages de la rangée B derrière les moniteurs, post-it collé à l'écran de Pixou, file de post-its, sous-agents de Bip, chaque overlay au-dessus du bon poste. |
-| `ilot-x3-jour.png` | 2016 × 2682 | Le détail : netteté (c'est exactement ×1 agrandi, sans aucun flou), finesse des personnages et des objets du bureau. |
+| `planche-0-palette.png` | 3136 × 2380 | Les 32 couleurs de base et les 10 teintes en 3 tons : la palette te plaît-elle telle quelle ? La case « flaque d'une lampe » montre maintenant ce que dessinent les scènes : `light.cone` (alertOrange) ajouté à 35 % sur le plateau du bureau (woodLight), de jour, sous le voile de nuit (`#C7894E`, chaud) et sous le voile réduit. |
+| `planche-1-sols-murs.png` | 3136 × 6472 | Moquettes des 10 teintes avec leurs bords et coins (ceux marqués « MIROIR » restent éclairés en haut à gauche), carrelage du hall et du couloir, marquages `floor.dropTarget` et `floor.hover` (sur damier sombre), murs, fenêtres de jour, au crépuscule et de nuit, ascenseur en 6 images, mur de liège. |
+| `planche-2-mobilier-decor.png` | 3136 × 4444 | Chaises en 4 orientations et 11 teintes, chaise avec la veste (agent hors ligne), bureau, lampe (pied, bras arqué, abat-jour) éteinte et allumée, petits objets, post-its, fontaine, plante, ombres, flaque, lueur d'écran et étoiles. |
+| `planche-3-ecrans-overlays.png` | 3136 × 3104 | Moniteurs (LED d'état au dos, côté rangée B), les 10 contenus d'écran de 12 × 13 et tous les overlays : chaque état doit avoir sa forme propre, sans compter sur la couleur. `ov.edgeArrow` est une flèche ; `fx.dust` et `fx.pinDrop` sont sur damier sombre. |
+| `planche-4-hud-texte.png` | 3136 × 2248 | Icônes d'état, points de mini-carte, pancartes, plaques de nom et police `PixelFont` : lisibilité des accents et des chiffres redessinés (0 barré, 8 rond). |
+| `planche-5-personnage.png` | 3656 × 5580 | Les 14 animations du personnage par défaut en SE, SW, NE et NW : `sleep` est maintenant avachi sur le bureau (tête sur les bras de face, dos voûté de dos). SW et NW, miroirs ré-ombrés, restent-ils éclairés en haut à gauche ? |
+| `planche-6-apparences.png` | 3136 × 1336 | Les 16 apparences de face et de dos (peaux, coupes avec mèches, oreilles et nuque visibles de dos, accessoires) et `agent.mini` dans les 10 teintes : assez variées, assez originales ? |
+| `ilot-x1-jour.png` | 672 × 894 | Le zoom le plus petit (1 pt par texel) : chaque état se lit-il d'un coup d'œil, l'écran de la rangée A reste-t-il visible à côté de la tête (décision 1), chaque overlay est-il au-dessus du bon agent ? |
+| `ilot-x2-jour.png` | 1344 × 1788 | Le zoom courant : visages de la rangée B derrière les moniteurs, post-it collé à l'écran de Pixou, file de post-its, sous-agents de Bip, plaque « SOL » à côté de sa tête, « zZ » posé sur la tête de Tao endormi. |
+| `ilot-x3-jour.png` | 2016 × 2682 | Le détail : netteté (c'est exactement ×1 agrandi, sans aucun flou), finesse des personnages, de la lampe, de la veste de Kiwi et des objets du bureau. |
 | `ilot-x1-nuit.png` | 672 × 894 | La nuit au plus petit zoom : les overlays restent identiques au jour au-dessus du voile ; la scène reste-t-elle lisible ? |
-| `ilot-x2-nuit.png` | 1344 × 1788 | Couleur, taille et position des flaques de lumière des lampes et de la lueur des écrans. |
-| `ilot-x3-nuit.png` | 2016 × 2682 | Les mêmes lumières de près : les flaques débordent du plateau sur la moquette et virent au gris mauve. |
-| `vue-ensemble-jour.png` | 1920 × 1056 | La maquette 6(q), 20 agents sur 6 projets : repère-t-on tout de suite les 3 agents qui attendent (Nova, Sol, Ivo) et Zéphyr en erreur ? Les petites icônes et le texte sont-ils encore utiles à cette échelle ? |
-| `vue-ensemble-nuit.png` | 1920 × 1056 | La même de nuit : ambiance générale, fenêtres de nuit, « ! » toujours aussi visibles. |
+| `ilot-x2-nuit.png` | 1344 × 1788 | Couleur, taille et position des flaques de lumière (orange, sur le plateau, sous la lampe) et de la lueur des écrans (sur le bureau autour du moniteur, jamais sur le moniteur). |
+| `ilot-x3-nuit.png` | 2016 × 2682 | Les mêmes lumières de près : la flaque reste sur le plateau, le dos des moniteurs de la rangée B reste sombre, la lueur tombe sur le clavier. |
+| `vue-ensemble-jour.png` | 1920 × 1056 | La maquette 6(q), 20 agents sur 6 projets : ne restent que les « ! » XL des 3 agents qui attendent (Nova, Sol, Ivo), l'orage de Zéphyr en erreur et leurs 4 plaques (décision 2) ; les tapis sont à la taille des équipes (décision 3). Repère-t-on tout de suite qui t'attend ? |
+| `vue-ensemble-nuit.png` | 1920 × 1056 | La même de nuit : ambiance générale, fenêtres de nuit et leurs étoiles, flaques et lueurs, « ! » toujours aussi visibles. |
 
 Les sept planches couvrent tous les sprites v0 (`SpriteCatalog.v0IDs`), à l'échelle 4 (4 pixels par texel). Chaque
-image d'un sprite y est posée sur un damier `paper` / `mist` de 4 × 4 texels qui montre sa transparence ; un groupe
-porte l'identifiant, la taille, la cadence (« 4 × 8 FPS », « UNE FOIS » sans boucle) et l'ancre, chaque cellule sa
-variante (`~hue3`), sa direction (`@ne`) et « MIROIR » pour un sprite obtenu par miroir (« MIROIR RÉ-OMBRÉ » pour
-les personnages SW et NW). La planche 0 ajoute l'ombre, la flaque de lumière, le voile de nuit, les couleurs
-dérivées et les couleurs clés marquées « jamais dans un sprite » ; la planche 4 ajoute le spécimen de `PixelFont`
-(alphabet, accents, chiffres, symboles, les 60 noms de `NameGenerator`), les pancartes « API », « SITE WEB »,
-« DOCUMENTATION » et les plaques « NOVA », « ZÉPHYR », « OFF ».
+image d'un sprite y est posée sur un damier de 4 × 4 texels qui montre sa transparence : `paper` / `mist` en général,
+`slate` / `shade` sous un sprite clair, qui disparaîtrait sur le damier clair. Un sprite est clair quand au moins
+deux tiers de ses pixels opaques sont des neutres clairs de la palette (chalk, paper, mist, floorLight, floorDark,
+uiFace) : `floor.dropTarget`, `floor.hover`, `floor.hall`, `floor.corridor`, `fx.star`, `fx.dust`, `fx.pinDrop`, les
+post-its papier et le point de mini-carte `idle` (`ContactSheet.needsDarkChecker`, test
+`lightSpritesSitOnADarkCheckerboard`). Un groupe porte l'identifiant, la taille, la cadence (« 4 × 8 FPS »,
+« UNE FOIS » sans boucle) et l'ancre, chaque cellule sa variante (`~hue3`), sa direction (`@ne`) et « MIROIR » pour
+un sprite obtenu par miroir (« MIROIR RÉ-OMBRÉ » pour les personnages SW et NW). La planche 0 ajoute l'ombre, la
+flaque d'une lampe sur le plateau, le voile de nuit, les couleurs dérivées et les couleurs clés marquées « jamais
+dans un sprite » ; la planche 4 ajoute le spécimen de `PixelFont` (alphabet, accents, chiffres, symboles, les 60
+noms de `NameGenerator`), les pancartes « API », « SITE WEB », « DOCUMENTATION » et les plaques « NOVA », « ZÉPHYR »,
+« OFF ».
 
 ## Comment les regarder
 
@@ -53,8 +89,8 @@ dérivées et les couleurs clés marquées « jamais dans un sprite » ; la plan
 Un îlot a au plus 8 postes, dont un toujours libre, donc 7 agents ; il y a 10 états plus l'agent endormi. Chaque
 image de l'îlot montre donc le même îlot « API » dans deux distributions, l'une sous l'autre (décision 13). Rangée A
 (devant, index pairs) : dos au spectateur, écran visible ; rangée B (derrière, index impairs) : visage visible.
-Chaque îlot porte sa pancarte, une lampe par bureau, des post-its (file sur le bureau avec son badge, post-it collé
-à l'écran) et une plante.
+Chaque îlot porte sa pancarte (au coin avant gauche du tapis), une lampe par bureau, des post-its (file sur le bureau
+avec son badge, post-it collé à l'écran) et une plante.
 
 | Poste | Distribution 1 | Distribution 2 |
 |---|---|---|
@@ -68,86 +104,97 @@ Chaque îlot porte sa pancarte, une lampe par bureau, des post-its (file sur le 
 | 7 (B3) | (poste libre) | Galet : au repos, brouillon dans la zone de saisie, mode `bypassPermissions` |
 
 La vue d'ensemble reprend la maquette 6(q) : API (5 agents, dont Nova qui attend), INFRA (4, dont Sol qui attend
-et Zéphyr en erreur), SITE (3), DATA (3), MOBILE (3), DOCS (2, dont Ivo qui attend), 12 mini post-its sur le mur
-de liège, emprise de 36 × 24 tuiles.
+et Zéphyr en erreur), SITE (3, dont Tao endormi), DATA (3), MOBILE (3), DOCS (2, dont Ivo qui attend), 12 mini
+post-its sur le mur de liège, emprise de 36 × 24 tuiles.
 
 ## Questions à trancher
 
 ### Les trois questions du jalon (section 8)
 
-- [ ] **Lisibilité de l'écran en rangée A** : l'avatar de dos cache-t-il l'écran ? Le moniteur est décalé de 6 px
-  vers la tuile de dégagement.
-  - Ce que montrent les rendus : à ×1, ×2 et ×3, l'écran reste entièrement visible en haut à droite de la tête
-    (Lune « … » violet, Zéphyr croix rouge, Mika sablier, Lou démarrage). Le post-it collé à l'écran de Pixou en
-    cache environ un quart. Nova, qui attend, se tourne vers toi : son écran jaune est dégagé. En vue
-    d'ensemble, l'écran fait 6 × 6 pt : sa couleur se lit (jaune, rouge, vert), pas son contenu.
-  - En rangée B, l'état sur le moniteur n'est qu'une LED de 2 × 2 texels au dos (2 × 2 pt à ×1, 1 pt en vue
-    d'ensemble) : c'est l'overlay qui porte l'information.
-  - Choix : garder le décalage de 6 px tel quel, ou passer au **repli** de 7.4.3 (LED d'état sur le haut du
-    moniteur de la rangée A, en plus de l'écran).
-- [ ] **Taille des overlays à ×1 et en vue d'ensemble**.
+- [x] **Lisibilité de l'écran en rangée A** : tranché le 2026-10-01, on garde le décalage de 6 px, sans le repli LED
+  (décision 1 ci-dessus).
+  - Sur les rendus : à ×1, ×2 et ×3, l'écran reste entièrement visible en haut à droite de la tête. Le post-it collé
+    à l'écran de Pixou en cache environ un quart. En rangée B, l'état sur le moniteur n'est qu'une LED de 2 × 2 texels
+    au dos : c'est l'overlay qui porte l'information.
+- [x] **Taille des overlays à ×1 et en vue d'ensemble** : tranché le 2026-10-01, tailles gardées à ×1 et au-delà ; en
+  vue d'ensemble, seuls le « ! » XL et l'orage (décision 2 ci-dessus).
   - À ×1 (1 pt par texel) : le « ! » (12 × 24 pt, halo de 32 × 32) se voit au premier coup d'œil ; bulles d'outil
     (16 × 16), « … » (20 × 14), coche (12 × 12), « zZ » (16 × 16) et orage (28 × 18) se lisent ; les signes
     secondaires (brouillon 10 × 10, « ? » sans nouvelles 10 × 14, mode dégradé et `bypassPermissions` 12 × 12) sont
     petits mais se trouvent quand on les cherche.
-  - En vue d'ensemble (0,5 pt par texel) : le « ! » XL (24 × 48 texels, donc 12 × 24 pt) désigne bien les trois
-    agents qui attendent. Les autres signes tombent à 6 × 6 pt (icône d'état) et 8 × 8 pt (bulle d'outil) : on lit
-    leur couleur (coche verte, croix rouge, bulle lilas), pas leur glyphe (loupe, globe, feuille). Chaque poste
-    occupé porte deux petites icônes côte à côte, souvent redondantes (voir « Défauts »). De loin, la tête large et
-    arrondie du « ! » XL peut aussi se lire comme une ampoule.
-  - Choix : garder ces tailles ; ou, en vue d'ensemble, une seule icône par poste (l'état, sans la bulle d'outil),
-    éventuellement agrandie ; ou masquer tout sauf le « ! » et l'orage à ce niveau.
-- [ ] **Palette** : valeurs à ajuster à l'œil (planche 0, puis les scènes).
+  - Reste vrai (voir « Restants ») : de loin, la tête large et arrondie du « ! » avec son halo se lit aussi comme une
+    ampoule.
+- [ ] **Palette** : encore ouverte, valeurs à ajuster à l'œil (planche 0, puis les scènes).
   - De jour : chaque pixel des scènes est une couleur de la palette ou une couleur assombrie une seule fois par
     l'ombre (test `dayPixelsArePaletteOrSingleShadow`), aucune dérive. Les 6 teintes de la vue d'ensemble se
     distinguent bien ; les moquettes au ton « clair » donnent un ensemble pastel, les pancartes au ton de base.
   - De nuit : le voile (0,55) passe le carrelage au gris et les moquettes à des tons profonds ; les overlays gardent
-    leurs couleurs de jour. Mais `lampWarm` ajouté à 35 % sur une moquette voilée ne donne pas de lumière chaude :
-    sur la moquette bleue ombrée, la flaque vaut `#98939B`, un gris mauve.
-  - Choix : garder la palette telle quelle, ou nommer les couleurs à changer (rôle et valeur) ; pour la nuit, changer
-    la teinte ou l'alpha de la flaque, ou passer plus tôt à la permutation de palette jour → nuit (7.8).
+    leurs couleurs de jour. La flaque d'une lampe n'utilise plus `lampWarm` (qui virait au gris mauve) mais
+    `alertOrange`, et reste chaude : `#C7894E` sur le plateau voilé, `#E7A059` sous le voile réduit. `lampWarm` sert
+    encore ailleurs, entre autres à l'intérieur de la lampe allumée, à l'horloge de `ov.quota` et à la LED de
+    l'ascenseur.
+  - Choix : garder la palette telle quelle, ou nommer les couleurs à changer (rôle et valeur).
 
 ### Autres choix du plan à confirmer
 
-- [ ] **Orientation des rangées** (décision 2) : rangée A regard `ne` (dos et écran visibles), rangée B regard `sw`
-  (visage visible).
-- [ ] **Pas des postes** (décision 3) : un poste toutes les 2 tuiles (bureau, puis une tuile de dégagement qui reçoit
-  les sous-agents et la flaque de la lampe). Repli : postes jointifs, îlot plus étroit.
-- [ ] **Police** (décision 6) : garder `PixelFont` (originale, même rendu partout, texte net garanti) aussi dans
-  l'app, ou revenir à Silkscreen (7.11). Si elle reste : redessiner le 0 (voir « Défauts »).
-- [ ] **Nuit** : force du voile (0,55 ; 0,35 avec « Réduire la transparence ») et des flaques de lumière (35 %,
-  additives).
+- [ ] **Orientation des rangées** (décision 2 du plan) : rangée A regard `ne` (dos et écran visibles), rangée B
+  regard `sw` (visage visible).
+- [ ] **Pas des postes** (décision 3 du plan) : un poste toutes les 2 tuiles (bureau, puis une tuile de dégagement
+  qui reçoit les sous-agents). Repli : postes jointifs, îlot plus étroit.
+- [x] **Police** (décision 6 du plan) : tranché le 2026-10-01, on garde `PixelFont` aussi dans l'app, chiffres
+  redessinés (décision 4 ci-dessus).
+- [ ] **Nuit** : force du voile (0,55 ; 0,35 avec « Réduire la transparence ») et des lumières (35 %, additives). La
+  flaque est maintenant petite (28 × 14), orange, limitée au plateau ; la lueur des écrans éclaire le bureau autour
+  du moniteur.
 - [ ] **Visages de la rangée B** derrière les moniteurs : lisibles à ×1 ? (Sur les rendus : tête et yeux visibles
   au-dessus du moniteur à ×1, détail des lunettes et des casques lisible à partir de ×2.)
-- [ ] **Texte en vue d'ensemble** : à 0,5 pt par texel, les pancartes et les plaques de nom (capitales de 5 px)
-  font 2,5 pt de haut, à la limite du lisible. Les garder, les agrandir, ou les masquer à ce niveau ?
-- [ ] **Démarrage** : un agent qui démarre n'a pas d'overlay (comme un agent au repos) ; seuls la pose debout et
-  l'écran de démarrage le signalent, et de dos (Lou, rangée A) la pose debout ressemble à la pose assise. Ajouter un
-  signe (par exemple l'icône `hud.state.launching` au-dessus du poste), ou laisser l'arrivée par l'ascenseur de
-  l'étape 3 jouer ce rôle ?
+- [ ] **Texte en vue d'ensemble** : en partie réglé. Les pancartes y sont ×2 (capitales de 5 pt, lisibles) ; il ne
+  reste que les plaques des agents urgents, mais elles font toujours 2,5 pt de haut, à la limite du lisible. Les
+  garder, les agrandir comme les pancartes, ou les masquer ?
+- [ ] **Démarrage** : proposition appliquée dans ce rendu, à confirmer. Un agent qui démarre porte le signe
+  « démarre » (`hud.state.launching`) au-dessus du poste, à ×1 et au-delà (Lou), masqué en vue d'ensemble ; de dos,
+  la pose debout seule ressemblait à la pose assise. Autre choix : laisser l'arrivée par l'ascenseur de l'étape 3
+  jouer ce rôle.
 
-## Défauts constatés
+## Défauts : corrigés et restants
 
-Relevés à la revue des 15 images. Ils ne sont pas corrigés ici : chaque correction fera l'objet d'une tâche de
-suivi (la colonne « Tâche » renvoie au plan), après quoi le golden et les images seront régénérés.
+Relevés à la revue des 15 images du premier rendu, puis revus un par un sur ce rendu.
 
-| Fichier | Tâche | Défaut |
+### Corrigés
+
+| Fichier | Défaut du premier rendu | Correction |
 |---|---|---|
-| `ilot-x*-*.png`, `vue-ensemble-*.png` | 7 (placement) | Les overlays du poste B0 chevauchent ou touchent la pancarte de l'îlot (tuile locale (0, 0), juste au-dessus de B0) : en distribution 2, le « ! », son halo et la bulle « ? » de Sol passent sur la pancarte « API » ; en distribution 1 et en vue d'ensemble, la bulle `>_` de Bip la touche. |
-| `ilot-x*-*.png`, `vue-ensemble-*.png` | 7 (placement) | En rangée A, l'overlay principal flotte au-dessus du bureau du poste de derrière : l'orage de Zéphyr sur le bureau de Lune, le sablier de Mika sur celui de Pixou, la double coche d'un agent de la rangée A sur le bureau voisin en vue d'ensemble. On peut l'attribuer au mauvais poste. Piste : un `overlayLift` plus bas en rangée A (avatar de dos, tête plus basse). |
-| `ilot-x*-*.png` | 7 (placement) | La plaque d'un agent de la rangée B est posée sous ses pieds, donc sur le plateau du bureau : en distribution 2, « SOL » se lit entre Pixou et le sablier de Mika, loin de la tête de Sol. |
-| `ilot-x*-nuit.png`, `vue-ensemble-nuit.png` | 4 (`light.cone`), 7 (position) | Les flaques de lumière virent au gris mauve pâle (`#98939B` sur la moquette bleue ombrée) : `lampWarm` ajouté à 35 % sur la moquette voilée ne donne pas une lumière chaude. L'ellipse déborde du plateau sur la moquette devant le bureau et se lit comme un spot au sol. À revoir : teinte (ou alpha), taille et position. |
-| `ilot-x*-nuit.png` | 4 (`light.screenGlow`), 7 | La lueur des écrans forme sur les plateaux des parallélogrammes cyan pâle à bord net, qui se lisent comme une vitre posée sur le bureau plus que comme une lueur, surtout à ×3. |
-| `ilot-x*-*.png` (Tao), `vue-ensemble-*.png` (SITE, INFRA, MOBILE), `planche-5-personnage.png` | 6 | `sleep` ne diffère de `sitIdle` que par la tête baissée d'environ un texel et les yeux fermés : l'agent endormi semble assis et éveillé. Seul le « zZ », qui flotte haut au-dessus de la tête, dit qu'il dort ; 7.9 prévoit une pose « avachi ». |
-| `ilot-x*-*.png` (Kiwi, hors ligne), `planche-2-mobilier-decor.png` | 4 | `chair~*.jacket` : la veste posée sur la chaise se lit comme une poubelle grise plutôt qu'un vêtement, à ×1 comme à ×3. |
-| `planche-2-mobilier-decor.png`, scènes | 4 | `lamp.desk` : silhouette en crochet noir de 12 × 18 qui se lit comme un bras de micro ou de moniteur plus que comme une lampe ; `~on` ne diffère de `~off` que par 1 ou 2 texels orange. |
-| `vue-ensemble-*.png` | 7 | Un agent qui attend porte à la fois le « ! » XL et la petite icône `hud.state.waitingInput` (un autre « ! ») : redondant. Pour les autres états, l'icône d'état s'ajoute à côté de la bulle d'outil ou de l'overlay (« … » à côté de « … », coche à côté de coche) : deux petites icônes au-dessus de chaque tête. |
-| `vue-ensemble-*.png` | 5, 7 | À 0,5 pt par texel, le texte des pancartes et des plaques (capitales de 5 px) fait 2,5 pt : à la limite du lisible en taille réelle (voir les questions). |
-| `vue-ensemble-*.png` | 7 | Mur de liège : les 12 mini post-its forment une seule ligne en diagonale en haut du panneau, le reste est vide ; le panneau se lit comme une frise plus que comme un tableau d'affichage. |
-| `planche-3-ecrans-overlays.png` | 5 | `ov.edgeArrow` ressemble à une goutte jaune marquée « ! » plus qu'à une flèche qui désigne le bord de l'écran. |
-| `planche-0` à `planche-6` | 5 | `PixelFont` : le chiffre 0 est un rectangle plein, qu'on lit D ou O dans les étiquettes (« ~HUE0 » se lit « ~HUED », « PLANCHE 0 » se lit « PLANCHE D ») ; le 8 est proche du B. Sans effet sur les scènes (seuls les badges de file 1 à 9 y portent des chiffres), à corriger si `PixelFont` est gardée dans l'app. |
-| `planche-6-apparences.png`, scènes (Zéphyr, Lou) | 6 | Les cheveux gris courts vus de dos forment une calotte grise uniforme qui se lit comme un bonnet ou un casque. |
-| `planche-1-sols-murs.png`, `planche-2-mobilier-decor.png`, `planche-3-ecrans-overlays.png` | 8 (planches) | Les sprites clairs sont presque invisibles sur le damier `paper` / `mist` : `floor.dropTarget`, `floor.hover`, `fx.star`, `fx.dust`, `fx.pinDrop`. Un damier sombre pour ces groupes permettrait de les juger. |
+| `ilot-x*-*.png`, `vue-ensemble-*.png` | Les overlays du poste B0 chevauchaient ou touchaient la pancarte de l'îlot (tuile locale (0, 0)). | La pancarte se tient au coin avant gauche du tapis (tuile locale (0, 6)), loin de tout overlay. Test `signNeverTouchesOverlays` (×1 et vue d'ensemble, overlays les plus larges, erreurs sur tous les postes). |
+| `ilot-x*-*.png`, `vue-ensemble-*.png` | En rangée A, l'overlay flottait au-dessus du bureau du poste de derrière (orage de Zéphyr sur le bureau de Lune, sablier de Mika sur celui de Pixou). | En rangée A, l'overlay est posé sur la tête (1 à 3 px au-dessus), droit au-dessus du siège. Test `overlaysSitOnTheirOwnAgent`. En vue d'ensemble, seuls les signes urgents restent (décision 2). |
+| `ilot-x*-*.png` | La plaque d'un agent de la rangée B était posée sous ses pieds, sur le plateau du bureau (« SOL » entre Pixou et Mika). | Plaque à côté de la tête, du côté du poste précédent ; hors ligne, la plaque « OFF » prend la place de la tête au-dessus de la chaise. Test `rowBNameplateBesideTheHead`. |
+| `ilot-x*-nuit.png`, `vue-ensemble-nuit.png`, `planche-0-palette.png` | Les flaques de lumière viraient au gris mauve pâle (`lampWarm` à 35 % sur la moquette voilée) et débordaient du plateau comme un spot au sol. La planche 0 montrait encore cette flaque. | `light.cone` : 28 × 14, `alertOrange` plein au centre et en damier au bord, ancré sous le pied de la lampe et découpé au losange du plateau : chaud, jamais sur la moquette. La planche 0 montre la vraie flaque sur le plateau. Tests `lampPoolStaysWarmOnEveryVeiledFloor`, `lampPoolStaysOnTheDeskTop`, `paletteSheetShowsEveryColor`. |
+| `ilot-x*-nuit.png`, `vue-ensemble-nuit.png` | La lueur des écrans formait des parallélogrammes cyan pâle à bord net, comme une vitre posée sur le bureau. | `light.screenGlow` en dégradé (plein, puis damier, puis pixels épars). Dans ce rendu, la lueur n'éclaire plus son propre moniteur : de dos (rangée B), le moniteur couvert de cyan se lisait encore comme une vitre ; il reste sombre et la lueur tombe sur le clavier et le bureau. Test `screenGlowNeverLightsItsMonitor`. |
+| `ilot-x*-*.png` (Tao), `vue-ensemble-*.png` (Tao, SITE), `planche-5-personnage.png` | `sleep` ne différait de `sitIdle` que par la tête baissée d'un texel ; seul le « zZ », très haut, disait que l'agent dormait. | Pose avachie (7.9) : de face, la tête posée sur les bras croisés, 13 px plus bas ; de dos, le dos voûté, la tête enfoncée entre les épaules. Test `sleepIsSlumpedNotSitIdle`. Dans ce rendu, le « zZ » suit la tête couchée (`SceneCompositor.headShift`) au lieu de flotter à la place d'une tête assise. Test `sleeperOverlayFollowsTheHead`. |
+| `ilot-x*-*.png` (Kiwi), `planche-2-mobilier-decor.png` | `chair~*.jacket` se lisait comme une poubelle grise. | Veste dessinée (col, épaules tombantes, manches, revers et boutons), camel, ou marine sur les chaises Tomate, Mandarine et Cacao. Test `jacketReadsAsAJacket`. Lisible comme une veste à partir de ×2. |
+| `planche-2-mobilier-decor.png`, scènes | `lamp.desk` : crochet noir de 12 × 18 qui se lisait comme un bras de micro. | 24 × 17 : pied métal, bras arqué, abat-jour crème penché à côté du moniteur ; allumée, l'intérieur s'éclaire et l'ampoule devient blanche. Tests `lampOnOff`, `lampShadeStandsBesideTheMonitor`. |
+| `vue-ensemble-*.png` | Un agent qui attend portait le « ! » XL et la petite icône « ! » ; ailleurs, deux petites icônes redondantes au-dessus de chaque tête. | Décision 2 : seuls le « ! » XL et l'orage restent. Test `overviewKeepsOnlyUrgentSigns`. |
+| `vue-ensemble-*.png` | Le texte des pancartes et des plaques faisait 2,5 pt. | Pancartes ×2. Les plaques restantes (agents urgents) font toujours 2,5 pt : voir « Restants ». |
+| `vue-ensemble-*.png` | Mur de liège : les 12 mini post-its formaient une seule ligne en diagonale. | Cartes réparties en rangées lâches, en quinconce, sur tout le panneau (`boardSpread`, ordre de van der Corput) ; une nouvelle carte ne déplace jamais les autres. Test `corkWallSpreadsItsCards`. |
+| `planche-3-ecrans-overlays.png` | `ov.edgeArrow` ressemblait à une goutte jaune marquée « ! ». | Flèche vers le haut (tête à 45°, hampe de 8 px) en alertYellow cernée d'alertOrange, « ! » ink sur l'axe. Test `edgeArrowIsAnArrowWithABang`. |
+| `planche-0` à `planche-6` | `PixelFont` : 0 lu D ou O, 8 proche du B. | Décision 4 : chiffres redessinés (« PLANCHE 0 » et « ~HUE0 » se lisent bien). |
+| `planche-6-apparences.png`, scènes (Zéphyr, Lou) | Les cheveux gris courts vus de dos formaient une calotte grise uniforme (bonnet, casque). | Mèches sur toutes les coupes, oreilles et nuque dégagées pour les coupes courtes, carré qui s'arrête à la mâchoire. Test `hairFromBehindIsNotACap`. |
+| `planche-1`, `planche-2`, `planche-3`, `planche-4` | Les sprites clairs étaient presque invisibles sur le damier `paper` / `mist`. | Damier sombre `slate` / `shade` sous tout sprite clair (règle plus haut). Test `lightSpritesSitOnADarkCheckerboard`. |
+
+### Restants
+
+Ce qui suit n'a pas été corrigé dans ce rendu : ce sont des retouches de dessin ou des choix, pas des réglages de
+placement.
+
+| Fichier | Défaut | Piste |
+|---|---|---|
+| `ilot-x*-*.png`, `vue-ensemble-*.png`, `planche-3-ecrans-overlays.png` | La tête large et arrondie du « ! » (`ov.bang`, `ov.bang~xl`) avec son halo se lit aussi comme une ampoule, surtout en vue d'ensemble et à ×3. Le signe reste le plus visible de la scène. | Tâche 5 : un « ! » plus étroit et anguleux, ou un halo d'une autre forme. |
+| `vue-ensemble-*.png` | Les plaques des agents urgents (NOVA, SOL, IVO, ZÉPHYR) font 2,5 pt de haut, à la limite du lisible. | Question « Texte en vue d'ensemble » : les dessiner ×2 comme les pancartes, ou les masquer. |
+| `ilot-x*-*.png` (Tao), `planche-5-personnage.png` | Les yeux fermés de la pose avachie sont des points de 1 px, qu'on lit comme des yeux ouverts ; la pose et le « zZ » suffisent à dire que l'agent dort. | Tâche 6 : un trait horizontal de 2 px. |
+| `ilot-x1-*.png`, `planche-2-mobilier-decor.png` | À ×1, la lampe est petite et se mêle au pied du moniteur ; de jour, `~on` et `~off` ne diffèrent que de quelques texels (la nuit, la flaque le dit). | Tâche 4, à juger à l'œil. |
+| `ilot-x1-*.png`, `planche-6-apparences.png` | Les cheveux gris courts vus de dos sont nettement mieux, mais à ×1 la coupe reste une masse arrondie assez uniforme (mèches d'un seul pixel). | Tâche 6, à juger à l'œil. |
+| `ilot-x1-*.png` (Kiwi) | À ×1, la veste n'est qu'une petite forme brune sur le dossier ; elle se lit comme une veste à partir de ×2. | À juger à l'œil. |
+| `ilot-x*-*.png` (Zéphyr) | L'orage, posé sur la tête de Zéphyr, chevauche le coin avant du bureau du poste précédent : il se lit comme le sien, mais la superposition se voit. | Conséquence de la décision 1 et de la hauteur des bureaux ; acceptable à mon avis. |
+| `vue-ensemble-*.png` | La pancarte ×2 de SITE touche le bord gauche de l'image (pas coupée, vérifié pixel à pixel) et passe devant le mur. | Aucune pour le jalon : dans l'app, la caméra a des marges. |
 
 Rien d'autre à signaler sur la netteté ni sur la couverture : `ilot-x2-*` et `ilot-x3-*` sont exactement `ilot-x1-*`
 agrandi au plus proche (vérifié pixel à pixel), les PNG n'ont que des pixels opaques ou transparents, et chaque
@@ -164,7 +211,8 @@ swift run --package-path Core -c release sprite-export --out "$PWD/docs/jalon-vi
 Une ligne par fichier écrit (nom, largeur × hauteur, taille en octets). Compte une minute au plus la première
 fois (compilation en release), puis quelques secondes pour les 15 images ; le pic de mémoire est d'environ
 1,1 Go (planche 1 à l'échelle 4). Le rendu est déterministe : deux rendus donnent les mêmes octets, sous Linux
-comme sous macOS (le rendu du 1er octobre 2026 est identique, octet pour octet, aux images du commit précédent).
+comme sous macOS (vérifié le 1er octobre 2026 : deux rendus successifs de ce deuxième rendu sont identiques octet
+pour octet).
 
 Options : `--only palette,sheets,island,overview` (une partie seulement), `--scale <n>` (échelle des planches,
 de 1 à 8 ; 4 par défaut), `--out <dossier>`, `--help`.
@@ -173,7 +221,8 @@ de 1 à 8 ; 4 par défaut), `--out <dossier>`, `--help`.
 
 - `cd Core && swift test` compare l'empreinte de chaque image de chaque sprite (714) et de quatre scènes (îlot 1
   et 2 à ×1 de jour, vue d'ensemble de jour et de nuit) au fichier
-  `Core/Tests/PixelCoreTests/Fixtures/golden/sprites.txt` (`GoldenTests`).
+  `Core/Tests/PixelCoreTests/Fixtures/golden/sprites.txt` (`GoldenTests`). Les planches n'y sont pas : leur mise en
+  page est vérifiée par `ContactSheetTests`.
 - La CI (job Linux de `.github/workflows/core.yml`) refait le rendu, compare chaque PNG à celui du dépôt octet
   par octet, et publie les images en artefact (`jalon-visuel`).
 
@@ -240,3 +289,19 @@ puis commit du golden et des images.
 - **`sprite-export`** : `--scale` va de 1 à 8 et ne touche que les planches ; `--help` ; code de sortie 2 si un
   fichier ne peut pas être écrit.
 - **Journal de provenance** dans `docs/ASSETS.md` (7.10 le prévoyait dans `Resources/`).
+
+### Écarts de la révision du 1er octobre 2026
+
+- `light.cone` : 28 × 14 ancré en (14, 7) au lieu de 48 × 32, en `alertOrange` au lieu de `lampWarm`, découpé au
+  losange du plateau au compositing (7.1, 7.4, 7.8).
+- `lamp.desk` : 24 × 17 ancré en (12, 17) au lieu de 12 × 18 ancré en (6, 17).
+- `light.screenGlow` : découpé au compositing pour ne jamais éclairer son propre moniteur (ni l'écran, ni le post-it
+  collé dessus).
+- **Tapis** : à la taille des postes occupés plus un poste libre (décision 3), au lieu de toute l'emprise de l'îlot.
+- **Pancarte** : au coin avant gauche du tapis au lieu du coin arrière ; ×2 en vue d'ensemble.
+- **Overlays** : en rangée A, posés sur la tête ; plaque de la rangée B à côté de la tête ; « zZ » sur la tête
+  couchée d'un agent endormi ; signe « démarre » au-dessus d'un agent qui démarre (×1 et au-delà).
+- **Vue d'ensemble** : seuls les signes urgents et les plaques de leurs agents (décision 2), au lieu de l'icône
+  d'état et de la bulle d'outil de chaque poste.
+- **Planches** : damier sombre `slate` / `shade` sous les sprites clairs ; la planche 0 montre la flaque de la lampe
+  sur le plateau (woodLight) plutôt que sur floorLight.
