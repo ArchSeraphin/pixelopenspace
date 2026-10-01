@@ -3,9 +3,9 @@ import PixelCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The main window (mockup 6(b)): status bar and waiting tray, banners, projects sidebar, agent board and the
-/// post-its board panel (⌘B), terminal panel. Performs the model's UI requests (sheets, Settings, terminal,
-/// board), focus requests and quit sheet.
+/// The main window (mockups 6(b), 6(q)): status bar and waiting tray, banners, projects sidebar, the open space (or
+/// the list of agents, ⌘L) and the post-its board panel (⌘B), terminal panel. Performs the model's UI requests
+/// (sheets, Settings, terminal, board, view mode and zoom), focus requests and quit sheet.
 struct RootView: View {
     static let minimumPanelHeight: Double = 200
     static let minimumBoardHeight: Double = 180
@@ -24,7 +24,11 @@ struct RootView: View {
     @AppStorage("sidebarVisible") private var isSidebarVisible = true
     @AppStorage("boardPanelWidth") private var boardWidth: Double = 340
     @AppStorage("welcomeShown") private var welcomeShown = false
+    /// `WorkbenchState.MainView`: the open space (default) or the list.
+    @AppStorage("mainView") private var storedMainView = WorkbenchState.MainView.scene.rawValue
     @State private var isDropTargeted = false
+    /// The open space of this window: it outlives the SpriteKit view (⌘L), so the camera and textures stay.
+    @State private var stage: WorldStage?
 
     var body: some View {
         @Bindable var bindable = workbench
@@ -92,15 +96,18 @@ struct RootView: View {
         .onChange(of: model.quitRequest, initial: true) { _, request in
             syncQuitSheet(request)
         }
+        .onChange(of: workbench.mainView) { _, mode in
+            storedMainView = mode.rawValue
+        }
     }
 
     // MARK: - Layout
 
-    /// The agents, and the post-its board panel on their right.
+    /// The open space or the list of agents, and the post-its board panel on their right.
     private var workArea: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                AgentBoardView()
+                mainContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     // Over the agents, never over the board panel: its last cards stay visible.
                     .overlay(alignment: .bottomTrailing) {
@@ -113,6 +120,18 @@ struct RootView: View {
                         .frame(width: min(max(boardWidth, range.lowerBound), range.upperBound))
                 }
             }
+        }
+    }
+
+    /// The open space (scene mode) or the agent cards (list view, the main VoiceOver path).
+    @ViewBuilder
+    private var mainContent: some View {
+        if workbench.mainView == .scene, let stage {
+            WorldAreaView(stage: stage)
+        } else if workbench.mainView == .list {
+            AgentBoardView()
+        } else {
+            Color(nsColor: .windowBackgroundColor)
         }
     }
 
@@ -162,6 +181,13 @@ struct RootView: View {
             }
             .help("Afficher ou masquer le tableau des post-its (⌘B)")
             Button {
+                workbench.toggleMainView()
+            } label: {
+                Label(workbench.mainView == .scene ? "Vue Liste" : "Open space",
+                      systemImage: workbench.mainView == .scene ? AppCommand.toggleListView.symbolName : "square.grid.3x3")
+            }
+            .help("Vue Liste ou open space (⌘L)")
+            Button {
                 workbench.togglePanel()
             } label: {
                 Label(panelToggleTitle, systemImage: AppCommand.toggleTerminalPanel.symbolName)
@@ -181,6 +207,12 @@ struct RootView: View {
     private func appeared() {
         workbench.mainWindowAppeared()
         workbench.openWindowAction = openWindow
+        workbench.mainView = WorkbenchState.MainView(rawValue: storedMainView) ?? .scene
+        if stage == nil {
+            let created = WorldStage(model: model, workbench: workbench)
+            stage = created
+            workbench.worldStage = created
+        }
         if !welcomeShown {
             welcomeShown = true
             if workbench.activeSheet == nil { workbench.present(.claudeSetup) }
@@ -223,6 +255,17 @@ struct RootView: View {
             presentSheet(.templates)
         case .toggleBoard:
             isBoardVisible.toggle()
+        case .toggleListView:
+            workbench.toggleMainView()
+        case .zoomIn:
+            guard workbench.mainView == .scene else { return }
+            workbench.worldStage?.camera.zoomIn(about: nil)
+        case .zoomOut:
+            guard workbench.mainView == .scene else { return }
+            workbench.worldStage?.camera.zoomOut(about: nil)
+        case .fitAll:
+            guard workbench.mainView == .scene else { return }
+            workbench.worldStage?.camera.fitAll(animated: true)
         }
     }
 
@@ -235,7 +278,8 @@ struct RootView: View {
         workbench.bringMainWindowForward()
     }
 
-    /// Notification click, ⌘', ⌥⌘→: select and show the agent; a waiting agent's terminal opens, ready for the answer.
+    /// Notification click, ⌘', ⌥⌘→: select and show the agent (the camera flies to it in the open space, the list
+    /// scrolls to its card); a waiting agent's terminal opens, ready for the answer.
     private func handleFocus(_ request: FocusRequest?) {
         guard let request else { return }
         model.consumeFocusRequest()

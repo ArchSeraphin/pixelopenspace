@@ -47,6 +47,14 @@ final class CommandCenter {
             model.post(.toggleBoard)
         case .toggleTerminalPanel:
             model.post(.toggleTerminalPanel)
+        case .toggleListView:
+            model.post(.toggleListView)
+        case .zoomIn:
+            model.post(.zoomIn)
+        case .zoomOut:
+            model.post(.zoomOut)
+        case .fitAll:
+            model.post(.fitAll)
         case .redetectClaude:
             model.redetectClaude()
         case .showSettings:
@@ -60,6 +68,9 @@ final class CommandCenter {
         let running = runtime?.pid != nil
         switch command {
         case .newCard, .pasteCards, .manageTemplates, .toggleBoard, .newProject, .toggleTerminalPanel, .showSettings:
+            return true
+        // In scene mode only for the zoom commands: `WorkbenchState.isAvailable` (the view mode is UI state).
+        case .toggleListView, .zoomIn, .zoomOut, .fitAll:
             return true
         case .newAgent:
             return !model.projects.isEmpty

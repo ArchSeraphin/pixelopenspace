@@ -73,6 +73,10 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
     case previousAgent
     case toggleBoard
     case toggleTerminalPanel
+    case toggleListView
+    case zoomIn
+    case zoomOut
+    case fitAll
     case redetectClaude
     case showSettings
 
@@ -97,6 +101,10 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
         case .previousAgent: return "Agent précédent"
         case .toggleBoard: return "Afficher ou masquer le tableau"
         case .toggleTerminalPanel: return "Afficher ou masquer le terminal"
+        case .toggleListView: return "Vue Liste ou open space"
+        case .zoomIn: return "Zoom avant"
+        case .zoomOut: return "Zoom arrière"
+        case .fitAll: return "Tout voir"
         case .redetectClaude: return "Rechercher Claude Code"
         case .showSettings: return "Réglages…"
         }
@@ -107,7 +115,7 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
         case .newCard, .pasteCards, .manageTemplates, .newProject, .newAgent: return .file
         case .nextWaitingAgent, .previousWaitingAgent, .nextAgent, .previousAgent: return .go
         case .openTerminal, .interrupt, .relaunchSession, .closeSession, .removeAgent: return .agent
-        case .toggleBoard, .toggleTerminalPanel: return .view
+        case .toggleBoard, .toggleTerminalPanel, .toggleListView, .zoomIn, .zoomOut, .fitAll: return .view
         case .redetectClaude, .showSettings: return .app
         }
     }
@@ -117,6 +125,14 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
     var isBlockedBySheet: Bool {
         switch self {
         case .newCard, .pasteCards, .manageTemplates, .newProject, .newAgent: return true
+        default: return false
+        }
+    }
+
+    /// Acts on the open space's camera: unavailable in the list view (`WorkbenchState.isAvailable`).
+    var needsScene: Bool {
+        switch self {
+        case .zoomIn, .zoomOut, .fitAll: return true
         default: return false
         }
     }
@@ -140,6 +156,10 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
         case .previousAgent: return "arrow.left"
         case .toggleBoard: return "sidebar.right"
         case .toggleTerminalPanel: return "rectangle.bottomthird.inset.filled"
+        case .toggleListView: return "list.bullet.rectangle"
+        case .zoomIn: return "plus.magnifyingglass"
+        case .zoomOut: return "minus.magnifyingglass"
+        case .fitAll: return "viewfinder"
         case .redetectClaude: return "magnifyingglass"
         case .showSettings: return "gearshape"
         }
@@ -161,6 +181,11 @@ enum AppCommand: String, CaseIterable, Identifiable, Sendable {
         case .previousAgent: return CommandShortcut(key: .leftArrow, option: true)
         case .toggleBoard: return CommandShortcut(key: .character("b"))
         case .toggleTerminalPanel: return CommandShortcut(key: .character("t"), option: true)
+        case .toggleListView: return CommandShortcut(key: .character("l"))
+        // ⌘= is an alias the scene's keyboard handling adds (task 9).
+        case .zoomIn: return CommandShortcut(key: .character("+"))
+        case .zoomOut: return CommandShortcut(key: .character("-"))
+        case .fitAll: return CommandShortcut(key: .character("0"))
         // ⌘, already belongs to the "Réglages…" item SwiftUI adds for the Settings scene.
         case .showSettings, .closeSession, .removeAgent, .redetectClaude, .manageTemplates: return nil
         }

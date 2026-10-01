@@ -97,9 +97,19 @@ struct ScrollRequest: Equatable {
 @MainActor
 @Observable
 final class WorkbenchState {
+    /// What the work area of the main window shows: the open space (default) or the list of agents (⌘L), kept by
+    /// `RootView` in the `mainView` preference.
+    enum MainView: String {
+        case scene, list
+    }
+
     @ObservationIgnored let model: AppModel
     @ObservationIgnored let commands: CommandCenter
     @ObservationIgnored let presenter: TerminalPresenter
+
+    var mainView: MainView = .scene
+    /// The open space of the main window (owned by `RootView`): its camera, plan and scene.
+    @ObservationIgnored weak var worldStage: WorldStage?
 
     var activeSheet: ActiveSheet?
     /// Confirmation dialog of the main window.
@@ -166,6 +176,7 @@ final class WorkbenchState {
     func isAgentVisible(_ agentID: AgentID) -> Bool {
         if let window = presenter.window(showing: agentID), Self.isOnScreen(window) { return true }
         guard isMainWindowOpen, let window = mainWindow, Self.isOnScreen(window) else { return false }
+        if mainView == .scene, let stage = worldStage { return stage.isVisible(agentID) }
         if let filter = stateFilter, model.runtime(for: agentID)?.kind != filter { return false }
         return true
     }
@@ -227,6 +238,7 @@ final class WorkbenchState {
     /// hide it, and its unsaved edits would be lost).
     func isAvailable(_ command: AppCommand) -> Bool {
         guard commands.isEnabled(command) else { return false }
+        if command.needsScene && mainView != .scene { return false }
         return !(command.isBlockedBySheet && activeSheet != nil)
     }
 
@@ -334,18 +346,30 @@ final class WorkbenchState {
         scrollRequest = ScrollRequest(id: UUID(), target: target)
     }
 
-    /// Selects the agent and scrolls the board to its card (removing a filter that would hide it).
+    /// Selects the agent and brings it into view: the camera flies to it in the open space (notification click, ⌘',
+    /// ⌥⌘→); the list scrolls to its card (removing a filter that would hide it).
     func reveal(_ agentID: AgentID) {
         model.select(agent: agentID)
         if let filter = stateFilter, model.runtime(for: agentID)?.kind != filter {
             stateFilter = nil
+        }
+        if mainView == .scene, let stage = worldStage {
+            stage.camera.fly(to: .agent(agentID))
         }
         scroll(to: .agent(agentID))
     }
 
     func reveal(project projectID: ProjectID) {
         model.select(project: projectID)
+        if mainView == .scene, let stage = worldStage {
+            stage.camera.fly(to: .island(projectID, part: 0))
+        }
         scroll(to: .project(projectID))
+    }
+
+    /// ⌘L: the list view, or back to the open space.
+    func toggleMainView() {
+        mainView = mainView == .scene ? .list : .scene
     }
 
     // MARK: - Projects

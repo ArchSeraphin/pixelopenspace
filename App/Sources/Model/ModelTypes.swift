@@ -44,6 +44,13 @@ enum UIRequest: Equatable, Sendable {
     case manageTemplates
     /// ⌘B: show or hide the board panel.
     case toggleBoard
+    /// ⌘L: the list view, or back to the open space.
+    case toggleListView
+    /// ⌘+, ⌘−: the next or previous zoom of the open space, about the view's centre.
+    case zoomIn
+    case zoomOut
+    /// ⌘0, "Tout voir" (3.9).
+    case fitAll
 }
 
 struct PendingUIRequest: Identifiable, Equatable, Sendable {
