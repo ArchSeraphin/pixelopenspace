@@ -4,7 +4,8 @@ import SwiftUI
 
 /// Pixel Open Space (step 2a UI): one main window, detached terminal windows (one per agent), Settings, and the
 /// menus built from `AppCommand`. Every object is created once by `AppEnvironment` (the delegate starts it).
-@main
+/// Launched by `AppEntry` (the only `@main`) when the command line asks for neither the snapshot harness nor the
+/// demo mode.
 struct PixelOpenSpaceApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 

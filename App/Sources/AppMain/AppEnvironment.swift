@@ -2,21 +2,34 @@ import AppKit
 import Foundation
 import PixelCore
 
-/// Creates and wires the app's objects once (proposal 2.1). `AppEnvironment.shared` is reachable from the
-/// `AppDelegate` and from the SwiftUI `App`:
+/// How the app runs: for real, or on a temporary state for the snapshot harness and the demo mode (step 3).
+enum AppRunMode: Sendable {
+    /// The user's files, hook server, sessions, clock, notifications and search for `claude`.
+    case normal
+    /// `--snapshot` and `--demo`: the directories given (a temporary folder), and nothing is started: no
+    /// notification delegate, hook server, session, clock or search for `claude` (`prepareForLaunch()` and `start()`
+    /// do nothing). The harness fills the model itself.
+    case isolated
+}
+
+/// Creates and wires the app's objects once (proposal 2.1). `AppEnvironment.shared` is the normal environment,
+/// reachable from the `AppDelegate` and from the SwiftUI `App`:
 /// ```swift
-/// @main struct PixelOpenSpaceApp: App {
+/// struct PixelOpenSpaceApp: App {
 ///     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 ///     private let environment = AppEnvironment.shared
 ///     var body: some Scene { WindowGroup { RootView(model: environment.model, commands: environment.commands) } }
 /// }
 /// ```
+/// The snapshot harness and the demo mode build their own, isolated one (`init(directories:mode:)`): `shared` is
+/// never evaluated then, and no isolated one exists in a normal launch (`AppEntry`).
 /// Files are loaded synchronously here (a few kilobytes); the hook server, the clock and the search for `claude`
 /// start in `start()`, from `applicationDidFinishLaunching`.
 @MainActor
 final class AppEnvironment {
-    static let shared = AppEnvironment()
+    static let shared = AppEnvironment(directories: .standard(), mode: .normal)
 
+    let mode: AppRunMode
     let directories: AppDirectories
     let persistence: PersistenceStore
     let hookServer: HookServer
@@ -29,8 +42,8 @@ final class AppEnvironment {
 
     private var started = false
 
-    private init() {
-        let directories = AppDirectories.standard()
+    init(directories: AppDirectories, mode: AppRunMode) {
+        self.mode = mode
         let directoryProblems = directories.prepare()
         self.directories = directories
 
@@ -62,15 +75,17 @@ final class AppEnvironment {
         }
     }
 
-    /// `applicationWillFinishLaunching`: must precede any notification delivery.
+    /// `applicationWillFinishLaunching`: must precede any notification delivery. Nothing in isolated mode.
     func prepareForLaunch() {
+        guard mode == .normal else { return }
         NSWindow.allowsAutomaticWindowTabbing = false
         notifications.install()
     }
 
-    /// `applicationDidFinishLaunching`: hook server, hook and clock loops, search for `claude`. Idempotent.
+    /// `applicationDidFinishLaunching`: hook server, hook and clock loops, search for `claude`. Idempotent. Nothing
+    /// in isolated mode.
     func start() {
-        guard !started else { return }
+        guard mode == .normal, !started else { return }
         started = true
         model.start()
     }

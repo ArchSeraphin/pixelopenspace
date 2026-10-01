@@ -32,13 +32,29 @@ they never touch services directly.
 ## Files
 
 ### `AppMain/`
+- `AppEntry.swift`: the only `@main`. Parses the command line (`SnapshotOptions.parse`): `--snapshot` runs the
+  snapshot harness, `--demo` the demo mode, anything else the normal app (`PixelOpenSpaceApp.main()`). A command line
+  it cannot read: French message and usage on stderr, exit code 1.
 - `AppDelegate.swift`: `NSApplicationDelegate` (installed with `@NSApplicationDelegateAdaptor`). Installs the
   notification delegate in `applicationWillFinishLaunching`, starts the environment in `applicationDidFinishLaunching`,
   keeps the app alive when the last window closes, and routes ⌘Q to `AppModel.handleTerminationRequest()`.
-- `AppEnvironment.swift`: `AppEnvironment.shared`: creates and wires every object once (directories, persistence,
-  hook server, terminal presenter, session manager, Claude locator, notifications, `AppModel`, `CommandCenter`).
-  Loads the state files synchronously; `start()` starts the rest.
-- `PixelOpenSpaceApp.swift`: the SwiftUI `@main App` (written with the UI, `App/Sources/UI/`).
+- `AppEnvironment.swift`: creates and wires every object once (directories, persistence, hook server, terminal
+  presenter, session manager, Claude locator, notifications, `AppModel`, `CommandCenter`). Loads the state files
+  synchronously; `start()` starts the rest. `AppEnvironment.shared` is the normal one; `init(directories:mode:)`
+  with `.isolated` builds the harness's, for which `prepareForLaunch()` and `start()` do nothing.
+- `PixelOpenSpaceApp.swift`: the SwiftUI `App` (written with the UI, `App/Sources/UI/`), launched by `AppEntry`.
+
+### `Snapshot/`
+- `SnapshotOptions.swift`: the command line of the harness and of the demo mode.
+- `SnapshotEnvironment.swift`: the isolated state (temporary folder, throwaway preferences domain, `.isolated`
+  environment filled with `Showcase.appWorkspace()`), `IsolatedApplication` (refuses activation in the harness),
+  `IsolatedWindow` (the main window, hidden in the harness) and the choice of the capture screen.
+- `SnapshotHooks.swift`: the vocabulary of steps (`SnapshotStep`) and the registry where features plug in their
+  hooks (`SnapshotHooks.shared`, `SceneCaptureProviding`).
+- `SnapshotScenarios.swift`: the scenarios and their shots.
+- `SnapshotRunner.swift`: runs the scenarios, captures, compares, writes `report.txt` and `stats.json`, watchdog.
+- `SnapshotImages.swift`: window captures, PNG, the software reference and the comparison (tolerance 1 per channel).
+- `DemoMode.swift`: the demo mode: menu bar from `AppCommand`, the "Démo" panel, the clock.
 
 ### `Model/`
 - `AppModel.swift`: `@MainActor @Observable` state: workspace, settings, `runtimes`, global issues, hook server
@@ -109,3 +125,68 @@ they never touch services directly.
   `TerminalPresenter.attach(_:to:)` and released with `container.detachFromPresenter()` in `dismantleNSView`
   (see `TerminalPresenter`). The process never depends on a view being shown.
 - Do not name UI types `TerminalView` or `Terminal`: those are SwiftTerm types used by `Sessions/`.
+
+## Banc de captures et mode démo
+
+Both run the app on a temporary, isolated state with the simulated open space of `Showcase.appWorkspace()` (6
+projects, 20 agents in every state, a board of 19 post-its, fixed clock 2026-10-01 09:00 UTC). No hook server,
+session, clock, notification or search for `claude` is started, and nothing of your own state is read or written.
+
+### Snapshot harness
+
+```bash
+Tools/snapshot.sh "$TMPDIR/pos-snapshots/tache-7" zooms,fractional   # scenario: all by default
+# or directly:
+build/DerivedData/Build/Products/Debug/PixelOpenSpace.app/Contents/MacOS/PixelOpenSpace \
+    --snapshot <dossier> [--scenario <id,id…>] [--size 1440x900] [--keep-state]
+```
+
+The script runs the Debug build of `build/DerivedData` (never `build/Demo`), and fails in French when it is missing.
+The app captures, writes into `<dossier>`, then quits by itself. Exit codes: 0 done (mismatches are in the report),
+1 invalid command line, 2 a file could not be written, 3 watchdog (120 s) or interruption.
+
+Scenarios (`SnapshotScenarios.swift`): `overview`, `zooms`, `fractional`, `list`, `empty`, `select`, `navigation`,
+`agentwindow`, `dragdrop`, `board`, `arrival`, `demo`, `selftest`, and `all` (every one, in that order).
+
+Files:
+- `window-<scenario>-<shot>.png`: the main window at the display scale; other visible windows (panels) as `-2`,
+  `-3`… The content view is drawn by `cacheDisplay` and laid on the window's background colour.
+- With a scene on screen and a scene provider (step 3, task 7): `scene-…png` (the SpriteKit drawing),
+  `reference-…png` (`SceneCompositor` on the same input, cropped to the visible texels, scaled to the nearest) and
+  `diff-…png` (the reference darkened by half, mismatches in magenta). Without a provider: `reference-…png` only,
+  the whole world at the shot's zoom.
+- `report.txt` (French): capture screen and display scale, state folder and preferences domain used, one line per
+  step (hook and its owner, harness fallback, or "non prise en charge" with the task that will register it), one
+  line per file, mismatches per shot, scene statistics; ends with
+  `BILAN : écarts hors tolérance N · étapes non prises en charge M`. `stats.json` holds the same data.
+- `selftest` checks the comparison tool itself: "outil de comparaison : OK" when a reference matches itself and a
+  copy shifted by one texel does not.
+
+A pixel is a mismatch when a channel differs by more than 1 where the reference is opaque. A feature plugs into a
+shot by registering its hook in its own files, only when `SnapshotHooks.shared.isEnabled` (contract in
+`SnapshotHooks.swift`); the harness files never change for it.
+
+Isolation:
+- State folder `$TMPDIR/PixelOpenSpace-snapshot-<pid>-<uuid>` (0700), used as the home of `AppDirectories`: the
+  support folder, `run/` and the socket path fall inside it. Removed at the end, unless `--keep-state` (its path is
+  in the report).
+- Preferences domain `fr.vv2.pixelopenspace.snapshot.<pid>`, given to every view by `.defaultAppStorage(_:)`; its
+  plist lives in the state folder, never in `~/Library/Preferences`; erased at the end.
+- An accessory app (no Dock icon) that never activates; its windows are transparent, click-through, never key nor
+  main. They sit on the capture screen: the main screen, or the finest one (highest backing scale) when the main
+  screen is a 1x monitor, so that the captures have a Retina scale whenever the Mac has a Retina display.
+- After a run, these print nothing: `ls -d "$TMPDIR"/PixelOpenSpace-snapshot-*`,
+  `find ~/Library/Preferences -name 'fr.vv2.pixelopenspace.snapshot*'`, `pgrep -f 'PixelOpenSpace --snapshot'`.
+
+### Demo mode
+
+```bash
+build/DerivedData/Build/Products/Debug/PixelOpenSpace.app/Contents/MacOS/PixelOpenSpace --demo [--size 1440x900]
+```
+
+For you only (the "3 s" protocol, step 3, décision 10): the same isolated state in a visible window, a minimal menu
+bar built from `AppCommand` (without "Rechercher Claude Code" and "Réglages…"), and a floating "Démo" panel:
+"Nouvel essai" puts 2 live agents picked at random in a wait (the others work), "Révéler" says who waits and for
+what, "Animer" makes 3 agents change activity every 4 s (frame-rate measures). The clock advances every second from
+the simulated date. The agents are simulated: no terminal, no `claude`. ⌘Q, closing the window or Ctrl-C erases the
+temporary state.

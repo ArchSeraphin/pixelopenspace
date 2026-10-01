@@ -103,6 +103,28 @@ jobs:
           check "event, app not running" env PIXEL_HOOK_SOCKET="$RUNNER_TEMP/absent.sock" "$hook" \
             <"$RUNNER_TEMP/event.json"
 
+      # Snapshot harness (step 3): the app on a temporary, isolated state, every scenario, then it quits by itself.
+      # Informative only: the virtual machines have no real graphics acceleration (scenes may come out black); the
+      # reference stays the core's software rendering.
+      - name: Snapshot harness
+        continue-on-error: true
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          status=0
+          Tools/snapshot.sh build/snapshots all || status=$?
+          tail -n 30 build/snapshots/report.txt || true
+          exit "$status"
+
+      - name: Upload the snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: build/snapshots
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Zip the app
         run: ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" build/PixelOpenSpace.app.zip
 
