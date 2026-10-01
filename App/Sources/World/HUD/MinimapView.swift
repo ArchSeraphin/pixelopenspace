@@ -18,15 +18,24 @@ struct MinimapDot: Hashable, Sendable, Identifiable {
 /// `minimap.frame` in 9-slice, the islands as blocks of their project's light tone, one dot per agent, and the
 /// visible part of the world (`minimap.viewport`). A click flies the camera there, a drag moves it at once. Everything
 /// at 2 pt per texel, never smoothed.
+///
+/// Its dots are drop targets of a dragged post-it (3.9): held over a dot, the dot is ringed and the map says what a
+/// drop does; after half a second the camera flies to the agent while the drag goes on; let go there, the post-it goes
+/// to that agent (`DropHUDController`).
 struct MinimapView: View {
     /// Texels of the frame around the map (`HUDSprites.minimapFrameInsets`).
     static let frameInset = 4
     /// Points the pointer moves before a press becomes a drag.
     static let dragThreshold: CGFloat = 3
+    /// Points from a dot's centre within which a dragged post-it is over it.
+    static let dropRadius: CGFloat = 9
+    /// Points of the ring around a dot under a dragged post-it.
+    static let dropRingSize: CGFloat = 18
 
     let stage: WorldStage
 
     @Environment(AppModel.self) private var model
+    @Environment(WorkbenchState.self) private var workbench
     @State private var isDragging = false
 
     init(stage: WorldStage) {
@@ -47,10 +56,32 @@ struct MinimapView: View {
                         .accessibilityHidden(true)
                 }
                 MinimapViewport(camera: camera, layout: map.layout)
+                if let hover = dropHover, let dot = map.dots.first(where: { $0.agentID == hover.spot.agentID }) {
+                    Circle()
+                        .strokeBorder(Color.accentColor, lineWidth: 2)
+                        .background(Circle().fill(Color.accentColor.opacity(0.2)))
+                        .frame(width: Self.dropRingSize, height: Self.dropRingSize)
+                        .offset(x: dot.center.x - Self.dropRingSize / 2, y: dot.center.y - Self.dropRingSize / 2)
+                        .allowsHitTesting(false)
+                }
             }
             .frame(width: map.size.width, height: map.size.height, alignment: .topLeading)
+            .overlay(alignment: .topLeading) {
+                if let hover = dropHover {
+                    let origin = bubbleOrigin(hover, map: map)
+                    DropFeedbackBubble(text: hover.feedback, accepted: hover.accepted)
+                        .offset(x: origin.x, y: origin.y)
+                        .allowsHitTesting(false)
+                }
+            }
             .contentShape(Rectangle())
             .gesture(drag(map.layout))
+            .onDrop(of: [.pixelTaskCard], delegate: HUDDropDelegate(model: model, workbench: workbench, spot: { location in
+                Self.dot(near: location, in: map.dots).map { DropHUDSpot.minimapDot($0.agentID) }
+            }, owns: { spot in
+                if case .minimapDot = spot { return true }
+                return false
+            }))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Mini-carte")
             .accessibilityHint("Montre la partie visible de l'open space ; un clic y déplace la vue")
@@ -58,6 +89,77 @@ struct MinimapView: View {
             .accessibilityAction(named: "Tout voir") { camera.fitAll(animated: true) }
             .help("Mini-carte : clic pour y aller, glisser pour déplacer la vue")
         }
+    }
+
+    /// The dragged post-it is over one of the dots.
+    private var dropHover: DropHUDHover? {
+        guard let hover = workbench.dropHUDHover, case .minimapDot = hover.spot else { return nil }
+        return hover
+    }
+
+    /// Where the bubble of a post-it held over a dot goes, from the minimap's top-left corner: above the map against
+    /// its right edge, else above the dot; else the clear place nearest to the dot. Always out of the edge arrows,
+    /// drawn over the minimap (`DropBubbleLayout`).
+    private func bubbleOrigin(_ hover: DropHUDHover, map: MinimapRenderer.Content) -> CGPoint {
+        let camera = stage.camera
+        let view = CGSize(width: CGFloat(camera.view.width), height: CGFloat(camera.view.height))
+        let frame = Self.frame(size: map.size, in: view)
+        let size = DropFeedbackBubble.size(text: hover.feedback, accepted: hover.accepted)
+        let dot = map.dots.first { $0.agentID == hover.spot.agentID }
+            .map { CGPoint(x: frame.minX + $0.center.x, y: frame.minY + $0.center.y) }
+            ?? CGPoint(x: frame.midX, y: frame.midY)
+        let above = frame.minY - DropBubbleLayout.gap - size.height
+        let candidates = [CGPoint(x: frame.maxX - size.width, y: above),
+                          DropBubbleLayout.clamped(CGPoint(x: dot.x - size.width / 2, y: above), size: size, in: view)]
+        let origin = DropBubbleLayout.origin(size: size, candidates: candidates, near: dot, in: view,
+                                             avoiding: DropBubbleLayout.hudFrames(stage: stage, model: model))
+        return CGPoint(x: origin.x - frame.minX, y: origin.y - frame.minY)
+    }
+
+    /// The minimap's frame while it shows, in the scene's points from its top-left corner.
+    static func frame(stage: WorldStage, model: AppModel) -> CGRect? {
+        let camera = stage.camera
+        guard camera.needsMinimap,
+              let map = MinimapRenderer.shared.content(world: camera.world, hud: WorldHUD.shared, model: model) else {
+            return nil
+        }
+        return frame(size: map.size, in: CGSize(width: CGFloat(camera.view.width), height: CGFloat(camera.view.height)))
+    }
+
+    /// The frame of a minimap of `size` in a scene of `view` points: the bottom-right corner,
+    /// `WorldAreaView.minimapMargin` from the edges.
+    static func frame(size: CGSize, in view: CGSize) -> CGRect {
+        let margin = WorldAreaView.minimapMargin
+        return CGRect(x: view.width - margin - size.width, y: view.height - margin - size.height, width: size.width,
+                      height: size.height)
+    }
+
+    /// Where a dragged post-it held over the scene's view meets the minimap: `overMap` when the point (in the scene's
+    /// points from its top-left corner) is on the minimap, and the agent of the dot under it.
+    static func dropSpot(at point: CGPoint, stage: WorldStage, model: AppModel) -> (overMap: Bool, agentID: AgentID?) {
+        let camera = stage.camera
+        guard camera.needsMinimap,
+              let map = MinimapRenderer.shared.content(world: camera.world, hud: WorldHUD.shared, model: model) else {
+            return (false, nil)
+        }
+        let frame = frame(size: map.size, in: CGSize(width: CGFloat(camera.view.width),
+                                                     height: CGFloat(camera.view.height)))
+        guard frame.contains(point) else { return (false, nil) }
+        let local = CGPoint(x: point.x - frame.minX, y: point.y - frame.minY)
+        return (true, dot(near: local, in: map.dots)?.agentID)
+    }
+
+    /// The dot nearest to a point of the minimap (its frame included), within `dropRadius`; the most urgent when two
+    /// are as near.
+    static func dot(near location: CGPoint, in dots: [MinimapDot]) -> MinimapDot? {
+        var best: (dot: MinimapDot, distance: CGFloat)?
+        // `dots` is sorted the most urgent last (drawn on top).
+        for dot in dots.reversed() {
+            let distance = hypot(dot.center.x - location.x, dot.center.y - location.y)
+            guard distance <= dropRadius, distance < (best?.distance ?? .infinity) else { continue }
+            best = (dot, distance)
+        }
+        return best?.dot
     }
 
     /// A sprite's anchor in points from its top-left corner (`minimap.dot.*`: 5 × 5 texels, anchor (2, 2)).

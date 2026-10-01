@@ -193,22 +193,44 @@ extension AppModel {
         return runtime.kind == .idle || runtime.kind == .done
     }
 
-    /// "Lancer un nouvel agent avec ce post-it" (3.6, when no agent of the project runs): a new agent of the card's
-    /// project, started with the card's prompt as its positional prompt. The card joins its queue and its delivery
-    /// is recorded at the launch, so that the prompt's `UserPromptSubmit` moves it to "En cours" (T30b).
-    func launchNewAgent(with cardID: TaskCardID) {
-        guard let card = board.card(cardID), card.column == .todo else { return }
-        guard let projectID = dispatchProject(for: card) else {
+    /// "Lancer un nouvel agent avec ce post-it" (3.6, when no agent of the project runs), or a post-it dropped on a
+    /// free desk or on an island of the scene (3.9): a new agent, started with the card's prompt as its positional
+    /// prompt. The card joins its queue and its delivery is recorded at the launch, so that the prompt's
+    /// `UserPromptSubmit` moves it to "En cours" (T30b).
+    ///
+    /// `projectID`: the project of the new agent (the island the card was dropped on); nil, the card's project.
+    /// A card of another project moves to it, as any assignment does (noted in its history, and in a toast).
+    /// `deskIndex`: that desk (a free desk of the scene), refused with a toast when an agent sits there already; nil,
+    /// the first free desk. Returns the new agent.
+    @discardableResult
+    func launchNewAgent(with cardID: TaskCardID, in projectID: ProjectID? = nil, deskIndex: Int? = nil) -> AgentID? {
+        guard let card = board.card(cardID), card.column == .todo else { return nil }
+        guard let projectID = projectID.flatMap({ workspace.liveProject($0)?.id }) ?? dispatchProject(for: card) else {
             showToast("Choisis d'abord le projet de ce post-it.", style: .warning)
-            return
+            return nil
         }
-        guard let agentID = addAgent(projectID: projectID, launch: false) else { return }
+        guard let agentID = addAgent(projectID: projectID, launch: false, deskIndex: deskIndex) else { return nil }
         applyTask(.assign(cardID, to: agentID))
+        if let previous = card.projectID, previous != projectID, board.card(cardID)?.assignee == agentID,
+           let project = workspace.project(projectID) {
+            showToast("« \(card.title) » passe au projet \(project.name), avec son nouvel agent.", agentID: agentID)
+        }
         guard board.card(cardID)?.assignee == agentID, let prompt = promptPreview(for: cardID), !prompt.isEmpty else {
-            return
+            return agentID
         }
         dispatcher.expectPositionalLaunch(agentID, item: .card(cardID), text: prompt.text)
         launch(agentID, mode: .new(initialPrompt: prompt.text))
+        return agentID
+    }
+
+    /// "Premier agent libre" of a project (3.6, `DispatchPolicy.firstFreeAgent`), for a post-it dropped on its island
+    /// (3.9): idle or done with an empty queue, idle the longest, else the shortest queue among its running agents;
+    /// nil when none of them runs.
+    func firstFreeAgent(in projectID: ProjectID) -> AgentID? {
+        guard workspace.liveProject(projectID) != nil else { return nil }
+        let agents = workspace.agents(in: projectID)
+        let lengths = Dictionary(agents.map { ($0.id, queue(of: $0.id).count) }) { first, _ in first }
+        return DispatchPolicy.firstFreeAgent(in: projectID, agents: agents, runtimes: runtimes, queueLengths: lengths)
     }
 
     // MARK: - Selection and navigation

@@ -4,8 +4,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The main window (mockups 6(b), 6(q)): status bar and waiting tray, banners, projects sidebar, the open space (or
-/// the list of agents, ⌘L) and the post-its board panel (⌘B), terminal panel. Performs the model's UI requests
-/// (sheets, Settings, terminal, board, view mode and zoom), focus requests and quit sheet.
+/// the list of agents, ⌘L) and the post-its board (⌘B: beside them on the right, 6(k); full screen in their place,
+/// 6(c); hidden), terminal panel. Performs the model's UI requests (sheets, Settings, terminal, board, view mode and
+/// zoom), focus requests and quit sheet.
 struct RootView: View {
     static let minimumPanelHeight: Double = 200
     static let minimumBoardHeight: Double = 180
@@ -20,7 +21,11 @@ struct RootView: View {
     @Environment(\.openSettings) private var openSettings
 
     @AppStorage("terminalPanelHeight") private var panelHeight: Double = 300
+    /// The board's place before ⌘B had three (step 2b), kept in step with `boardMode`: true when beside the scene. An
+    /// older copy of the app reads it; the first launch takes `boardMode` from it.
     @AppStorage("boardPanelVisible") private var isBoardVisible = true
+    /// `BoardMode`; empty until the first launch that knows it.
+    @AppStorage("boardMode") private var storedBoardMode = ""
     @AppStorage("sidebarVisible") private var isSidebarVisible = true
     @AppStorage("boardPanelWidth") private var boardWidth: Double = 340
     @AppStorage("welcomeShown") private var welcomeShown = false
@@ -99,25 +104,46 @@ struct RootView: View {
         .onChange(of: workbench.mainView) { _, mode in
             storedMainView = mode.rawValue
         }
+        .onChange(of: workbench.boardMode) { _, mode in
+            storedBoardMode = mode.rawValue
+            if isBoardVisible != (mode == .side) { isBoardVisible = mode == .side }
+        }
+        .onChange(of: isBoardVisible) { _, visible in
+            // Written from outside (an older copy of the app, the snapshot harness resetting a scenario).
+            if visible, workbench.boardMode != .side {
+                workbench.boardMode = .side
+            } else if !visible, workbench.boardMode == .side {
+                workbench.boardMode = .hidden
+            }
+        }
     }
 
     // MARK: - Layout
 
-    /// The open space or the list of agents, and the post-its board panel on their right.
+    /// The open space or the list of agents, and the post-its board panel on their right; or the board full screen
+    /// in their place.
     private var workArea: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
-                mainContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Over the agents, never over the board panel: its last cards stay visible.
-                    .overlay(alignment: .bottomTrailing) {
-                        ToastOverlay()
+                if workbench.boardMode == .full {
+                    BoardFullScreenView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .overlay(alignment: .bottomTrailing) {
+                            ToastOverlay()
+                        }
+                } else {
+                    mainContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // Over the agents, never over the board panel: its last cards stay visible.
+                        .overlay(alignment: .bottomTrailing) {
+                            ToastOverlay()
+                        }
+                    if workbench.boardMode == .side {
+                        let range = boardWidthRange(available: Double(geometry.size.width))
+                        BoardPanelDivider(width: $boardWidth, range: range)
+                        BoardPanelView()
+                            .frame(width: min(max(boardWidth, range.lowerBound), range.upperBound))
                     }
-                if isBoardVisible {
-                    let range = boardWidthRange(available: Double(geometry.size.width))
-                    BoardPanelDivider(width: $boardWidth, range: range)
-                    BoardPanelView()
-                        .frame(width: min(max(boardWidth, range.lowerBound), range.upperBound))
                 }
             }
         }
@@ -143,6 +169,15 @@ struct RootView: View {
 
     private var showsPanel: Bool {
         workbench.isTerminalPanelVisible && model.selectedAgentID != nil
+    }
+
+    /// What ⌘B does next.
+    private var boardToggleTitle: String {
+        switch workbench.boardMode {
+        case .side: return "Tableau en plein écran"
+        case .full: return "Masquer le tableau"
+        case .hidden: return "Afficher le tableau"
+        }
     }
 
     private var panelToggleTitle: String {
@@ -174,12 +209,11 @@ struct RootView: View {
             .disabled(model.projects.isEmpty)
             .help("Nouvel agent dans le projet sélectionné (⇧⌘N)")
             Button {
-                isBoardVisible.toggle()
+                workbench.cycleBoardMode()
             } label: {
-                Label(isBoardVisible ? "Masquer le tableau" : "Afficher le tableau",
-                      systemImage: AppCommand.toggleBoard.symbolName)
+                Label(boardToggleTitle, systemImage: AppCommand.toggleBoard.symbolName)
             }
-            .help("Afficher ou masquer le tableau des post-its (⌘B)")
+            .help("Tableau des post-its : en panneau, puis plein écran, puis masqué (⌘B)")
             Button {
                 workbench.toggleMainView()
             } label: {
@@ -208,6 +242,8 @@ struct RootView: View {
         workbench.mainWindowAppeared()
         workbench.openWindowAction = openWindow
         workbench.mainView = WorkbenchState.MainView(rawValue: storedMainView) ?? .scene
+        workbench.boardMode = BoardMode(rawValue: storedBoardMode) ?? (isBoardVisible ? .side : .hidden)
+        BoardSnapshotHook.register(workbench: workbench)
         if stage == nil {
             let created = WorldStage(model: model, workbench: workbench)
             stage = created
@@ -244,17 +280,17 @@ struct RootView: View {
         case .newCard:
             // The title field would take the focus behind an open sheet.
             guard workbench.activeSheet == nil else { return workbench.bringMainWindowForward() }
-            isBoardVisible = true
+            workbench.showBoard()
             workbench.requestQuickAdd()
             workbench.bringMainWindowForward()
         case .pasteCards:
             guard workbench.activeSheet == nil else { return workbench.bringMainWindowForward() }
-            isBoardVisible = true
+            workbench.showBoard()
             presentSheet(.pasteCards)
         case .manageTemplates:
             presentSheet(.templates)
         case .toggleBoard:
-            isBoardVisible.toggle()
+            workbench.cycleBoardMode()
         case .toggleListView:
             workbench.toggleMainView()
         case .zoomIn:
@@ -284,6 +320,8 @@ struct RootView: View {
         guard let request else { return }
         model.consumeFocusRequest()
         let agentID = request.agentID
+        // The full-screen board would hide the agent: it goes back beside the scene or the list.
+        if workbench.boardMode == .full { workbench.boardMode = .side }
         workbench.reveal(agentID)
         let waits = !(model.runtime(for: agentID)?.pendingWaits.isEmpty ?? true)
         if waits, model.hasTerminal(agentID) {

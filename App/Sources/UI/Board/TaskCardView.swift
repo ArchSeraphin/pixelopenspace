@@ -217,7 +217,7 @@ struct CardStatusLine: View {
 /// One post-it (mockups 6(b), 6(c)): pin, title, two lines of description, project badge, tags, status line and
 /// flags; "Valider" and "↺" in "À valider". Click focuses it, double-click or Return opens the editor, ⌘↩
 /// validates, ⌥⌘↩ resends with a precision, ⌘⌫ deletes, ↑ ↓ move the focus. It can be dragged to another
-/// section or onto an agent card.
+/// section, onto an agent card of the list, or onto the open space (an agent, a free desk, an island, 3.9).
 struct TaskCardView: View {
     let card: TaskCard
     let focus: FocusState<TaskCardID?>.Binding
@@ -288,7 +288,11 @@ struct TaskCardView: View {
         .onKeyPress(phases: .down, action: handleKey)
         .onTapGesture(count: 2) { workbench.editCard(card.id) }
         .onTapGesture { focus.wrappedValue = card.id }
-        .draggable(CardDragPayload(cardID: card.id)) {
+        // The same type and data as `CardDragPayload` (the board's sections and the agent cards receive it), and
+        // the scene told at once which card is dragged (décision 9). The preview stays the board's post-it.
+        .onDrag {
+            CardDragSource.itemProvider(for: card.id, workbench: workbench)
+        } preview: {
             CardDragPreview(card: card)
         }
         .contextMenu {
@@ -407,7 +411,7 @@ struct ProjectBadge: View {
     }
 }
 
-/// What follows the pointer during a drag: the pin and the title.
+/// What follows the pointer during a drag: the pin and the title, the board's size whatever the scene's zoom (3.9).
 private struct CardDragPreview: View {
     let card: TaskCard
 

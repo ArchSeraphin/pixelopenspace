@@ -6,6 +6,10 @@ import SwiftUI
 /// agent, flies the camera to it in the open space (the list shows its card instead), and opens its window
 /// (`AgentWindowController`), which acknowledges the wait; the answer is given from there, by its "Ouvrir le
 /// terminal ⌘T".
+///
+/// A row is also a drop target of a dragged post-it (3.9): held there, the row is highlighted with what a drop does
+/// ("Donner à Sol · …"), and after half a second the camera flies to the agent while the drag goes on; let go there,
+/// the post-it goes to that agent (`DropHUDController`).
 struct WaitingTrayView: View {
     static let visibleRows = 4
 
@@ -81,12 +85,15 @@ private struct WaitingTrayRow: View {
     let action: @MainActor () -> Void
 
     @Environment(AppModel.self) private var model
+    @Environment(WorkbenchState.self) private var workbench
 
     var body: some View {
         let names = model.names(of: entry.agentID)
         let since = DurationText.short(model.now.timeIntervalSince(entry.since))
         let reason = AgentPresenter.describe(entry.reason)
         let extra = entry.count > 1 ? " (+\(entry.count - 1))" : ""
+        let spot = DropHUDSpot.trayRow(entry.agentID)
+        let dropHover = workbench.dropHUDHover.flatMap { $0.spot == spot ? $0 : nil }
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: AgentPresenter.symbolName(for: entry.reason))
@@ -98,14 +105,23 @@ private struct WaitingTrayRow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 8)
+                if let dropHover {
+                    DropFeedbackBubble(text: dropHover.feedback, accepted: dropHover.accepted)
+                }
                 Text(since)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
             .frame(height: 22)
+            .padding(.horizontal, 4)
+            .background(RoundedRectangle(cornerRadius: 4)
+                .fill(dropHover == nil ? Color.clear : Color.accentColor.opacity(0.16)))
+            .overlay(RoundedRectangle(cornerRadius: 4)
+                .strokeBorder(dropHover == nil ? Color.clear : Color.accentColor, lineWidth: 2))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .agentDropTarget(spot, model: model, workbench: workbench)
         .help("Ouvrir la fenêtre de \(names.agent) : ce qu'il attend, et son terminal pour répondre")
         .accessibilityLabel(model.accessibilityLabel(for: entry.agentID) ?? "\(names.agent), \(reason)")
         .accessibilityHint("Ouvre la fenêtre de l'agent")

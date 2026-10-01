@@ -2,9 +2,10 @@ import AppKit
 import PixelCore
 import SwiftUI
 
-/// The board panel, right of the agents (mockup 6(b); the full-screen board of 6(c) comes with step 3): filters,
-/// then four stacked sections "À FAIRE", "EN COURS", "À VALIDER", "FAIT" (folded by default). Shown or hidden
-/// with ⌘B; its width is set by dragging its left edge. Every change goes through `TaskLifecycle.reduce`.
+/// The board panel, right of the open space or of the agents (mockups 6(b), 6(k)): filters, then four stacked
+/// sections "À FAIRE", "EN COURS", "À VALIDER", "FAIT" (folded by default). ⌘B makes it full screen
+/// (`BoardFullScreenView`, 6(c)), then hides it; its width is set by dragging its left edge. Its post-its are
+/// dragged onto an agent of the scene or of the list. Every change goes through `TaskLifecycle.reduce`.
 struct BoardPanelView: View {
     static let minimumWidth: Double = 260
 
@@ -58,7 +59,7 @@ struct BoardPanelView: View {
                 }
             }
             Divider()
-            Text("Glisse un post-it sur un agent pour le lui donner · ⌘N nouveau · ⇧⌘V coller une liste")
+            Text("Glisse un post-it sur un agent, un poste libre ou un îlot · ⌘N nouveau · ⇧⌘V coller une liste")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
@@ -87,11 +88,20 @@ struct BoardPanelView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("\(model.board.cards.count) post-its en tout")
             Spacer(minLength: 0)
+            Button {
+                workbench.boardMode = .full
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+            }
+            .buttonStyle(.borderless)
+            .help("Tableau en plein écran (⌘B)")
+            .accessibilityLabel("Tableau en plein écran")
             Menu {
                 Button(AppCommand.pasteCards.title) { workbench.commands.perform(.pasteCards) }
                 Button(AppCommand.manageTemplates.title) { workbench.commands.perform(.manageTemplates) }
                 Divider()
-                Button("Masquer le tableau") { workbench.commands.perform(.toggleBoard) }
+                Button("Plein écran") { workbench.boardMode = .full }
+                Button("Masquer le tableau") { workbench.boardMode = .hidden }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }

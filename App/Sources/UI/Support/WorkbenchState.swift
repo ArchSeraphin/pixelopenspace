@@ -92,6 +92,44 @@ struct ScrollRequest: Equatable {
     let target: Target
 }
 
+/// Where the post-its board stands (⌘B goes from one to the next, décision 8): beside the scene or the list, on the
+/// right (6(k)); full screen, in place of the scene or the list (6(c)); hidden. Kept by `RootView` in the `boardMode`
+/// preference.
+enum BoardMode: String, CaseIterable {
+    case side, full, hidden
+
+    /// ⌘B: side, then full screen, then hidden, then side again.
+    var next: BoardMode {
+        switch self {
+        case .side: return .full
+        case .full: return .hidden
+        case .hidden: return .side
+        }
+    }
+}
+
+/// A post-it held over a small control of the window during a drag (3.9): a row of the waiting tray, an edge arrow or
+/// a dot of the minimap. Each stands for its agent: the same decision as the agent in the scene.
+enum DropHUDSpot: Hashable {
+    case trayRow(AgentID)
+    case edgeArrow(AgentID)
+    case minimapDot(AgentID)
+
+    var agentID: AgentID {
+        switch self {
+        case .trayRow(let id), .edgeArrow(let id), .minimapDot(let id): return id
+        }
+    }
+}
+
+/// What the spot under a dragged post-it shows: its highlight and the decision's text ("Donner à Sol · …").
+struct DropHUDHover: Equatable {
+    var spot: DropHUDSpot
+    var feedback: String
+    /// false: the post-it would be refused there (forbidden cursor, the reason in `feedback`).
+    var accepted: Bool
+}
+
 /// UI-only state of the windows (never persisted, never read by the model): sheets, terminal panel, filter,
 /// detached terminals, scroll and focus requests. Model state stays in `AppModel`.
 @MainActor
@@ -103,13 +141,27 @@ final class WorkbenchState {
         case scene, list
     }
 
+    /// Seconds the drag of a post-it is still known after the mouse button went up: the drop's handlers run first.
+    static let dragEndGrace: TimeInterval = 0.5
+
     @ObservationIgnored let model: AppModel
     @ObservationIgnored let commands: CommandCenter
     @ObservationIgnored let presenter: TerminalPresenter
 
     var mainView: MainView = .scene
+    /// The board's place (⌘B); `RootView` reads it from the `boardMode` preference when the window appears.
+    var boardMode: BoardMode = .side
     /// The open space of the main window (owned by `RootView`): its camera, plan and scene.
     @ObservationIgnored weak var worldStage: WorldStage?
+
+    /// The post-it being dragged from the board (décision 9): set by the board when the drag starts, cleared once the
+    /// mouse button is up. The scene reads the card's id from the drag's pasteboard, and falls back on this one while
+    /// that data cannot be read yet (during the hover).
+    @ObservationIgnored private(set) var draggedCard: TaskCardID?
+    /// The small control a dragged post-it is held over (tray row, edge arrow, minimap dot), highlighted.
+    var dropHUDHover: DropHUDHover?
+    @ObservationIgnored private var dragWatch: Timer?
+    @ObservationIgnored private var dragGeneration = 0
 
     var activeSheet: ActiveSheet?
     /// Confirmation dialog of the main window.
@@ -176,6 +228,8 @@ final class WorkbenchState {
     func isAgentVisible(_ agentID: AgentID) -> Bool {
         if let window = presenter.window(showing: agentID), Self.isOnScreen(window) { return true }
         guard isMainWindowOpen, let window = mainWindow, Self.isOnScreen(window) else { return false }
+        // The full-screen board covers the open space and the list.
+        guard boardMode != .full else { return false }
         if mainView == .scene, let stage = worldStage { return stage.isVisible(agentID) }
         if let filter = stateFilter, model.runtime(for: agentID)?.kind != filter { return false }
         return true
@@ -336,6 +390,56 @@ final class WorkbenchState {
     }
 
     // MARK: - Board
+
+    /// ⌘B: side, full screen, hidden, side again.
+    func cycleBoardMode() {
+        boardMode = boardMode.next
+    }
+
+    /// The board must show (⌘N, "Coller une liste"): beside the scene when it was hidden; full screen stays.
+    func showBoard() {
+        if boardMode == .hidden { boardMode = .side }
+    }
+
+    // MARK: - Dragging a post-it (décision 9)
+
+    /// The board's post-it starts a drag: the scene knows it at once, whatever the drag's pasteboard can tell yet.
+    /// The drag ends when the mouse button comes up (AppKit gives the source no other news through SwiftUI); the card
+    /// is forgotten `dragEndGrace` later, once the destination handled the drop.
+    func beginCardDrag(_ cardID: TaskCardID) {
+        dragGeneration += 1
+        let generation = dragGeneration
+        draggedCard = cardID
+        dragWatch?.invalidate()
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] timer in
+            let done = MainActor.assumeIsolated { () -> Bool in
+                guard let self, self.dragGeneration == generation else { return true }
+                guard NSEvent.pressedMouseButtons & 1 == 0 else { return false }
+                self.dragWatch = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.dragEndGrace) { [weak self] in
+                    MainActor.assumeIsolated { self?.endCardDrag(generation: generation) }
+                }
+                return true
+            }
+            if done { timer.invalidate() }
+        }
+        // Common modes: the drag tracks the mouse in its own run-loop mode.
+        RunLoop.main.add(timer, forMode: .common)
+        dragWatch = timer
+    }
+
+    /// The drag is over (dropped, cancelled): no card held, no control highlighted.
+    func endCardDrag() {
+        endCardDrag(generation: dragGeneration)
+    }
+
+    private func endCardDrag(generation: Int) {
+        guard generation == dragGeneration else { return }
+        dragWatch?.invalidate()
+        dragWatch = nil
+        draggedCard = nil
+        if dropHUDHover != nil { dropHUDHover = nil }
+    }
 
     /// Status-bar counter clicked: filters the board on that state, or removes the filter.
     func toggleFilter(_ kind: AgentStateKind) {

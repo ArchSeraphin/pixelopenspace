@@ -10,6 +10,10 @@ import SpriteKit
 ///
 /// The mouse, the trackpad and the keyboard go to its `WorldInputController` (3.9, "Caméra et souris"), which turns
 /// them into camera moves and intents; the view itself only routes the events. It takes the keyboard focus on a click.
+///
+/// It is the destination of a post-it dragged from the board (3.9, "Glisser-déposer", décision 9): it registers the
+/// post-it's type itself and hands the drag to its `WorldDropController`. No SwiftUI view over the scene takes the
+/// drag, the hover, the scroll or the pinch.
 final class WorldView: SKView {
     static let restFPS = 30
     static let interactionFPS = 60
@@ -24,6 +28,8 @@ final class WorldView: SKView {
     }
     /// Gestures, clicks, hover and keys; created by `connectInput`, once the stage is attached.
     private(set) var input: WorldInputController?
+    /// A post-it dragged onto the scene; created with `input`.
+    private(set) var drop: WorldDropController?
 
     private var interactionUntil: TimeInterval = 0
     private var interactionTimer: Timer?
@@ -38,6 +44,7 @@ final class WorldView: SKView {
         allowsTransparency = false
         shouldCullNonVisibleNodes = true
         preferredFramesPerSecond = Self.restFPS
+        registerForDraggedTypes([.pixelTaskCard])
         // Selector-based: removed with the view.
         let center = NotificationCenter.default
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
@@ -57,7 +64,10 @@ final class WorldView: SKView {
         observeWindow()
         reportMetrics()
         updateEnergy()
-        if window == nil { input?.viewLeftWindow() }
+        if window == nil {
+            input?.viewLeftWindow()
+            drop?.viewLeftWindow()
+        }
     }
 
     override func setFrameSize(_ newSize: NSSize) {
@@ -137,6 +147,7 @@ final class WorldView: SKView {
     func connectInput(model: AppModel, workbench: WorkbenchState) {
         guard input == nil, let stage else { return }
         input = WorldInputController(view: self, stage: stage, model: model, workbench: workbench)
+        drop = WorldDropController(view: self, stage: stage, model: model, workbench: workbench)
     }
 
     override var acceptsFirstResponder: Bool { true }
@@ -226,6 +237,32 @@ final class WorldView: SKView {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if input?.performKeyEquivalent(event) == true { return true }
         return super.performKeyEquivalent(with: event)
+    }
+
+    // MARK: Dragging a post-it (3.9)
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        drop?.draggingEntered(sender) ?? []
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        drop?.draggingUpdated(sender) ?? []
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        drop?.draggingExited()
+    }
+
+    override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        drop != nil
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        drop?.performDragOperation(sender) ?? false
+    }
+
+    override func draggingEnded(_ sender: any NSDraggingInfo) {
+        drop?.draggingEnded()
     }
 
     // MARK: Accessibility (7.9)
