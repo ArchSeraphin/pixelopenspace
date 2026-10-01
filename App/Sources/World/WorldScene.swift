@@ -55,7 +55,8 @@ final class WorldScene: SKScene {
 
     /// Reconciliation by node id: removed sprites go, added ones come, updated ones change their texture, animation
     /// or position in place (never removed and added again). The background is the coordinator's
-    /// (`showBackground`), baked off the main thread.
+    /// (`showBackground`), baked off the main thread. A one-shot of `TransitionPlayer` stops when the plan gives its
+    /// avatar another look (another state wins at once).
     func apply(_ plan: WorldScenePlan, diff: ScenePlanDiff) {
         guard let registry = stage?.registry else { return }
         for id in diff.removed {
@@ -63,6 +64,9 @@ final class WorldScene: SKScene {
         }
         for node in diff.added + diff.updated {
             if let sprite = sprites[node.id] {
+                if sprite.planNode?.sprite != node.sprite, sprite.action(forKey: TransitionPlayer.actionKey) != nil {
+                    sprite.removeAction(forKey: TransitionPlayer.actionKey)
+                }
                 sprite.show(node, registry: registry, frozen: isFrozen)
             } else {
                 let sprite = WorldSceneNodes.make(node, registry: registry, frozen: isFrozen)
@@ -82,6 +86,17 @@ final class WorldScene: SKScene {
 
     func node(for id: SceneNodeID) -> SKSpriteNode? {
         sprites[id]
+    }
+
+    /// A node the scene shows besides the plan's (a walker, its shadow, the ding, dust), among the plan's sprites:
+    /// its `zPosition` places it among them (`SceneDepth`). Its owner removes it.
+    func addEffect(_ node: SKNode) {
+        content.addChild(node)
+    }
+
+    /// One-shot animations of the avatars (task 11; a post-it received after a drop, task 12).
+    var transitions: TransitionPlayer? {
+        stage?.coordinator?.transitions
     }
 
     var spriteCount: Int { sprites.count }
