@@ -14,7 +14,8 @@ import PixelCore
 ///   drag that starts on the bare floor (nothing, the hall, a rug) pans once it has gone past `dragThreshold`; so does
 ///   the middle button, or any drag while Space is held. A drag from an agent or a desk never pans.
 /// - Hover: the agent or free desk under the pointer goes to `WorldInteractionState.hovered` (the plan draws its name
-///   plate or `floor.hover`); after `hoverDelay` at rest, its `HoverCardView`.
+///   plate or `floor.hover`); after `hoverDelay` at rest, its `HoverCardView`, out of the HUD's controls. Nothing is
+///   hovered through the minimap or an edge arrow.
 /// - Keyboard, focus in the scene: arrows pan by `CameraMath.keyboardStep` (⇧: ×4), ⌘= zooms in (alias of ⌘+), ↩ or
 ///   Space released without a drag opens the selected agent's window, Escape deselects.
 ///
@@ -190,7 +191,8 @@ final class WorldInputController {
     func mouseMoved(_ event: NSEvent) {
         view?.noteInteraction()
         let point = viewPoint(of: event)
-        let target = Self.hoverable(target(at: point))
+        // Over a control of the HUD, the pointer is the control's, not the scene's beneath it.
+        let target = isOverHUD(point) ? nil : Self.hoverable(target(at: point))
         hoverPose = stage.camera.pose
         if stage.interaction.hovered != target {
             stage.interaction.hovered = target
@@ -202,7 +204,7 @@ final class WorldInputController {
         // The card waits for the pointer to rest: every move starts the delay again.
         hoverTimer = Self.timer(after: Self.hoverDelay) { [weak self] in
             guard let self, self.stage.interaction.hovered == target else { return }
-            self.hoverCard.show(target, model: self.model, near: point)
+            self.hoverCard.show(target, model: self.model, near: point, avoiding: self.hudFrames())
         }
     }
 
@@ -374,6 +376,57 @@ final class WorldInputController {
         SceneVector(Double(point.x), Double(point.y))
     }
 
+    /// The frames of the HUD's controls over the scene, in the view's points from its top-left corner, as
+    /// `WorldAreaView` lays them out: the minimap (bottom right, while the world is not entirely visible), each edge
+    /// arrow and its name plate. SwiftUI draws them over the view and its subviews, and they take the events in
+    /// their frames.
+    private func hudFrames() -> [CGRect] {
+        guard let view else { return [] }
+        let camera = stage.camera
+        let bounds = view.bounds.size
+        let ppt = SpriteImage.pointsPerTexel
+        var frames: [CGRect] = []
+        if camera.needsMinimap, camera.world.width > 0, camera.world.height > 0 {
+            // `MinimapRenderer.content`: the map on whole texels, its frame around it.
+            let layout = Minimap.layout(world: camera.world)
+            let border = 2 * MinimapView.frameInset
+            let size = CGSize(width: CGFloat(Int(layout.width / Double(ppt)) + border) * ppt,
+                              height: CGFloat(Int(layout.height / Double(ppt)) + border) * ppt)
+            let margin = WorldAreaView.minimapMargin
+            frames.append(CGRect(origin: CGPoint(x: bounds.width - margin - size.width,
+                                                 y: bounds.height - margin - size.height), size: size))
+        }
+        for arrow in WorldHUD.shared.edgeArrows(model: model) {
+            // `EdgeArrowButton`: the arrow on its point (origin at the bottom-left corner), the plate on the inside.
+            let sprite = EdgeArrowsView.sprite(for: arrow.direction)
+            let size = SpriteImage.size(of: sprite.key, quarterTurns: sprite.quarterTurns)
+            let center = CGPoint(x: CGFloat(arrow.position.x), y: bounds.height - CGFloat(arrow.position.y))
+            frames.append(CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width,
+                                 height: size.height))
+            guard let plate = SpriteImageCache.nameplate(model.agent(arrow.id)?.name ?? "Agent") else { continue }
+            let plateSize = CGSize(width: CGFloat(plate.width) * ppt, height: CGFloat(plate.height) * ppt)
+            // The plate's side (`EdgeArrowButton.plateCenter`): below an arrow pointing up, above one pointing down,
+            // on the left of one pointing right, on the right of one pointing left.
+            let direction = ((arrow.direction % 8) + 8) % 8, gap = EdgeArrowsView.plateGap
+            var plateCenter = center
+            switch direction {
+            case 0: plateCenter.y += size.height / 2 + gap + plateSize.height / 2
+            case 4: plateCenter.y -= size.height / 2 + gap + plateSize.height / 2
+            default: plateCenter.x += (direction < 4 ? -1 : 1) * (size.width / 2 + gap + plateSize.width / 2)
+            }
+            frames.append(CGRect(x: plateCenter.x - plateSize.width / 2, y: plateCenter.y - plateSize.height / 2,
+                                 width: plateSize.width, height: plateSize.height))
+        }
+        return frames
+    }
+
+    /// Whether a view point (origin at the bottom-left corner) is on a control of the HUD.
+    private func isOverHUD(_ point: CGPoint) -> Bool {
+        guard let view else { return false }
+        let flipped = CGPoint(x: point.x, y: view.bounds.height - point.y)
+        return hudFrames().contains { $0.contains(flipped) }
+    }
+
     /// What is under a view point: the core's hit test on the plan the scene shows (opaque texels first, then the
     /// floor's tiles); nil outside the world or before the first plan.
     private func target(at point: CGPoint) -> SceneHitTarget? {
@@ -430,7 +483,7 @@ final class WorldInputController {
         stage.settle()
         hoverPose = stage.camera.pose
         guard let rect = stage.viewRect(of: target) else { return false }
-        hoverCard.show(target, model: model, near: CGPoint(x: rect.midX, y: rect.midY))
+        hoverCard.show(target, model: model, near: CGPoint(x: rect.midX, y: rect.midY), avoiding: hudFrames())
         return true
     }
 }
