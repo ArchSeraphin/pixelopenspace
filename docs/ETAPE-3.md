@@ -348,7 +348,8 @@ qui évite la mini-carte et les flèches de bord ; la tâche 12 se déroulait en
     « ding » et les meubles en l'air ne sont pas dans la référence, qui est une image fixe (`brume-0`, `brume-40`,
     `brume-80`, `chute-mobile` : 300 816 pixels en tout).
   - 9 étapes non prises en charge, toutes de la tâche 12 (`dragHover` ×8, `board` ×1) : les crochets du glisser et
-    du tableau plein écran n'étaient pas encore fusionnés. Ces images sont à regarder après la fusion de la vague 4.
+    du tableau plein écran n'étaient pas encore fusionnés. Après la fusion de la vague 4 (plus bas), il n'en reste
+    aucune.
   - Statistiques de la prise `overview` (20 agents, « Tout voir », ici à ×1) : 264 nœuds, 1 page d'atlas, 1 page de
     personnages, 11 images composées, 4 tuiles de fond ; en vue d'ensemble (½), 243 nœuds.
   - Après le passage, aucun dossier d'état temporaire, aucun domaine de préférences du banc, aucun processus du banc,
@@ -364,6 +365,16 @@ qui évite la mini-carte et les flèches de bord ; la tâche 12 se déroulait en
   fenêtre agent de Sol (question et options), `window-dragdrop-bip`, `window-board-plein-ecran`,
   `window-arrival-brume-40` (Brume dans le hall) et `-chute-mobile` (meubles de MOBILE en l'air au-dessus de leur
   ombre), les deux fenêtres de `demo` (la fenêtre principale et le panneau « Démo »), `diff-selftest-decalage`.
+- **Après la fusion de la vague 4** (tâches 12 et 13, au commit `b7df087`, le 2026-10-02) : le cœur donne toujours
+  1 272 tests dans 91 suites, tous verts ; l'app compile (`** BUILD SUCCEEDED **`, aucun avertissement de
+  concurrence) ; `Tools/snapshot.sh … all` sort avec le code 0 en 82 s, sur `BILAN : écarts hors tolérance 300816 ·
+  étapes non prises en charge 0`. Les huit prises de scène de `dragdrop` sont à 0 écart. Images regardées :
+  `window-dragdrop-bip` (anneau sous Bip, « Donner à Bip · en file #1 »), `-poste-libre` (poste marqué, « Nouvel
+  agent avec ce post-it »), `-fleche` (flèche IVO en surbrillance, sa bulle « Donner à Ivo · autre projet :
+  /projets/docs » au-dessus et à gauche, hors de la mini-carte), `-plateau` (ligne de Sol en surbrillance, sa bulle
+  dans la ligne), `-mini-carte` (point d'Ivo cerclé, la bulle au-dessus de la carte et de la flèche SOL),
+  `window-board-plein-ecran` (barre de filtres et quatre colonnes à la place de la scène, boutons « Panneau
+  latéral » et « Masquer »), `window-demo-demo`. Le même passage n'a rien laissé derrière lui.
 - **Pas vérifié, personne n'a touché l'interface** : tout ce qui est dans la checklist ci-dessus (gestes réels,
   glisser-déposer à la souris, fluidité, Instruments, VoiceOver, le protocole « 3 s »). Le banc pose la scène dans
   chaque état sans vraie souris : il vérifie ce qui est dessiné, pas le ressenti.
@@ -372,7 +383,7 @@ qui évite la mini-carte et les flèches de bord ; la tâche 12 se déroulait en
 
 - **`BILAN` du banc** : la ligne additionne les écarts des prises animées d'`arrival` (plus haut) ; elle ne vaudra
   donc jamais 0 tant que ce scénario fait partie de `all`. Lis les écarts prise par prise dans `report.txt`.
-- **Prises sans scène** : dans `board` et `demo`, la zone de la scène reste vide (blanche) dans `window-…png`, seuls
+- **Prises sans scène** : dans `demo`, la zone de la scène reste vide (blanche) dans `window-…png`, seuls
   la mini-carte et les flèches de bord y apparaissent. La capture d'une fenêtre (`cacheDisplay`) ne lit pas le dessin
   Metal de SpriteKit, et le banc ne le remplace par une image fixe que dans les prises qui capturent la scène. Ce n'est
   pas un défaut de l'app.
