@@ -1,0 +1,345 @@
+Banc de captures de Pixel Open Space
+Scénarios : overview, zooms, fractional, list, empty, select, navigation, agentwindow, dragdrop, board, arrival, demo, selftest
+Fenêtre principale : 1440 × 900 pt
+Dossier d'état (temporaire) : /var/folders/l9/s3ffyh850pgfhq7bfsvh3qfh0000gn/T/PixelOpenSpace-snapshot-45088-326961DD-099F-4A61-81E6-AF1BA90149CD (supprimé à la sortie)
+Domaine de préférences (jetable) : fr.vv2.pixelopenspace.snapshot.45088, fichier dans le dossier d'état (/var/folders/l9/s3ffyh850pgfhq7bfsvh3qfh0000gn/T/PixelOpenSpace-snapshot-45088-326961DD-099F-4A61-81E6-AF1BA90149CD/Preferences/fr.vv2.pixelopenspace.snapshot.45088.plist), effacé à la sortie
+Écran des captures : Écran Retina intégré (le plus fin ; l'écran principal est à l'échelle 1)
+Échelle d'affichage : 2
+Fournisseur de scène : présent
+
+== overview ==
+[tout-voir]
+  listView(false) : crochet (tâche 7)
+  board(.side) : crochet (tâche 12)
+  fitAll : crochet (tâche 7)
+  écrit window-overview-tout-voir.png (2880 × 1800 px)
+  écrit scene-overview-tout-voir.png (1744 × 1450 px)
+  écrit reference-overview-tout-voir.png (1744 × 1450 px)
+  écrit diff-overview-tout-voir.png (1744 × 1450 px)
+  écarts hors tolérance : 0 sur 2353568 pixels comparés (×1 ; texels 524, 165, 872 × 725 ; 2 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 11, dynamicPages 1, nodes 264
+
+== zooms ==
+[préparation]
+  listView(false) : crochet (tâche 7)
+  board(.hidden) : crochet (tâche 12)
+  focusIsland("API") : crochet (tâche 7)
+[ensemble]
+  zoom(.overview) : crochet (tâche 7)
+  écrit window-zooms-ensemble.png (2880 × 1800 px)
+  écrit scene-zooms-ensemble.png (2438 × 1451 px)
+  écrit reference-zooms-ensemble.png (2438 × 1451 px)
+  écrit diff-zooms-ensemble.png (2438 × 1451 px)
+  écarts hors tolérance : 0 sur 1070976 pixels comparés (vue d'ensemble ; texels -259, -198, 2438 × 1451 ; 1 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 21, dynamicPages 1, nodes 243
+[x1]
+  zoom(.x1) : crochet (tâche 7)
+  écrit window-zooms-x1.png (2880 × 1800 px)
+  écrit scene-zooms-x1.png (2436 × 1450 px)
+  écrit reference-zooms-x1.png (2436 × 1450 px)
+  écrit diff-zooms-x1.png (2436 × 1450 px)
+  écarts hors tolérance : 0 sur 3077824 pixels comparés (×1 ; texels 351, 165, 1218 × 725 ; 2 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 21, dynamicPages 1, nodes 264
+[x2]
+  zoom(.x2) : crochet (tâche 7)
+  écrit window-zooms-x2.png (2880 × 1800 px)
+  écrit scene-zooms-x2.png (2432 × 1448 px)
+  écrit reference-zooms-x2.png (2432 × 1448 px)
+  écrit diff-zooms-x2.png (2432 × 1448 px)
+  écarts hors tolérance : 0 sur 3521536 pixels comparés (×1 ; texels 656, 346, 608 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 21, dynamicPages 1, nodes 264
+[x3]
+  zoom(.x3) : crochet (tâche 7)
+  écrit window-zooms-x3.png (2880 × 1800 px)
+  écrit scene-zooms-x3.png (2436 × 1446 px)
+  écrit reference-zooms-x3.png (2436 × 1446 px)
+  écrit diff-zooms-x3.png (2436 × 1446 px)
+  écarts hors tolérance : 0 sur 3522456 pixels comparés (×1 ; texels 757, 407, 406 × 241 ; 6 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 21, dynamicPages 1, nodes 264
+
+== fractional ==
+[préparation]
+  listView(false) : crochet (tâche 7)
+  board(.hidden) : crochet (tâche 12)
+  zoom(.x2) : crochet (tâche 7)
+  focusAgent("Nova") : crochet (tâche 7)
+[d1]
+  cameraNudge(0.25, 0) : crochet (tâche 7)
+  écrit window-fractional-d1.png (2880 × 1800 px)
+  écrit scene-fractional-d1.png (2436 × 1448 px)
+  écrit reference-fractional-d1.png (2436 × 1448 px)
+  écrit diff-fractional-d1.png (2436 × 1448 px)
+  écarts hors tolérance : 0 sur 3006048 pixels comparés (×1 ; texels 144, 131, 609 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 21, dynamicPages 1, nodes 264
+[d2]
+  cameraNudge(0.5, 0.5) : crochet (tâche 7)
+  écrit window-fractional-d2.png (2880 × 1800 px)
+  écrit scene-fractional-d2.png (2436 × 1448 px)
+  écrit reference-fractional-d2.png (2436 × 1448 px)
+  écrit diff-fractional-d2.png (2436 × 1448 px)
+  écarts hors tolérance : 0 sur 3000256 pixels comparés (×1 ; texels 144, 130, 609 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 21, dynamicPages 1, nodes 264
+[d3]
+  cameraNudge(0.75, 0.25) : crochet (tâche 7)
+  écrit window-fractional-d3.png (2880 × 1800 px)
+  écrit scene-fractional-d3.png (2436 × 1448 px)
+  écrit reference-fractional-d3.png (2436 × 1448 px)
+  écrit diff-fractional-d3.png (2436 × 1448 px)
+  écarts hors tolérance : 0 sur 3003152 pixels comparés (×1 ; texels 145, 130, 609 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 21, dynamicPages 1, nodes 264
+[d4]
+  cameraNudge(1.5, 0.75) : crochet (tâche 7)
+  écrit window-fractional-d4.png (2880 × 1800 px)
+  écrit scene-fractional-d4.png (2432 × 1448 px)
+  écrit reference-fractional-d4.png (2432 × 1448 px)
+  écrit diff-fractional-d4.png (2432 × 1448 px)
+  écarts hors tolérance : 0 sur 2997360 pixels comparés (×1 ; texels 147, 129, 608 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 21, dynamicPages 1, nodes 264
+[x3]
+  zoom(.x3) : crochet (tâche 7)
+  cameraNudge(0.33, 0.66) : crochet (tâche 7)
+  écrit window-fractional-x3.png (2880 × 1800 px)
+  écrit scene-fractional-x3.png (2436 × 1446 px)
+  écrit reference-fractional-x3.png (2436 × 1446 px)
+  écrit diff-fractional-x3.png (2436 × 1446 px)
+  écarts hors tolérance : 0 sur 3343536 pixels comparés (×1 ; texels 248, 189, 406 × 241 ; 6 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 21, dynamicPages 1, nodes 264
+
+== list ==
+[liste]
+  listView(true) : crochet (tâche 7)
+  board(.side) : crochet (tâche 12)
+  écrit window-list-liste.png (2880 × 1800 px)
+
+== empty ==
+[monde-vide]
+  listView(false) : crochet (tâche 7)
+  écrit window-empty-monde-vide.png (2880 × 1800 px)
+  écrit scene-empty-monde-vide.png (1740 × 1734 px)
+  écrit reference-empty-monde-vide.png (1740 × 1734 px)
+  écrit diff-empty-monde-vide.png (1740 × 1734 px)
+  écarts hors tolérance : 0 sur 2438928 pixels comparés (×1 ; texels 18, 165, 290 × 289 ; 6 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 1, composedTextures 21, dynamicPages 1, nodes 5
+[liste-vide]
+  listView(true) : crochet (tâche 7)
+  écrit window-empty-liste-vide.png (2880 × 1800 px)
+
+== select ==
+[préparation]
+  listView(false) : crochet (tâche 7)
+  zoom(.x2) : crochet (tâche 7)
+  focusAgent("Nova") : crochet (tâche 7)
+[selection]
+  select("Nova") : repli du banc : model.select(agent:)
+  écrit window-select-selection.png (2880 × 1800 px)
+  écrit scene-select-selection.png (1744 × 832 px)
+  écrit reference-select-selection.png (1744 × 832 px)
+  écrit diff-select-selection.png (1744 × 832 px)
+  écarts hors tolérance : 0 sur 1392448 pixels comparés (×1 ; texels 230, 208, 436 × 208 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 21, dynamicPages 1, nodes 265
+[survol-agent]
+  hover(.agent("Bip")) : crochet (tâche 9)
+  écrit window-select-survol-agent.png (2880 × 1800 px)
+  écrit scene-select-survol-agent.png (1744 × 832 px)
+  écrit reference-select-survol-agent.png (1744 × 832 px)
+  écrit diff-select-survol-agent.png (1744 × 832 px)
+  écarts hors tolérance : 0 sur 1392448 pixels comparés (×1 ; texels 230, 208, 436 × 208 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 266
+[survol-poste]
+  hover(.freeDesk("API", 5)) : crochet (tâche 9)
+  écrit window-select-survol-poste.png (2880 × 1800 px)
+  écrit scene-select-survol-poste.png (1744 × 832 px)
+  écrit reference-select-survol-poste.png (1744 × 832 px)
+  écrit diff-select-survol-poste.png (1744 × 832 px)
+  écarts hors tolérance : 0 sur 1392448 pixels comparés (×1 ; texels 230, 208, 436 × 208 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 267
+
+== navigation ==
+[préparation]
+  listView(false) : crochet (tâche 7)
+  board(.side) : crochet (tâche 12)
+[loin]
+  zoom(.x3) : crochet (tâche 7)
+  focusIsland("DOCS") : crochet (tâche 7)
+  écrit window-navigation-loin.png (2880 × 1800 px)
+  écrit scene-navigation-loin.png (1740 × 1446 px)
+  écrit reference-navigation-loin.png (1740 × 1446 px)
+  écrit diff-navigation-loin.png (1740 × 1446 px)
+  écarts hors tolérance : 0 sur 2433096 pixels comparés (×1 ; texels 879, 727, 290 × 241 ; 6 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 264
+[hall]
+  zoom(.x1) : crochet (tâche 7)
+  focusHall : crochet (tâche 7)
+  écrit window-navigation-hall.png (2880 × 1800 px)
+  écrit scene-navigation-hall.png (1744 × 1450 px)
+  écrit reference-navigation-hall.png (1744 × 1450 px)
+  écrit diff-navigation-hall.png (1744 × 1450 px)
+  écarts hors tolérance : 0 sur 1978152 pixels comparés (×1 ; texels 380, -48, 872 × 725 ; 2 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 264
+
+== agentwindow ==
+[nova]
+  openAgentWindow("Nova") : crochet (tâche 8)
+  écrit window-agentwindow-nova.png (2880 × 1800 px)
+  écrit window-agentwindow-nova-2.png (1280 × 1266 px)
+  écrit scene-agentwindow-nova.png (1744 × 1450 px)
+  écrit reference-agentwindow-nova.png (1744 × 1450 px)
+  écrit diff-agentwindow-nova.png (1744 × 1450 px)
+  écarts hors tolérance : 0 sur 1978152 pixels comparés (×1 ; texels 380, -48, 872 × 725 ; 2 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 263
+[sol]
+  openAgentWindow("Sol") : crochet (tâche 8)
+  écrit window-agentwindow-sol.png (2880 × 1800 px)
+  écrit window-agentwindow-sol-2.png (1280 × 1266 px)
+  écrit window-agentwindow-sol-3.png (1280 × 1320 px)
+  écrit scene-agentwindow-sol.png (1744 × 1450 px)
+  écrit reference-agentwindow-sol.png (1744 × 1450 px)
+  écrit diff-agentwindow-sol.png (1744 × 1450 px)
+  écarts hors tolérance : 0 sur 1978152 pixels comparés (×1 ; texels 380, -48, 872 × 725 ; 2 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 262
+[brume]
+  openAgentWindow("Brume") : crochet (tâche 8)
+  écrit window-agentwindow-brume.png (2880 × 1800 px)
+  écrit window-agentwindow-brume-2.png (1280 × 1266 px)
+  écrit window-agentwindow-brume-3.png (1280 × 1320 px)
+  écrit window-agentwindow-brume-4.png (1280 × 892 px)
+  écrit scene-agentwindow-brume.png (1744 × 1450 px)
+  écrit reference-agentwindow-brume.png (1744 × 1450 px)
+  écrit diff-agentwindow-brume.png (1744 × 1450 px)
+  écarts hors tolérance : 0 sur 1978152 pixels comparés (×1 ; texels 380, -48, 872 × 725 ; 2 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 262
+
+== dragdrop ==
+[préparation]
+  listView(false) : crochet (tâche 7)
+  board(.side) : crochet (tâche 12)
+  zoom(.x2) : crochet (tâche 7)
+  focusIsland("API") : crochet (tâche 7)
+[bip]
+  dragHover("Pagination /users", .agent("Bip")) : crochet (tâche 12)
+  écrit window-dragdrop-bip.png (2880 × 1800 px)
+  écrit scene-dragdrop-bip.png (1744 × 1448 px)
+  écrit reference-dragdrop-bip.png (1744 × 1448 px)
+  écrit diff-dragdrop-bip.png (1744 × 1448 px)
+  écarts hors tolérance : 0 sur 2486112 pixels comparés (×1 ; texels 358, 155, 436 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 265
+[sol-autre-projet]
+  dragHover("Pagination /users", .agent("Sol")) : crochet (tâche 12)
+  écrit window-dragdrop-sol-autre-projet.png (2880 × 1800 px)
+  écrit scene-dragdrop-sol-autre-projet.png (1740 × 1448 px)
+  écrit reference-dragdrop-sol-autre-projet.png (1740 × 1448 px)
+  écrit diff-dragdrop-sol-autre-projet.png (1740 × 1448 px)
+  écarts hors tolérance : 0 sur 2519520 pixels comparés (×1 ; texels 754, 306, 435 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 265
+[kiwi-hors-ligne]
+  dragHover("Pagination /users", .agent("Kiwi")) : crochet (tâche 12)
+  écrit window-dragdrop-kiwi-hors-ligne.png (2880 × 1800 px)
+  écrit scene-dragdrop-kiwi-hors-ligne.png (1740 × 1448 px)
+  écrit reference-dragdrop-kiwi-hors-ligne.png (1740 × 1448 px)
+  écrit diff-dragdrop-kiwi-hors-ligne.png (1740 × 1448 px)
+  écarts hors tolérance : 0 sur 2449824 pixels comparés (×1 ; texels 371, 132, 435 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 265
+[ilot]
+  dragHover("Pagination /users", .island("API")) : crochet (tâche 12)
+  écrit window-dragdrop-ilot.png (2880 × 1800 px)
+  écrit scene-dragdrop-ilot.png (1740 × 1448 px)
+  écrit reference-dragdrop-ilot.png (1740 × 1448 px)
+  écrit diff-dragdrop-ilot.png (1740 × 1448 px)
+  écarts hors tolérance : 0 sur 2449824 pixels comparés (×1 ; texels 371, 132, 435 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 312
+[poste-libre]
+  dragHover("Pagination /users", .freeDesk("API", 5)) : crochet (tâche 12)
+  écrit window-dragdrop-poste-libre.png (2880 × 1800 px)
+  écrit scene-dragdrop-poste-libre.png (1740 × 1448 px)
+  écrit reference-dragdrop-poste-libre.png (1740 × 1448 px)
+  écrit diff-dragdrop-poste-libre.png (1740 × 1448 px)
+  écarts hors tolérance : 0 sur 2449824 pixels comparés (×1 ; texels 371, 132, 435 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 266
+[fleche]
+  dragHover("Pagination /users", .edgeArrow("Ivo")) : crochet (tâche 12)
+  écrit window-dragdrop-fleche.png (2880 × 1800 px)
+  écrit scene-dragdrop-fleche.png (1740 × 1448 px)
+  écrit reference-dragdrop-fleche.png (1740 × 1448 px)
+  écrit diff-dragdrop-fleche.png (1740 × 1448 px)
+  écarts hors tolérance : 0 sur 2449824 pixels comparés (×1 ; texels 371, 132, 435 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 265
+[plateau]
+  dragHover("Pagination /users", .trayRow("Sol")) : crochet (tâche 12)
+  écrit window-dragdrop-plateau.png (2880 × 1800 px)
+  écrit scene-dragdrop-plateau.png (1740 × 1448 px)
+  écrit reference-dragdrop-plateau.png (1740 × 1448 px)
+  écrit diff-dragdrop-plateau.png (1740 × 1448 px)
+  écarts hors tolérance : 0 sur 2449824 pixels comparés (×1 ; texels 371, 132, 435 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 265
+[mini-carte]
+  dragHover("Pagination /users", .minimap("Ivo")) : crochet (tâche 12)
+  écrit window-dragdrop-mini-carte.png (2880 × 1800 px)
+  écrit scene-dragdrop-mini-carte.png (1740 × 1448 px)
+  écrit reference-dragdrop-mini-carte.png (1740 × 1448 px)
+  écrit diff-dragdrop-mini-carte.png (1740 × 1448 px)
+  écarts hors tolérance : 0 sur 2449824 pixels comparés (×1 ; texels 371, 132, 435 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 1, nodes 265
+
+== board ==
+[plein-ecran]
+  board(.full) : crochet (tâche 12)
+  écrit window-board-plein-ecran.png (2880 × 1800 px)
+
+== arrival ==
+[préparation]
+  listView(false) : crochet (tâche 7)
+  zoom(.x2) : crochet (tâche 7)
+  focusIsland("DATA") : crochet (tâche 7)
+[brume-0]
+  arrival("Brume", 0) : crochet (tâche 11)
+  écrit window-arrival-brume-0.png (2880 × 1800 px)
+  écrit scene-arrival-brume-0.png (1744 × 1448 px)
+  écrit reference-arrival-brume-0.png (1744 × 1448 px)
+  écrit diff-arrival-brume-0.png (1744 × 1448 px)
+  écarts hors tolérance : 30976 sur 1907456 pixels comparés (×1 ; texels 454, -24, 436 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 2, nodes 262
+[brume-40]
+  arrival("Brume", 0.4) : crochet (tâche 11)
+  écrit window-arrival-brume-40.png (2880 × 1800 px)
+  écrit scene-arrival-brume-40.png (1744 × 1448 px)
+  écrit reference-arrival-brume-40.png (1744 × 1448 px)
+  écrit diff-arrival-brume-40.png (1744 × 1448 px)
+  écarts hors tolérance : 10512 sur 2347232 pixels comparés (×1 ; texels 870, 163, 436 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 2, nodes 262
+[brume-80]
+  arrival("Brume", 0.8) : crochet (tâche 11)
+  écrit window-arrival-brume-80.png (2880 × 1800 px)
+  écrit scene-arrival-brume-80.png (1744 × 1448 px)
+  écrit reference-arrival-brume-80.png (1744 × 1448 px)
+  écrit diff-arrival-brume-80.png (1744 × 1448 px)
+  écarts hors tolérance : 11008 sur 2525312 pixels comparés (×1 ; texels 550, 387, 436 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 2, nodes 262
+[brume-100]
+  arrival("Brume", 1) : crochet (tâche 11)
+  écrit window-arrival-brume-100.png (2880 × 1800 px)
+  écrit scene-arrival-brume-100.png (1744 × 1448 px)
+  écrit reference-arrival-brume-100.png (1744 × 1448 px)
+  écrit diff-arrival-brume-100.png (1744 × 1448 px)
+  écarts hors tolérance : 0 sur 1974752 pixels comparés (×1 ; texels 390, 499, 436 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 2, nodes 264
+[chute-mobile]
+  focusIsland("MOBILE") : crochet (tâche 7)
+  islandDrop("MOBILE", 0.5) : crochet (tâche 11)
+  écrit window-arrival-chute-mobile.png (2880 × 1800 px)
+  écrit scene-arrival-chute-mobile.png (1744 × 1448 px)
+  écrit reference-arrival-chute-mobile.png (1744 × 1448 px)
+  écrit diff-arrival-chute-mobile.png (1744 × 1448 px)
+  écarts hors tolérance : 248320 sur 2520416 pixels comparés (×1 ; texels 1094, 523, 436 × 362 ; 4 px par texel)
+  statistiques de scène : atlasPages 1, backgroundTiles 4, composedTextures 22, dynamicPages 2, nodes 264
+
+== demo ==
+[demo]
+  écrit window-demo-demo.png (2880 × 1800 px)
+  écrit window-demo-demo-2.png (640 × 418 px)
+
+== selftest ==
+  outil de comparaison : OK (identique : 0 écart sur 345600 pixels comparés ; décalé d'un texel : 46104 écarts)
+  écrit diff-selftest-decalage.png (720 × 480 px)
+Durée : 81,9 s
+
+BILAN : écarts hors tolérance 300816 · étapes non prises en charge 0

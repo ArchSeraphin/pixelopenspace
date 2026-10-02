@@ -8,7 +8,10 @@ se glisse du tableau sur un agent de la scène, même quand l'agent est hors du 
 de l'étape 2 reste là, par ⌘L, et reste le chemin principal pour VoiceOver. La scène est toujours de jour : le mode
 nuit arrive à l'étape 4.
 
-Le plan d'implémentation, tâche par tâche, est dans `docs/superpowers/plans/2026-10-01-etape-3-open-space.md`.
+Le plan d'implémentation, tâche par tâche, est dans `docs/superpowers/plans/2026-10-01-etape-3-open-space.md`. Les
+captures du contrôle final (le 2026-10-02) sont dans `docs/etape-3/captures/` : une sélection de 16 vues de la
+fenêtre, regarde-les avant de lancer l'app. Le jeu complet (142 fichiers) se régénère avec le banc (plus bas) et la CI
+macOS le publie à chaque push (artefact `snapshots`).
 
 ## Ce qui est livré
 
@@ -76,11 +79,12 @@ propose aussi « Tout voir » et « Vue Liste ».
 | Raccourci | Action | Menu |
 |---|---|---|
 | ⌘L | Vue Liste ou open space (aussi le bouton de la barre d'outils) | Présentation |
-| ⌘+ (ou ⌘=) et ⌘− | Zoom avant, arrière (en mode scène seulement) | Présentation |
+| ⌘+ et ⌘− | Zoom avant, arrière (en mode scène seulement) ; ⌘= marche aussi, mais seulement quand le focus est dans la scène | Présentation |
 | ⌘0 | Tout voir (en mode scène seulement) | Présentation |
 | ⌘B | Tableau : latéral, puis plein écran, puis masqué | Présentation |
-| ↩ ou Espace | Ouvrir la fenêtre de l'agent sélectionné (focus dans la scène) | |
+| ↩ ou Espace | Ouvrir la fenêtre de l'agent sélectionné (focus dans la scène ; Espace relâché sans glisser) | |
 | Échap | Désélectionner (focus dans la scène) | |
+| ← → ↑ ↓, ⇧ + flèches | Déplacer la vue de 64 pt, ou de 256 pt (focus dans la scène) | |
 | ⌘' et ⇧⌘', ⌥⌘→ et ⌥⌘← | Agent en attente suivant ou précédent, agent suivant ou précédent : la caméra vole jusqu'à lui | Aller |
 
 Dans la fenêtre agent : ⌘W la ferme, ⌘T ouvre le terminal, ⌘. interrompt, Échap interrompt seulement si l'agent
@@ -128,7 +132,7 @@ bulle près du curseur dit ce qui va se passer ; le curseur devient « interdit 
 | Agent du même projet, libre | « Donner à Nova · file #1 » (sa file + 1) | donné ; il part si les gardes de la livraison passent |
 | Agent occupé | « Donner à Bip · en file #2 » | donné, en file |
 | Agent qui attend ta réponse | « Donner à Nova · sera livré après ton accord » | donné, en file |
-| Agent d'un autre projet | halo et « Donner à Sol · autre projet : ~/dev/infra » | la confirmation du tableau (C3), puis donné |
+| Agent d'un autre projet | anneau (le même que pour un agent du projet) et « Donner à Sol · autre projet : ~/dev/infra » | la confirmation du tableau (C3), puis donné |
 | Agent hors ligne | « Donner à Kiwi · hors ligne : sera livré après relance » | donné, puis un toast propose de relancer la session |
 | Agent déjà destinataire du post-it | « Déjà dans la file de Nova · file #1 » | rien |
 | Agent dont le terminal tourne hors de l'app | curseur interdit, « Nova · terminal hors de l'app » | rien |
@@ -297,6 +301,10 @@ fenêtre), `scene-…png` (le dessin SpriteKit), `reference-…png` (le rendu lo
 `diff-…png` (la référence assombrie, les écarts en magenta), plus `report.txt`, qui finit par la ligne `BILAN`.
 Scénarios, isolation et lecture du rapport : `App/README.md`, section « Banc de captures et mode démo ».
 
+Le dépôt ne garde qu'une sélection du contrôle final dans `docs/etape-3/captures/` (16 vues de la fenêtre,
+`report.txt` et `stats.json`) : le jeu complet pèse 27 Mo. Pour le revoir, ou pour comparer après un changement,
+lance le banc dans un dossier hors du dépôt, ou récupère l'artefact `snapshots` de la CI macOS.
+
 ## Checklist manuelle
 
 Ce qui demande ton Mac, une vraie souris ou Instruments (critère de fin de la section 8). À cocher :
@@ -328,8 +336,8 @@ Ce qui demande ton Mac, une vraie souris ou Instruments (critère de fin de la s
 
 ## Ce qui a été vérifié, et ce qui ne l'a pas été
 
-Contrôle d'ensemble du 2026-10-02, sur ce Mac, au commit `8807d8e` (vagues 1 à 3 fusionnées, plus la carte de survol
-qui évite la mini-carte et les flèches de bord ; la tâche 12 se déroulait en parallèle de ce guide) :
+Contrôle final du 2026-10-02, sur ce Mac (écran Retina intégré, échelle 2), au commit `656038c` : les quatre vagues
+sont fusionnées et aucun code n'a changé depuis.
 
 - **Cœur** : `cd Core && swift build && swift test` donne **1 272 tests dans 91 suites, tous verts** (1 113 au début
   de l'étape, 761 à la fin de l'étape 2b). Les règles de la scène y ont chacune leur test : caméra recalée au pixel
@@ -338,46 +346,62 @@ qui évite la mini-carte et les flèches de bord ; la tâche 12 se déroulait en
   agent ne déplace rien (`addingAnAgentMovesNothing`), aucun îlot ni annexe ne bouge
   (`WorldLayoutPropertyTests.noIslandEverMoves`), migration (`PersistenceTests.workspaceV1MigratesToV2`), règles de
   clic (`ClickResolverTests`) et de dépôt (`DropResolverTests`), une fonction par règle.
-- **App** : compilée en Debug avec `xcodebuild`, après un nettoyage (`** BUILD SUCCEEDED **`, aucun avertissement
-  Swift, donc aucun de concurrence).
-- **Banc de captures**, `Tools/snapshot.sh … all` : code de sortie 0 en 70 s, « outil de comparaison : OK ».
-  - Chaque prise de scène est identique à sa référence logicielle (0 écart, tolérance de 1 par canal) : vue
-    d'ensemble, ×1, ×2, ×3, cinq positions de caméra fractionnaires, sélection, survols, navigation, fenêtres agent,
-    monde vide, et l'arrivée de Brume une fois assise (`brume-100`).
-  - Seules les prises animées d'`arrival` s'en écartent, comme prévu : l'avatar qui marche, les portes ouvertes, le
-    « ding » et les meubles en l'air ne sont pas dans la référence, qui est une image fixe (`brume-0`, `brume-40`,
-    `brume-80`, `chute-mobile` : 300 816 pixels en tout).
-  - 9 étapes non prises en charge, toutes de la tâche 12 (`dragHover` ×8, `board` ×1) : les crochets du glisser et
-    du tableau plein écran n'étaient pas encore fusionnés. Après la fusion de la vague 4 (plus bas), il n'en reste
-    aucune.
+- **App** : `xcodegen generate`, puis le build Debug de `xcodebuild` : `** BUILD SUCCEEDED **`, aucune erreur, aucun
+  avertissement de concurrence (`Sendable`, isolation).
+- **Banc de captures**, `Tools/snapshot.sh docs/etape-3/captures all` : code de sortie 0 en 82 s, « outil de
+  comparaison : OK », `BILAN : écarts hors tolérance 300816 · étapes non prises en charge 0`.
+  - 28 prises de scène sur 32 sont identiques à leur référence logicielle (0 pixel hors tolérance) : « Tout voir »,
+    vue d'ensemble, ×1, ×2, ×3, les cinq positions de caméra fractionnaires, sélection, survols, navigation, fenêtres
+    agent, monde vide, les huit survols de glisser-déposer et l'arrivée de Brume une fois assise (`brume-100`).
+  - Les 4 autres sont les prises animées d'`arrival`, dont la référence est une image fixe : l'avatar qui marche, les
+    portes ouvertes, le « ding » et les meubles en l'air n'y sont pas (`brume-0` : 30 976 pixels, `brume-40` :
+    10 512, `brume-80` : 11 008, `chute-mobile` : 248 320). Le magenta des images d'écarts tombe exactement sur ces
+    éléments, nulle part ailleurs.
+  - **Aucun flou**, par un second contrôle indépendant du banc : chaque image de scène ne compte que 12 à 66 couleurs
+    différentes (un filtrage ou un décalage d'un demi-pixel en créerait des milliers), à tous les zooms et après chaque
+    position fractionnaire. Agrandi pixel par pixel, le « ! » de Nova à ×3 et après un décalage de (1,5 ; 0,75) pt
+    n'a que des texels nets, sans couleur intermédiaire.
   - Statistiques de la prise `overview` (20 agents, « Tout voir », ici à ×1) : 264 nœuds, 1 page d'atlas, 1 page de
     personnages, 11 images composées, 4 tuiles de fond ; en vue d'ensemble (½), 243 nœuds.
-  - Après le passage, aucun dossier d'état temporaire, aucun domaine de préférences du banc, aucun processus du banc,
+  - Après le passage : aucun dossier d'état temporaire, aucun domaine de préférences du banc, aucun processus du banc,
     et rien de plus récent que le passage dans ton état réel (`~/Library/Application Support/PixelOpenSpace`, tes
-    préférences).
-  - L'atlas exporté par `sprite-export --atlas` : une page de 2048 × 2048, 716 images, 128 animations ; deux exports
-    donnent les mêmes octets.
-- **Images regardées** : `window-overview-tout-voir` (×1, flèche vers Nova, mini-carte et son rectangle),
-  `window-zooms-ensemble` (le monde entier en ½, plaques NOVA, SOL, IVO, ZÉPHYR lisibles), `diff-fractional-x3` (aucun
-  pixel magenta), `window-list-liste`, `window-empty-monde-vide`, `window-select-survol-agent` (plaque et carte de
-  survol de Bip) et `-survol-poste` (le poste 5 d'API, au bord droit, est sous la mini-carte : sa carte « Poste libre ·
-  clic : nouvel agent ici » se pose juste au-dessus d'elle), `window-navigation-loin` (flèches vers Nova et Sol), la
-  fenêtre agent de Sol (question et options), `window-dragdrop-bip`, `window-board-plein-ecran`,
-  `window-arrival-brume-40` (Brume dans le hall) et `-chute-mobile` (meubles de MOBILE en l'air au-dessus de leur
-  ombre), les deux fenêtres de `demo` (la fenêtre principale et le panneau « Démo »), `diff-selftest-decalage`.
-- **Après la fusion de la vague 4** (tâches 12 et 13, au commit `b7df087`, le 2026-10-02) : le cœur donne toujours
-  1 272 tests dans 91 suites, tous verts ; l'app compile (`** BUILD SUCCEEDED **`, aucun avertissement de
-  concurrence) ; `Tools/snapshot.sh … all` sort avec le code 0 en 82 s, sur `BILAN : écarts hors tolérance 300816 ·
-  étapes non prises en charge 0`. Les huit prises de scène de `dragdrop` sont à 0 écart. Images regardées :
-  `window-dragdrop-bip` (anneau sous Bip, « Donner à Bip · en file #1 »), `-poste-libre` (poste marqué, « Nouvel
-  agent avec ce post-it »), `-fleche` (flèche IVO en surbrillance, sa bulle « Donner à Ivo · autre projet :
-  /projets/docs » au-dessus et à gauche, hors de la mini-carte), `-plateau` (ligne de Sol en surbrillance, sa bulle
-  dans la ligne), `-mini-carte` (point d'Ivo cerclé, la bulle au-dessus de la carte et de la flèche SOL),
-  `window-board-plein-ecran` (barre de filtres et quatre colonnes à la place de la scène, boutons « Panneau
-  latéral » et « Masquer »), `window-demo-demo`. Le même passage n'a rien laissé derrière lui.
-- **Pas vérifié, personne n'a touché l'interface** : tout ce qui est dans la checklist ci-dessus (gestes réels,
-  glisser-déposer à la souris, fluidité, Instruments, VoiceOver, le protocole « 3 s »). Le banc pose la scène dans
-  chaque état sans vraie souris : il vérifie ce qui est dessiné, pas le ressenti.
+    préférences ; contrôle par les dates seulement). `build/Demo` n'a pas été lancé.
+- **Atlas** : `sprite-export --atlas`, lancé deux fois dans un dossier temporaire, donne deux fois les mêmes octets :
+  une page de 2048 × 2048, 716 images, 128 animations.
+- **Images regardées** : les 43 captures de fenêtre une par une, l'auto-test, les 96 images de scène, de référence et
+  d'écarts sur des planches (une ligne par prise), et des agrandissements au pixel près là où un doute restait.
+  - **Îlots placés comme au jalon** (`docs/jalon-visuel/vue-ensemble-jour.png`) : SITE à gauche, API au-dessus, INFRA
+    au centre, DATA en bas à gauche, MOBILE à droite, DOCS en bas ; même hall, même ascenseur, même mur de liège.
+  - **Le « ! » d'attente saute aux yeux en vue d'ensemble** (`window-zooms-ensemble`) : « ! » XL jaune et son halo en
+    losange au-dessus de Nova, Sol et Ivo, plaques NOVA, SOL, IVO et ZÉPHYR ×2, orage de Zéphyr ; tout le reste est
+    discret. Le plateau « EN ATTENTE · 3 agents » le redit en toutes lettres.
+  - **Chaque état se lit** à ×1, ×2 et ×3 : attente (« ! », écran jaune), question (« ? » à côté du « ! »), erreur
+    (orage, écran rouge barré), travaille (bulle terminal ou crayon), réfléchit (bulle « … »), tour terminé (coche
+    verte), tâche de fond (sablier), limite d'usage (horloge), endormi (« zZ »), démarre (flèche bleue), hors ligne
+    (« KIWI · OFF », sac sur le bureau, chaise vide), sous-agents (deux petits personnages), file (badge « 1 » sur le
+    moniteur), `bypassPermissions` (cadenas rouge ouvert). Une attente déjà vue (fenêtre de l'agent ouverte) garde
+    son « ! » sans le halo, comme le prévoit la proposition (T23, T24).
+  - **Tableau latéral** à droite de la scène dans toutes les prises de scène ; **plein écran** (`board-plein-ecran`) :
+    « TABLEAU DE LIÈGE », barre de filtres, quatre colonnes, boutons « Panneau latéral » et « Masquer ».
+  - **Mini-carte** en bas à droite (îlots aux couleurs des projets, rectangle de la partie visible, point d'Ivo cerclé
+    pendant un glisser) et **flèches de bord** (NOVA, SOL, IVO, droites ou diagonales, avec leur plaque).
+  - **Vue Liste** (`list-liste`) : cartes complètes, compteurs en toutes lettres dans la barre d'état, tableau à
+    droite. Monde vide : la carte « Dépose ici un dossier de code… » en scène comme en liste.
+  - **Survols et glisser-déposer** : carte de survol de Bip et du poste libre ; anneau sous Bip, Sol et le poste de
+    Kiwi, poste libre marqué, îlot API en pointillés, flèche IVO encadrée, ligne de Sol surlignée dans le plateau,
+    point d'Ivo cerclé dans la mini-carte ; chaque bulle dit ce qui va se passer.
+  - **Fenêtres agent** : Nova (permission Bash, `rm -rf dist`, file d'un post-it), Sol (question et deux options),
+    Brume (« Démarre », sans bloc d'attente) ; boutons du terminal grisés, comme prévu sans session.
+  - **Arrivées** : Brume dans l'ascenseur ouvert avec la cloche, dans le hall, entre INFRA et DATA, puis assise ; les
+    meubles de MOBILE en l'air au-dessus de leurs ombres.
+  - **Mode démo** : la fenêtre principale et le panneau « Protocole « 3 s » » (Nouvel essai, Révéler, Essais : 0,
+    Animer, « Agents simulés : aucun terminal, aucun claude »).
+  - Les défauts vus dans ces images sont dans « Limites connues », plus bas.
+- **Pas vérifié, personne n'a touché l'interface** : tout ce qui est dans la checklist ci-dessus (les 60 images par
+  seconde et les budgets dans Instruments, le protocole « 3 s », le glisser-déposer à la vraie souris, y compris vers
+  un agent hors du champ, les gestes réels, la fluidité des vols, VoiceOver). Le banc pose la scène dans chaque état
+  sans vraie souris : il vérifie ce qui est dessiné, pas le ressenti ni la cadence. Aucune vraie session `claude` n'a
+  tourné pendant ce contrôle.
 
 ## Limites connues
 
@@ -393,10 +417,28 @@ qui évite la mini-carte et les flèches de bord ; la tâche 12 se déroulait en
   latérale ; pas vérifié sur ton écran.
 - **Durée du banc** : un passage complet prend 70 à 83 s sur ce Mac, pour un chien de garde de 120 s. La marge
   diminue à chaque scénario ajouté.
-- **Flèches de bord sur la mini-carte** : une flèche de bord peut se poser sur le cadre de la mini-carte (IVO dans
-  `window-dragdrop-bip.png`, SOL dans `window-select-survol-agent.png`) : leur placement n'évite pas la mini-carte.
+- **Flèches de bord sur la mini-carte** : une flèche de bord peut se poser sur le cadre de la mini-carte, ou en plein
+  dedans : IVO dans `window-dragdrop-bip.png` et `window-dragdrop-fleche.png`, SOL dans
+  `window-select-selection.png` et `window-fractional-d1.png`, IVO à l'intérieur de la carte dans
+  `window-arrival-brume-100.png`. Leur placement n'évite pas la mini-carte. Le défaut le plus visible de ce contrôle.
+- **Agent juste au-delà du bord** : quand un agent en attente sort de la vue de quelques texels, sa plaque de nom et un
+  bout de son « ! » restent dessinés au bord de la scène, et sa flèche de bord s'affiche en plus, un peu plus bas
+  (deux « SOL » dans `window-arrival-brume-80.png`). Rien de faux, mais le nom apparaît deux fois.
+- **Dépôt sur un agent d'un autre projet** : la proposition (3.9) demande un halo orange ; la scène montre le même
+  anneau que pour un agent du projet. Seule la bulle (« autre projet : … ») et la confirmation C3 au lâcher font la
+  différence (`window-dragdrop-sol-autre-projet.png`).
 - **Monde vide** : quand le hall ne tient pas dans la vue (à ×3 par exemple), la mini-carte s'affiche quand même, vide
-  à part le rectangle de la partie visible, puisqu'elle ne dessine que les îlots (`window-empty-monde-vide.png`).
+  à part le rectangle de la partie visible, puisqu'elle ne dessine que les îlots (`window-empty-monde-vide.png`). Dans
+  le banc, cette prise hérite du ×3 de la prise précédente. En mode scène, le texte de la carte se coupe mal (« … ton
+  premier / îlot, ou »).
+- **Mise en scène du banc**, pas des défauts de l'app :
+  - `chute-mobile` rejoue la chute des meubles sur un îlot dont les agents sont déjà assis : ils montent en l'air avec
+    leurs chaises. Dans l'app, un nouvel îlot n'a pas encore d'agent assis quand ses meubles tombent ;
+  - les post-its de l'open space simulé ont été créés trois jours avant l'horloge simulée, d'où « en cours · 66 h 59 »
+    ou « fini il y a 63 h 30 » dans le tableau, alors que les agents travaillent « depuis 1 min » ;
+  - toutes les sessions simulées commencent par `session-` : la fenêtre agent affiche donc « session-… » pour chacun ;
+  - la bannière « MODE DÉGRADÉ · Plume » est toujours là, dans le banc comme dans `--demo` : elle fait partie de
+    l'open space simulé (un agent sans hooks). Pendant le protocole « 3 s », ignore-la.
 - **Réglages** : le zoom de départ (×2) et le réglage « Réduire les animations » propre à l'app existent dans les
   réglages enregistrés, mais pas encore dans la fenêtre Réglages ; seul le réglage d'Accessibilité de macOS se
   change aujourd'hui.
